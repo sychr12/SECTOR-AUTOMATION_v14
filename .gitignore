@@ -1,0 +1,102 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# =========================
+# Ambientes virtuais
+# =========================
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# Pip / dependências
+# =========================
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+
+# =========================
+# PyInstaller
+# =========================
+build/
+dist/
+*.spec
+
+# =========================
+# Logs e temporários
+# =========================
+*.log
+*.tmp
+*.temp
+
+# =========================
+# Jupyter / IPython
+# =========================
+.ipynb_checkpoints/
+.profile_default/
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+*.code-workspace
+
+# =========================
+# PyCharm / JetBrains
+# =========================
+.idea/
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# =========================
+# Arquivos de configuração sensíveis
+# =========================
+.env
+.env.*
+*.env
+
+# Google API / OAuth
+token.json
+credentials.json
+jsons files/token.json
+jsons files/credentials.json
+
+# =========================
+# Cache de ferramentas
+# =========================
+.mypy_cache/
+.pytest_cache/
+.cache/
+
+# =========================
+# PDFs, imagens e arquivos gerados (opcional)
+# =========================
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# =========================
+# Banco de dados locais
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Outros
+# =========================
+.DS_Store
