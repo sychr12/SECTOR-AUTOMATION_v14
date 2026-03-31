@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 
 import pyodbc
-from services.database import get_connection, fetch_all_as_dict, fetch_one_as_dict
+from services.database import get_connection
 
 
 class CarteirasRepository:
@@ -37,20 +37,18 @@ class CarteirasRepository:
         foto3:        Optional[bytes],
         usuario:      Optional[str],
     ) -> Optional[int]:
-        # Validações
         if not isinstance(cpf, str):
             cpf = str(cpf)
         if not isinstance(nome, str):
             nome = str(nome)
-            
-        # Verifica PDF
+
         if pdf_conteudo and not isinstance(pdf_conteudo, bytes):
             raise TypeError(f"pdf_conteudo deve ser bytes, recebido {type(pdf_conteudo)}")
-        
+
         pdf_size = len(pdf_conteudo) if pdf_conteudo else 0
-        if pdf_size > 10 * 1024 * 1024:  # 10MB max
+        if pdf_size > 10 * 1024 * 1024:
             raise ValueError(f"PDF muito grande ({pdf_size / (1024*1024):.1f}MB). Máximo: 10MB")
-        
+
         sql = """
         INSERT INTO carteiras_digitais
             (nome, cpf, unloc, validade, pdf_conteudo,
@@ -59,12 +57,10 @@ class CarteirasRepository:
              foto1, foto2, foto3, usuario, criado_em)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
         """
-        
+
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            
-            # Executa INSERT
             params = (
                 nome, cpf, unloc, validade,
                 pyodbc.Binary(pdf_conteudo) if pdf_conteudo else None,
@@ -75,19 +71,14 @@ class CarteirasRepository:
                 pyodbc.Binary(foto3) if foto3 else None,
                 usuario,
             )
-            
             cursor.execute(sql, params)
-            
-            # Busca o ID inserido
             cursor.execute("SELECT SCOPE_IDENTITY() AS id;")
             row = cursor.fetchone()
             inserted_id = row[0] if row else None
-            
             cursor.close()
             conn.commit()
-            
             return inserted_id
-            
+
         except pyodbc.ProgrammingError as e:
             conn.rollback()
             raise Exception(f"Erro SQL: {str(e)}") from e
@@ -119,10 +110,8 @@ class CarteirasRepository:
             cursor.execute(sql, (carteira_id,))
             row = cursor.fetchone()
             cursor.close()
-            
             if not row:
                 return None
-                
             return {
                 'id': row[0],
                 'nome': row[1],
@@ -137,17 +126,18 @@ class CarteirasRepository:
     # ── Buscar com filtros ────────────────────────────────────────────────────
     def buscar_com_filtros(
         self,
-        termo:    str  = "",
-        periodo:  str  = "TODOS",
-        usuario:  str  = "TODOS",
-        limit:    int  = 300,
+        termo:    str = "",
+        periodo:  str = "TODOS",
+        usuario:  str = "TODOS",
+        limit:    int = 300,
     ) -> List[dict]:
         where  = ["1=1"]
-        params = []
+        # BUG CORRIGIDO: `limit` era appendado ao FINAL de params, mas TOP (?) é o
+        # PRIMEIRO placeholder no SQL. Agora limit é passado como primeiro parâmetro.
+        params = [limit]
 
         if termo:
-            where.append(
-                "(nome LIKE ? OR cpf LIKE ? OR unloc LIKE ?)")
+            where.append("(nome LIKE ? OR cpf LIKE ? OR unloc LIKE ?)")
             like = f"%{termo}%"
             params += [like, like, like]
 
@@ -158,11 +148,9 @@ class CarteirasRepository:
             elif periodo == "SEMANA":
                 ini = agora - timedelta(days=7)
             elif periodo == "MES":
-                ini = agora.replace(day=1, hour=0, minute=0,
-                                    second=0, microsecond=0)
+                ini = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             elif periodo == "ANO":
-                ini = agora.replace(month=1, day=1, hour=0,
-                                    minute=0, second=0, microsecond=0)
+                ini = agora.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             else:
                 ini = None
             if ini:
@@ -181,7 +169,6 @@ class CarteirasRepository:
         WHERE  {' AND '.join(where)}
         ORDER  BY criado_em DESC;
         """
-        params.append(limit)
 
         conn = get_connection()
         try:
@@ -189,7 +176,6 @@ class CarteirasRepository:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
             cursor.close()
-            
             registros = []
             for row in rows:
                 registros.append({
@@ -265,10 +251,8 @@ class CarteirasRepository:
             cursor.execute(sql, (like,))
             row = cursor.fetchone()
             cursor.close()
-
             if not row:
                 return None
-
             return {
                 'id': row[0],
                 'registro': row[1],

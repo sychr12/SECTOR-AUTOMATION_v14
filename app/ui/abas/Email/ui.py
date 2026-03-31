@@ -325,9 +325,19 @@ class BaixarEmailUI(ctk.CTkFrame):
     # ------------------------------------------------------------------
     def _init_banco(self):
         try:
+            #essa merda aqui voce ta vendo vai fazer a conexão primeiro ok
+            conn = self.repository._get_conn()
+            conn.close()
+            _safe_print("[EmailDownloadUI] Conexão com banco de dados estabelecida com sucesso.")
+            
+            #Aqui vai criar a bentita tabela sera? que vai kkkkkkkkk
             self.repository.criar_tabela()
-        except Exception as exc:
-            _safe_print(f"[EmailDownloadUI] Aviso: nao foi possivel criar tabela: {exc}")
+            
+        except Exception as e:
+            _safe_print(f"[EmailDownloadUI] Erro ao conectar ou criar tabela no banco de dados: {e}")
+            import traceback
+            traceback.print_exc()
+            
         self._carregar_historico()
 
     # ------------------------------------------------------------------
@@ -411,6 +421,21 @@ class BaixarEmailUI(ctk.CTkFrame):
             font=("Segoe UI", 13),
             command=self._carregar_historico,
         ).pack(side="left", padx=(0, 12))
+        
+         
+        self.btn_baixar_todos = ctk.CTkButton(
+             painel,
+             text="📥 Baixar Todos",
+             command=self._baixar_todos_pdfs,
+             height=48,
+             width=160,
+             corner_radius=10,
+             fg_color="#10b981",  # verde
+             hover_color="#059669",
+             text_color=_BRANCO,
+             font=("Segoe UI", 13, "bold")
+         )
+        self.btn_baixar_todos.pack(side="left", padx=(0, 12))
 
         # Botão de limpar logs
         ctk.CTkButton(
@@ -574,6 +599,8 @@ class BaixarEmailUI(ctk.CTkFrame):
             return
         if self.log_table:
             self.log_table.carregar_do_banco(registros)
+            
+    
 
     # ------------------------------------------------------------------
     # Download do banco
@@ -585,13 +612,13 @@ class BaixarEmailUI(ctk.CTkFrame):
             if not resultado:
                 messagebox.showwarning("Aviso", "Registro não encontrado no banco.")
                 return
-
+    
             nome_arquivo, dados = resultado
-
+    
             if not dados:
                 messagebox.showerror("Erro", "Nenhum dado encontrado para este registro.")
                 return
-
+    
             destino = filedialog.asksaveasfilename(
                 defaultextension=".pdf",
                 filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")],
@@ -600,14 +627,135 @@ class BaixarEmailUI(ctk.CTkFrame):
             )
             if not destino:
                 return
-
+    
             with open(destino, "wb") as f:
                 f.write(dados)
-
+    
             messagebox.showinfo("Sucesso", f"✅ PDF salvo em:\n{destino}")
-
+    
         except Exception as exc:
             messagebox.showerror("Erro", f"Falha ao baixar PDF:\n{exc}")
+
+
+    def _baixar_todos_pdfs(self):
+        """Baixa todos os PDFs do histórico para uma pasta selecionada"""
+
+        # Selecionar pasta de destino
+        pasta_destino = filedialog.askdirectory(
+            title="Selecione a pasta para salvar todos os PDFs"
+        )
+
+        if not pasta_destino:
+            return
+
+        # Pegar todos os registros do banco
+        try:
+            registros = self.repository.listar_downloads(limit=1000)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao buscar registros: {e}")
+            return
+
+        if not registros:
+            messagebox.showinfo("Info", "Nenhum PDF encontrado no histórico")
+            return
+
+        # Perguntar se quer continuar
+        resposta = messagebox.askyesno(
+            "Confirmar",
+            f"Você está prestes a baixar {len(registros)} arquivos PDF.\n\n"
+            f"Pasta de destino: {pasta_destino}\n\n"
+            "Deseja continuar?"
+        )
+
+        if not resposta:
+            return
+
+        # Desabilitar botões durante o download
+        self.btn_baixar.configure(state="disabled")
+        self.btn_baixar_todos.configure(state="disabled")
+
+        # Iniciar download em thread separada
+        threading.Thread(
+            target=self._executar_download_todos,
+            args=(registros, pasta_destino),
+            daemon=True
+        ).start()
+
+    def _executar_download_todos(self, registros, pasta_destino):
+        """Executa o download de todos os PDFs em thread"""
+
+        total = len(registros)
+        sucessos = 0
+        erros = 0
+
+        self._atualizar_progresso(0, f"Iniciando download de {total} arquivos...")
+
+        for i, registro in enumerate(registros):
+            try:
+                record_id = registro['id']
+                nome_arquivo = registro['nome_arquivo']
+
+                # Buscar os bytes do PDF
+                resultado = self.repository.baixar_bytes_por_id(record_id)
+
+                if not resultado:
+                    erros += 1
+                    self._log("Erro", f"Arquivo não encontrado: {nome_arquivo}")
+                    continue
+                
+                nome, dados = resultado
+
+                # Limpar nome do arquivo
+                nome_limpo = "".join(c for c in nome if c.isalnum() or c in ".-_ ").strip()
+                if not nome_limpo:
+                    nome_limpo = f"anexo_{record_id}.pdf"
+
+                # Caminho completo
+                caminho = os.path.join(pasta_destino, nome_limpo)
+
+                # Se arquivo já existe, adicionar número
+                contador = 1
+                while os.path.exists(caminho):
+                    nome_sem_ext = os.path.splitext(nome_limpo)[0]
+                    ext = os.path.splitext(nome_limpo)[1]
+                    caminho = os.path.join(pasta_destino, f"{nome_sem_ext}_{contador}{ext}")
+                    contador += 1
+
+                # Salvar arquivo
+                with open(caminho, "wb") as f:
+                    f.write(dados)
+
+                sucessos += 1
+                self._log("OK", f"Baixado: {nome_limpo}")
+
+                # Atualizar progresso
+                percentual = int((i + 1) / total * 100)
+                self._atualizar_progresso(
+                    percentual,
+                    f"Baixando {i+1}/{total}: {nome_limpo}"
+                )
+
+            except Exception as e:
+                erros += 1
+                self._log("Erro", f"Falha ao baixar {registro.get('nome_arquivo', 'desconhecido')}: {e}")
+
+        # Finalizar
+        self._atualizar_progresso(100, f"Download concluído! {sucessos} sucessos, {erros} erros")
+
+        # Reativar botões
+        self.after(0, lambda: self.btn_baixar.configure(state="normal"))
+        self.after(0, lambda: self.btn_baixar_todos.configure(state="normal"))
+
+        # Mostrar resultado
+        self.after(0, lambda: messagebox.showinfo(
+            "Download Concluído",
+            f" Download finalizado!\n\n"
+            f"Pasta: {pasta_destino}\n"
+            f"Sucessos: {sucessos}\n"
+            f"Erros: {erros}\n"
+            f"Total: {total}"
+       ))
+    
 
     # ------------------------------------------------------------------
     # Fluxo de download
@@ -689,16 +837,17 @@ class BaixarEmailUI(ctk.CTkFrame):
             nome, dados, erro = self.controller.obter_bytes_anexo_pdf(service, msg_id, part)
 
             record_id = self.repository.registrar_download(
-                msg_id        = f"{msg_id}_{nome or 'erro'}",
-                remetente     = remetente,
-                assunto       = assunto,
-                municipio     = municipio,
-                data_email    = data_email,
-                nome_arquivo  = nome or "erro.pdf",
+                msg_id = f"{msg_id}_{nome or 'erro'}",  # Gera ID único para evitar duplicidade essa bosta aqui
+                remetente = remetente,
+                assunto = assunto,
+                municipio = municipio,
+                data_email = data_email,
+                nome_arquivo = nome or 'Error.pdf',
                 arquivo_bytes = dados,
-                status        = "sucesso" if dados else "erro",
+                #staus = "SUCESSO" if dados else "ERRO",
                 erro_mensagem = erro if erro else None,
             )
+            
 
             if dados:
                 self.arquivos_baixados += 1

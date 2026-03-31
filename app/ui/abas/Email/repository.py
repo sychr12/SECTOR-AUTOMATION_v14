@@ -38,7 +38,7 @@ class EmailDownloadRepository:
         BEGIN
             CREATE TABLE [dbo].[emails_anexos] (
                 [id]           INT IDENTITY(1,1) PRIMARY KEY,
-                [email_id]     NVARCHAR(255) NOT NULL UNIQUE,
+                [email_id]     NVARCHAR(255) NOT NULL,
                 [remetente]    NVARCHAR(500),
                 [assunto]      NVARCHAR(500),
                 [municipio]    NVARCHAR(100),
@@ -60,12 +60,6 @@ class EmailDownloadRepository:
             cursor.execute(sql)
             cursor.close()
             conn.commit()
-        except Exception:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            raise
         finally:
             conn.close()
 
@@ -74,74 +68,80 @@ class EmailDownloadRepository:
     # ------------------------------------------------------------------
     def registrar_download(
         self,
-        msg_id:        str,
-        remetente:     str,
-        assunto:       str,
-        municipio:     str,
-        data_email:    Optional[datetime],
-        nome_arquivo:  str,
+        msg_id: str,
+        remetente: str,
+        assunto: str,
+        municipio: str,
+        data_email: Optional[datetime],
+        nome_arquivo: str,
         arquivo_bytes: Optional[bytes],
-        status:        str = "sucesso",
-        erro_mensagem: str = None,
+        erro_mensagem: Optional[str] = None,
     ) -> Optional[int]:
+        """Insere registro com bytes do PDF."""
+        
+        # isso aqui e so pra eu saber os erros mesmo ta bom?????
+        print(f"[Repositório] Registrando download: msg_id={msg_id}, remetente={remetente}, assunto={assunto}, municipio={municipio}, data_email={data_email}, nome_arquivo={nome_arquivo}, bytes={len(arquivo_bytes) if arquivo_bytes else 0}, erro={erro_mensagem}")
+        
+        # essa merda aqui gerar um id unico pra evitar duplicidade, pq o msg_id pode ser repetido se o email for reprocessado
+        unique_msg_id = f"{msg_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # SQL separado: primeiro INSERT, depois SELECT
+        sql_insert = """
+        INSERT INTO [dbo].[emails_anexos](
+            [email_id], [remetente], [assunto], [municipio],
+            [data_email], [nome_arquivo], [mime_type], [pdf],
+            [hash_sha256], [criado_em]
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
         """
-        Insere ou atualiza registro com os bytes do PDF.
-        Usa MERGE para SQL Server (UPSERT).
-        Retorna o id gerado.
+        
+        sql_select = """
+        SELECT SCOPE_IDENTITY() AS id;
         """
-        # SQL Server usa MERGE para UPSERT
-        # SET NOCOUNT ON é obrigatório para que OUTPUT INSERTED.id seja retornado
-        # via cursor.fetchone() com pyodbc — sem ele, fetchone() retorna None.
-        sql = """
-        SET NOCOUNT ON;
-        MERGE INTO [dbo].[emails_anexos] AS target
-        USING (SELECT ? AS email_id) AS source
-        ON target.email_id = source.email_id
-        WHEN MATCHED THEN
-            UPDATE SET 
-                nome_arquivo = ?,
-                pdf = ?,
-                criado_em = GETDATE()
-        WHEN NOT MATCHED THEN
-            INSERT (email_id, remetente, assunto, municipio, data_email,
-                    nome_arquivo, mime_type, pdf, hash_sha256, criado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
-        OUTPUT INSERTED.id;
-        """
+        
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
             
-            # Executar MERGE
-            cursor.execute(sql, (
-                msg_id,                     # source
-                nome_arquivo,               # UPDATE
-                pyodbc.Binary(arquivo_bytes) if arquivo_bytes else None,  # UPDATE
-                msg_id,                     # INSERT email_id
-                remetente,                  # INSERT remetente
-                assunto,                    # INSERT assunto
-                municipio,                  # INSERT municipio
-                data_email,                 # INSERT data_email
-                nome_arquivo,               # INSERT nome_arquivo
-                "application/pdf",          # INSERT mime_type
-                pyodbc.Binary(arquivo_bytes) if arquivo_bytes else None,  # INSERT pdf
-                None,                       # INSERT hash_sha256
+            pdf_bytes = pyodbc.Binary(arquivo_bytes) if arquivo_bytes else None
+            
+            # isso aqui e so pra eu saber se ta chegando os dados certinho, pode tirar depois
+            print(f"[Repositório] Executando INSERT com email_id={unique_msg_id}, remetente={remetente}, assunto={assunto}, municipio={municipio}, data_email={data_email}, nome_arquivo={nome_arquivo}, bytes={len(arquivo_bytes) if arquivo_bytes else 0}")
+            
+            # Executar o INSERT
+            cursor.execute(sql_insert, (
+                unique_msg_id,
+                remetente or "",
+                assunto or "",
+                municipio or "",
+                data_email,
+                nome_arquivo,
+                "application/pdf" if arquivo_bytes else None,
+                pdf_bytes,
+                None,  # hash_sha256 pode ser calculado posteriormente
             ))
             
+            # Executar o SELECT para pegar o ID
+            cursor.execute(sql_select)
             row = cursor.fetchone()
+            
             cursor.close()
             conn.commit()
             
-            return row[0] if row else None
+            record_id = row[0] if row else None
+            print(f"[Repositório] Download registrado com ID {record_id} para email_id {unique_msg_id}")
+            return record_id
             
-        except Exception:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            raise
+        except Exception as e:
+            print(f"[Reposritório] Erro ao registrar download: {e}")
+            import traceback
+            traceback.print_exc()
+            conn.rollback()
+            return None
         finally:
             conn.close()
+    
+    
 
     # ------------------------------------------------------------------
     # SELECT

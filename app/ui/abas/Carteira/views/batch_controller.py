@@ -2,13 +2,6 @@
 """
 batch_controller.py — Controller de geração em LOTE de carteiras digitais.
 Local: app/ui/abas/Carteira/views/batch_controller.py
-
-CORREÇÕES:
-  - Imagens/fontes resolvidas portavelmente via assets.py (qualquer máquina)
-  - Thread safety com Lock em _rodando e _parar_flag
-  - WebDriverWait em vez de sleep fixo (mais robusto)
-  - Driver fechado em finally garantido
-  - Dados nulos/vazios tratados corretamente
 """
 from __future__ import annotations
 
@@ -48,7 +41,7 @@ _XPATH = {
     "menu_gcc":    '//*[@id="oCMenu___GCC2300"]',
     "menu_cad":    '//*[@id="oCMenu___GCC1008"]',
     "cpf_field":   f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
-    "pesquisar":   '//*[@id="formProdutorRural_cadastroProdutorRuralAction!pesquisarProdutorRural"]',
+    "pesquisar":   f'//*[@id="formProdutorRural_cadastroProdutorRuralAction!pesquisarProdutorRural"]',
     "th_situacao": '//*[@id="tbProdutorRural"]/thead/tr/th[2]',
     "btn_abrir":   '//*[@id="tbProdutorRural"]/tbody/tr/td[8]/a[2]',
     "nome":        f'//*[@id="{_BASE}cceaPessoaFisica_pfNome"]',
@@ -76,7 +69,7 @@ def _normalizar_unloc(unloc: str) -> str:
 def _limitar_texto(texto: str, n: int) -> str:
     if not texto:
         return ""
-    return texto[: n - 3] + "..." if len(texto) > n else texto
+    return texto[:n - 3] + "..." if len(texto) > n else texto
 
 
 def _desenhar_texto_quebrado(draw, coordenadas, texto, fonte,
@@ -192,6 +185,26 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
                     pass
 
 
+# BUG CORRIGIDO: _edge_opts e _chrome_opts eram funções de módulo que referenciavam
+# `webdriver` sem importá-lo. Selenium só é importado dentro de _abrir_driver.
+# Solução: cada helper importa selenium internamente.
+
+def _edge_opts():
+    from selenium import webdriver
+    opts = webdriver.EdgeOptions()
+    opts.add_argument("--start-maximized")
+    opts.add_experimental_option("detach", True)
+    return opts
+
+
+def _chrome_opts():
+    from selenium import webdriver
+    opts = webdriver.ChromeOptions()
+    opts.add_argument("--start-maximized")
+    opts.add_experimental_option("detach", True)
+    return opts
+
+
 class BatchCarteiraController:
 
     def __init__(self, usuario: str, repo, sefaz_repo):
@@ -280,12 +293,11 @@ class BatchCarteiraController:
                 cpf_digits = self.cpf_do_arquivo(nome)
 
                 if not cpf_digits:
-                    log_cb(f"[{idx}/{total}] {nome} — CPF não encontrado no nome do arquivo; ignorado.", "aviso")
+                    log_cb(f"[{idx}/{total}] {nome} — CPF não encontrado no nome; ignorado.", "aviso")
                     ignorado += 1
                     continue
 
                 cpf_fmt = self.formatar_cpf(cpf_digits)
-
                 progress_cb(idx, total, nome)
                 log_cb(f"[{idx}/{total}] {cpf_fmt} — consultando SEFAZ...", "info")
 
@@ -303,6 +315,9 @@ class BatchCarteiraController:
 
                 try:
                     pdf_bytes = _gerar_pdf_bytes(dados)
+                    lat = dados.get("latitude", "")
+                    lon = dados.get("longitude", "")
+                    georef = f"{lat}  {lon}".strip() if (lat or lon) else ""
                     self._repo.salvar(
                         registro     = dados.get("rp", ""),
                         cpf          = cpf_digits or cpf_fmt,
@@ -314,8 +329,7 @@ class BatchCarteiraController:
                         endereco     = dados.get("endereco", ""),
                         atividade1   = dados.get("atv1", ""),
                         atividade2   = dados.get("atv2", ""),
-                        georef       = (f"{dados.get('latitude','')}"
-                                        f"  {dados.get('longitude','')}").strip(),
+                        georef       = georef,
                         pdf_conteudo = pdf_bytes,
                         foto1=None, foto2=None, foto3=None,
                         usuario      = self.usuario,
@@ -338,7 +352,6 @@ class BatchCarteiraController:
         import shutil
         from selenium import webdriver
         from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
 
         driver = None
 
@@ -352,10 +365,7 @@ class BatchCarteiraController:
                 continue
             try:
                 from selenium.webdriver.edge.service import Service as EdgeService
-                opts = webdriver.EdgeOptions()
-                opts.add_argument("--start-maximized")
-                opts.add_experimental_option("detach", True)
-                driver = webdriver.Edge(service=EdgeService(ep), options=opts)
+                driver = webdriver.Edge(service=EdgeService(ep), options=_edge_opts())
                 break
             except Exception:
                 continue
@@ -397,8 +407,6 @@ class BatchCarteiraController:
 
         d    = self._driver
         wait = WebDriverWait(d, 10)
-
-        # Remove formatação do CPF para envio puro
         cpf_limpo = re.sub(r"\D", "", cpf_fmt)
 
         try:
@@ -418,24 +426,21 @@ class BatchCarteiraController:
             time.sleep(0.2)
             campo.clear()
             time.sleep(0.1)
-            
-            # Método 1: Injeta valor via JavaScript (mais confiável para campos com máscara)
+
             d.execute_script(f"arguments[0].value = '{cpf_limpo}';", campo)
-            d.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", campo)
-            d.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo)
-            
+            d.execute_script(
+                "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", campo)
+            d.execute_script(
+                "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo)
             time.sleep(0.3)
-            
-            # Se JavaScript não funcionou, tenta send_keys como fallback
+
             if not campo.get_attribute("value"):
                 campo.send_keys(cpf_limpo)
                 time.sleep(0.2)
-            
-            # Clica no botão pesquisar
-            pesquisar_btn = d.find_element(By.XPATH, _XPATH["pesquisar"])
-            pesquisar_btn.click()
+
+            d.find_element(By.XPATH, _XPATH["pesquisar"]).click()
             time.sleep(1.5)
-        except Exception as e:
+        except Exception:
             return None
 
         try:
@@ -490,19 +495,3 @@ class BatchCarteiraController:
             except Exception:
                 pass
             self._driver = None
-
-
-def _edge_opts():
-    from selenium import webdriver
-    opts = webdriver.EdgeOptions()
-    opts.add_argument("--start-maximized")
-    opts.add_experimental_option("detach", True)
-    return opts
-
-
-def _chrome_opts():
-    from selenium import webdriver
-    opts = webdriver.ChromeOptions()
-    opts.add_argument("--start-maximized")
-    opts.add_experimental_option("detach", True)
-    return opts
