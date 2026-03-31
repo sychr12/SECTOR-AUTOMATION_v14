@@ -7,6 +7,7 @@ Colunas reais:
     inicio, endereco, atividade1, atividade2, georef, pdf_conteudo,
     foto1, foto2, foto3, usuario
 """
+import re
 from datetime import datetime, timedelta
 from typing import Optional, List
 
@@ -48,6 +49,14 @@ class CarteirasRepository:
         conn = get_connection()
         try:
             cursor = conn.cursor()
+            
+            # Verifica tamanho do PDF
+            pdf_size = len(pdf_conteudo) if pdf_conteudo else 0
+            
+            # Limite máximo de 5MB para PDF
+            if pdf_size > 5 * 1024 * 1024:
+                raise ValueError(f"PDF muito grande ({pdf_size / (1024*1024):.1f}MB). Máximo: 5MB")
+            
             cursor.execute(sql, (
                 nome, cpf, unloc, validade,
                 pyodbc.Binary(pdf_conteudo) if pdf_conteudo else None,
@@ -62,11 +71,17 @@ class CarteirasRepository:
             cursor.close()
             conn.commit()
             return row[0] if row else None
-        except Exception:
+        except pyodbc.Error as db_err:
             conn.rollback()
-            raise
+            raise Exception(f"Erro de banco de dados: {db_err}") from db_err
+        except Exception as e:
+            conn.rollback()
+            raise Exception(f"Erro ao salvar carteira: {str(e)}") from e
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     # ── Buscar PDF ────────────────────────────────────────────────────────────
     def buscar_pdf_por_id(self, carteira_id: int) -> Optional[dict]:
@@ -199,5 +214,53 @@ class CarteirasRepository:
             return [row[0] for row in rows]
         except Exception:
             return []
+        finally:
+            conn.close()
+
+    def buscar_por_cpf(self, cpf: str) -> Optional[dict]:
+        """Busca o último registro de carteira por CPF (busca flexível com ou sem máscara)."""
+        if not cpf:
+            return None
+
+        cpf_limpo = re.sub(r"\D", "", cpf)
+        if not cpf_limpo:
+            return None
+
+        sql = """
+        SELECT TOP 1 id, registro, nome, cpf, propriedade, unloc, inicio, validade,
+               endereco, atividade1, atividade2, georef
+        FROM   carteiras_digitais
+        WHERE  REPLACE(REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', ''), '/', '') LIKE ?
+        ORDER  BY criado_em DESC;
+        """
+
+        like = f"%{cpf_limpo}%"
+
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql, (like,))
+            row = cursor.fetchone()
+            cursor.close()
+
+            if not row:
+                return None
+
+            return {
+                'id': row[0],
+                'registro': row[1],
+                'nome': row[2],
+                'cpf': row[3],
+                'propriedade': row[4],
+                'unloc': row[5],
+                'inicio': row[6],
+                'validade': row[7],
+                'endereco': row[8],
+                'atividade1': row[9],
+                'atividade2': row[10],
+                'georef': row[11],
+            }
+        except Exception:
+            return None
         finally:
             conn.close()

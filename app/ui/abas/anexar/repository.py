@@ -332,20 +332,21 @@ class AnexarRepository:
                                 nome: str = "", limit: int = 500) -> list:
         """Busca carteiras prontas com filtros opcionais."""
         clausulas = ["pdf IS NOT NULL"]
-        params = []
+        filtro_params = []
 
         if usuario.strip():
             clausulas.append("LOWER(ISNULL(anexado_por, usuario)) LIKE LOWER(?)")
-            params.append(f"%{usuario.strip()}%")
+            filtro_params.append(f"%{usuario.strip()}%")
         if cpf.strip():
             clausulas.append("cpf LIKE ?")
-            params.append(f"%{cpf.strip()}%")
+            filtro_params.append(f"%{cpf.strip()}%")
         if nome.strip():
             clausulas.append("LOWER(nome) LIKE LOWER(?)")
-            params.append(f"%{nome.strip()}%")
+            filtro_params.append(f"%{nome.strip()}%")
 
         where = " AND ".join(clausulas)
-        params.append(limit)
+        # limit precisa ser o PRIMEIRO parâmetro para coincidir com TOP (?)
+        params = [limit] + filtro_params
 
         sql = f"""
         SELECT TOP (?)

@@ -108,7 +108,7 @@ class EmailDownloadService:
             for header in headers:
                 if header["name"] == nome_cabecalho:
                     return header["value"]
-        except:
+        except Exception:
             pass
         
         return padrao

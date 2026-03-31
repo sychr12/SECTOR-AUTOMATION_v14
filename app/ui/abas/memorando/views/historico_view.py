@@ -219,10 +219,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
     # ── janela ──────────────────────────────────────────────────────
     def _configure_window(self):
         self.title("Histórico de Memorandos")
-<<<<<<< HEAD
-=======
         self.geometry("1200x750")
->>>>>>> f4a3e3b (.)
         self.configure(fg_color=AppTheme.BG_APP)
         self.grab_set()
 
@@ -230,17 +227,10 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         altura = 600
 
         self.update_idletasks()
-<<<<<<< HEAD
-        x = (self.winfo_screenwidth() // 2) - (largura // 2)
-        y = (self.winfo_screenheight() // 2) - (altura // 2)
-
-        self.geometry(f"{largura}x{altura}+{x}+{y}")
-=======
         w, h = 1200, 750
         x = (self.winfo_screenwidth() // 2) - (w // 2)
         y = (self.winfo_screenheight() // 2) - (h // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
->>>>>>> f4a3e3b (.)
 
     # ── layout ──────────────────────────────────────────────────────
     def _create_widgets(self):
@@ -248,137 +238,11 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         root.pack(fill="both", expand=True, padx=36, pady=32)
 
         # cabeçalho
-<<<<<<< HEAD
-        hdr = ctk.CTkFrame(root, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 24))
-
-        ctk.CTkLabel(hdr, text="Histórico de Memorandos",
-                     font=("Segoe UI", 22, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(side="left")
-
-        # pesquisa
-        bar = ctk.CTkFrame(root, fg_color=AppTheme.BG_CARD, corner_radius=14)
-        bar.pack(fill="x", pady=(0, 20))
-
-        HEIGHT = 36
-        PAD_X = 8
-        PAD_Y = 10
-        LABEL_WIDTH = 80
-        FONT = ("Segoe UI", 12)
-        FONT_BOLD = ("Segoe UI", 11, "bold")
-
-        # ── Buscar ─────────────────────────────
-        ctk.CTkLabel(bar, text="Buscar",
-                    font=FONT_BOLD,
-                    text_color=AppTheme.TXT_MUTED,
-                    width=LABEL_WIDTH).pack(side="left", padx=(18, 6), pady=PAD_Y)
-
-        self.pesquisa_var = ctk.StringVar()
-        ctk.CTkEntry(
-            bar,
-            textvariable=self.pesquisa_var,
-            placeholder_text="Número do memo ou UNLOC...",
-            height=HEIGHT,
-            corner_radius=10,
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            font=FONT,
-            text_color=AppTheme.TXT_MAIN,
-        ).pack(side="left", fill="x", expand=True, padx=(0, PAD_X), pady=PAD_Y)
-
-        # ── Município ─────────────────────────────
-        self.municipio_var = ctk.StringVar(value="Todos")
-
-        lista_municipios = ["Todos"] + [
-            f"{codigo} - {nome}" for codigo, nome in MUNICIPIOS.items()
-        ]
-
-        ctk.CTkLabel(bar, text="Município",
-                    font=FONT_BOLD,
-                    text_color=AppTheme.TXT_MUTED,
-                    width=LABEL_WIDTH).pack(side="left", padx=(18, 6), pady=PAD_Y)
-
-        ctk.CTkOptionMenu(
-            bar,
-            values=lista_municipios,
-            variable=self.municipio_var,
-            width=180, 
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dynamic_resizing=False  
-        ).pack(side="left", padx=(0, 8), pady=10)
-
-        # ── Ano ─────────────────────────────
-        ctk.CTkLabel(bar, text="Ano",
-                    font=FONT_BOLD,
-                    text_color=AppTheme.TXT_MUTED,
-                    width=LABEL_WIDTH).pack(side="left", padx=(18, 6), pady=PAD_Y)
-
-        self.ano_var = ctk.StringVar(value="Todos")
-
-        ok, anos = self.controller.listar_anos()
-        lista_anos = ["Todos"] + anos if ok and anos else ["Todos"]
-
-        ctk.CTkOptionMenu(
-            bar,
-            values=lista_anos,
-            variable=self.ano_var,
-            width=100,
-            height=HEIGHT,
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            font=FONT
-        ).pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
-
-        # ── Ordem ─────────────────────────────
-        ctk.CTkLabel(bar, text="Ordem",
-                    font=FONT_BOLD,
-                    text_color=AppTheme.TXT_MUTED,
-                    width=LABEL_WIDTH).pack(side="left", padx=(18, 6), pady=PAD_Y)
-
-        self.ordem_var = ctk.StringVar(value="Recentes")
-
-        ctk.CTkOptionMenu(
-            bar,
-            values=["Recentes", "Antigos"],
-            variable=self.ordem_var,
-            width=120,
-            height=HEIGHT,
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            font=FONT
-        ).pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
-
-        # ── Limpar ─────────────────────────────
-        ctk.CTkButton(
-            bar,
-            text="Limpar",
-            width=80,
-            height=HEIGHT,
-            corner_radius=10,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
-            text_color=AppTheme.TXT_MUTED,
-            font=("Segoe UI", 11),
-            command=self._limpar_filtros
-        ).pack(side="right", padx=14, pady=PAD_Y)
-
-=======
         self._build_header(root)
         
         # barra de filtros
         self._build_filters(root)
         
->>>>>>> f4a3e3b (.)
         # linha divisória
         separator = ctk.CTkFrame(root, height=1, fg_color=AppTheme.BG_CARD)
         separator.pack(fill="x", pady=(0, 20))

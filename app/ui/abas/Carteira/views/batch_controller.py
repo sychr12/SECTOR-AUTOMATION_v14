@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+"""
+batch_controller.py — Controller de geração em LOTE de carteiras digitais.
+Local: app/ui/abas/Carteira/views/batch_controller.py
+
+CORREÇÕES:
+  - Imagens/fontes resolvidas portavelmente via assets.py (qualquer máquina)
+  - Thread safety com Lock em _rodando e _parar_flag
+  - WebDriverWait em vez de sleep fixo (mais robusto)
+  - Driver fechado em finally garantido
+  - Dados nulos/vazios tratados corretamente
+"""
 from __future__ import annotations
 
 import io
@@ -11,19 +22,13 @@ import time
 from typing import Callable, Optional
 
 import PyPDF2
-from PIL import Image as PILImage, ImageDraw, ImageFont
+from PIL import Image as PILImage, ImageDraw
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PATHS DOS ASSETS
-# ──────────────────────────────────────────────────────────────────────────────
-IMG_FRENTE = r"Q:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images\frente.png"
-IMG_VERSO  = r"Q:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images\verso.png"
-FONTE_PATH = r"Q:\ARQUIVOS CPCPR\fabio jr\CARTAO-DIGITAL\Roboto-Regular.ttf"
-SEFAZ_URL  = "http://sistemas.sefaz.am.gov.br/gcc/entrada.do"
+from ..assets import get_img_frente, get_img_verso, get_pil_font, open_image
 
-# ──────────────────────────────────────────────────────────────────────────────
-# MAPEAMENTO UNLOC
-# ──────────────────────────────────────────────────────────────────────────────
+# ── SEFAZ ─────────────────────────────────────────────────────────────────────
+SEFAZ_URL = "http://sistemas.sefaz.am.gov.br/gcc/entrada.do"
+
 _UNLOC_MAP = {
     "BAE":     "BAR",
     "MTS-ATZ": "ATZ-MTS", "MTS": "ATZ-MTS",
@@ -38,96 +43,62 @@ _UNLOC_MAP = {
     "ZL-MAO":  "MAO-ZL",  "ZL":  "MAO-ZL",
 }
 
-<<<<<<< HEAD
-# ── XPaths SEFAZ (base) ───────────────────────────────────────────────────────
 _BASE = "formProdutorRural_produtorRuralTOA_produtorRural_"
-
 _XPATH = {
-    "menu_gcc":     '//*[@id="oCMenu___GCC2300"]',
-    "menu_cad":     '//*[@id="oCMenu___GCC1008"]',
-    "cpf_field":    f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
-    "pesquisar":    '//*[@id="formProdutorRural_cadastroProdutorRuralAction!pesquisarProdutorRural"]',
-    "th_situacao":  '//*[@id="tbProdutorRural"]/thead/tr/th[2]',
-    "btn_abrir":    '//*[@id="tbProdutorRural"]/tbody/tr/td[8]/a[2]',
-    # dados do produtor
-    "nome":         f'//*[@id="{_BASE}cceaPessoaFisica_pfNome"]',
-    "rp":           f'//*[@id="{_BASE}ieProdutorRuralFormatado"]',
-    "cpf_pg":       f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
-    "propriedade":  f'//*[@id="{_BASE}nmPropriedade"]',
-    "endereco":     f'//*[@id="{_BASE}txEnderecoPropriedade"]',
-    "unloc":        f'//*[@id="{_BASE}sgDistritoIdam"]',
-    "latitude":     f'//*[@id="{_BASE}geoLatitude"]',
-    "longitude":    f'//*[@id="{_BASE}geoLongitude"]',
-    "atv1":         f'//*[@id="{_BASE}nmCnaePrincipal"]',
-    "atv2":         f'//*[@id="{_BASE}nmCnaeSecundario"]',
-    "inicioatv":    f'//*[@id="{_BASE}anoInicioAtividade"]',
-    "numcontrole":  f'//*[@id="{_BASE}nrDeclaracaoUnidLocal"]',
-    "cnae1":        f'//*[@id="{_BASE}cnaePrincipalFormatado"]',
-    "cnae2":        f'//*[@id="{_BASE}cnaeSecundarioFormatado"]',
-    "validade":     f'//*[@id="{_BASE}dtValidadeDeclaracaoFormatado"]',
+    "menu_gcc":    '//*[@id="oCMenu___GCC2300"]',
+    "menu_cad":    '//*[@id="oCMenu___GCC1008"]',
+    "cpf_field":   f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
+    "pesquisar":   '//*[@id="formProdutorRural_cadastroProdutorRuralAction!pesquisarProdutorRural"]',
+    "th_situacao": '//*[@id="tbProdutorRural"]/thead/tr/th[2]',
+    "btn_abrir":   '//*[@id="tbProdutorRural"]/tbody/tr/td[8]/a[2]',
+    "nome":        f'//*[@id="{_BASE}cceaPessoaFisica_pfNome"]',
+    "rp":          f'//*[@id="{_BASE}ieProdutorRuralFormatado"]',
+    "cpf_pg":      f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
+    "propriedade": f'//*[@id="{_BASE}nmPropriedade"]',
+    "endereco":    f'//*[@id="{_BASE}txEnderecoPropriedade"]',
+    "unloc":       f'//*[@id="{_BASE}sgDistritoIdam"]',
+    "latitude":    f'//*[@id="{_BASE}geoLatitude"]',
+    "longitude":   f'//*[@id="{_BASE}geoLongitude"]',
+    "atv1":        f'//*[@id="{_BASE}nmCnaePrincipal"]',
+    "atv2":        f'//*[@id="{_BASE}nmCnaeSecundario"]',
+    "inicioatv":   f'//*[@id="{_BASE}anoInicioAtividade"]',
+    "numcontrole": f'//*[@id="{_BASE}nrDeclaracaoUnidLocal"]',
+    "cnae1":       f'//*[@id="{_BASE}cnaePrincipalFormatado"]',
+    "cnae2":       f'//*[@id="{_BASE}cnaeSecundarioFormatado"]',
+    "validade":    f'//*[@id="{_BASE}dtValidadeDeclaracaoFormatado"]',
 }
 
 
-# ── Helpers de geração de PDF ─────────────────────────────────────────────────
-=======
-# ──────────────────────────────────────────────────────────────────────────────
-# XPATHS SEFAZ
-# ──────────────────────────────────────────────────────────────────────────────
-_BASE = "formProdutorRural_produtorRuralTOA_produtorRural_"
->>>>>>> f4a3e3b (.)
-
-_XPATH = {
-    "menu_gcc":     '//*[@id="oCMenu___GCC2300"]',
-    "menu_cad":     '//*[@id="oCMenu___GCC1008"]',
-    "cpf_field":    f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
-    "pesquisar":    '//*[@id="formProdutorRural_cadastroProdutorRuralAction!pesquisarProdutorRural"]',
-    "th_situacao":  '//*[@id="tbProdutorRural"]/thead/tr/th[2]',
-    "btn_abrir":    '//*[@id="tbProdutorRural"]/tbody/tr/td[8]/a[2]',
-    "nome":         f'//*[@id="{_BASE}cceaPessoaFisica_pfNome"]',
-    "rp":           f'//*[@id="{_BASE}ieProdutorRuralFormatado"]',
-    "cpf_pg":       f'//*[@id="{_BASE}cpfProdutorRuralFormatado"]',
-    "propriedade":  f'//*[@id="{_BASE}nmPropriedade"]',
-    "endereco":     f'//*[@id="{_BASE}txEnderecoPropriedade"]',
-    "unloc":        f'//*[@id="{_BASE}sgDistritoIdam"]',
-    "latitude":     f'//*[@id="{_BASE}geoLatitude"]',
-    "longitude":    f'//*[@id="{_BASE}geoLongitude"]',
-    "atv1":         f'//*[@id="{_BASE}nmCnaePrincipal"]',
-    "atv2":         f'//*[@id="{_BASE}nmCnaeSecundario"]',
-    "inicioatv":    f'//*[@id="{_BASE}anoInicioAtividade"]',
-    "numcontrole":  f'//*[@id="{_BASE}nrDeclaracaoUnidLocal"]',
-    "cnae1":        f'//*[@id="{_BASE}cnaePrincipalFormatado"]',
-    "cnae2":        f'//*[@id="{_BASE}cnaeSecundarioFormatado"]',
-    "validade":     f'//*[@id="{_BASE}dtValidadeDeclaracaoFormatado"]',
-}
-
-# ──────────────────────────────────────────────────────────────────────────────
-# HELPERS DE GERAÇÃO DE PDF
-# ──────────────────────────────────────────────────────────────────────────────
 def _normalizar_unloc(unloc: str) -> str:
-    return _UNLOC_MAP.get(unloc, unloc)
+    return _UNLOC_MAP.get(unloc.strip().upper(), unloc)
+
 
 def _limitar_texto(texto: str, n: int) -> str:
-    return texto[:n - 3] + "..." if len(texto) > n else texto
+    if not texto:
+        return ""
+    return texto[: n - 3] + "..." if len(texto) > n else texto
 
-def _desenhar_texto_quebrado(draw, coordenadas, texto, fonte, largura_max, altura_max):
+
+def _desenhar_texto_quebrado(draw, coordenadas, texto, fonte,
+                              largura_max: int, altura_max: int):
+    if not texto:
+        return
     x, y = coordenadas
-    for linha in textwrap.wrap(texto or "", width=largura_max // 9):
+    for linha in textwrap.wrap(texto, width=max(1, largura_max // 9)):
         if y >= altura_max:
             break
-        draw.text((x, y), linha, fill=(0, 0, 0), font=fonte)
+        if fonte:
+            draw.text((x, y), linha, fill=(0, 0, 0), font=fonte)
+        else:
+            draw.text((x, y), linha, fill=(0, 0, 0))
         y += 40
 
+
 def _gerar_pdf_bytes(dados: dict) -> bytes:
-<<<<<<< HEAD
-    """
-    Desenha frente + verso com Pillow, mescla com PyPDF2 e retorna
-    os bytes do PDF final — idêntico ao APP_SETOR / ui.py.
-    """
-=======
->>>>>>> f4a3e3b (.)
+    """Gera PDF frente+verso. Usa imagem real ou placeholder se não encontrada."""
+    fonte          = get_pil_font(41)
+    fonte_endereco = get_pil_font(38)
     largura_max    = 540
-    fonte          = ImageFont.truetype(FONTE_PATH, 41)
-    fonte_endereco = ImageFont.truetype(FONTE_PATH, 38)
 
     nome        = dados.get("nome", "")
     rp          = dados.get("rp", "")
@@ -144,36 +115,39 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
     latitude    = dados.get("latitude", "")
     longitude   = dados.get("longitude", "")
 
-<<<<<<< HEAD
-    # ── FRENTE ────────────────────────────────────────────────────────────────
-=======
->>>>>>> f4a3e3b (.)
-    modelo  = PILImage.open(IMG_FRENTE)
-    desenho = ImageDraw.Draw(modelo)
-    desenho.text((217, 393),  rp,          fill=(0, 0, 0), font=fonte)
-    desenho.text((95,  518),  nome,        fill=(0, 0, 0), font=fonte)
-    desenho.text((864, 392),  cpf,         fill=(0, 0, 0), font=fonte)
-    desenho.text((100, 660),  propriedade, fill=(0, 0, 0), font=fonte)
-    desenho.text((212, 824),  unloc,       fill=(0, 0, 0), font=fonte)
-    desenho.text((751, 824),  inicioatv,   fill=(0, 0, 0), font=fonte)
-    desenho.text((1063, 825), validade,    fill=(0, 0, 0), font=fonte)
+    def _txt(draw, pos, text):
+        if not text:
+            return
+        if fonte:
+            draw.text(pos, text, fill=(0, 0, 0), font=fonte)
+        else:
+            draw.text(pos, text, fill=(0, 0, 0))
 
-<<<<<<< HEAD
-    # ── VERSO ─────────────────────────────────────────────────────────────────
-=======
->>>>>>> f4a3e3b (.)
-    modelo_verso  = PILImage.open(IMG_VERSO)
+    # FRENTE
+    modelo  = open_image(get_img_frente(), "FRENTE").copy()
+    desenho = ImageDraw.Draw(modelo)
+    _txt(desenho, (217, 393),  rp)
+    _txt(desenho, (95,  518),  nome)
+    _txt(desenho, (864, 392),  cpf)
+    _txt(desenho, (100, 660),  propriedade)
+    _txt(desenho, (212, 824),  unloc)
+    _txt(desenho, (751, 824),  inicioatv)
+    _txt(desenho, (1063, 825), validade)
+
+    # VERSO
+    modelo_verso  = open_image(get_img_verso(), "VERSO").copy()
     desenho_verso = ImageDraw.Draw(modelo_verso)
     altura_verso  = modelo_verso.size[1]
 
-    # Endereço com quebra de linha (igual ao APP_SETOR)
-    linhas_endereco = textwrap.wrap(endereco, largura_max)
     coord_end = [89, 285]
-    for linha in linhas_endereco:
-        for lq in textwrap.wrap(linha, width=largura_max // 9):
+    for linha in textwrap.wrap(endereco, largura_max):
+        for lq in textwrap.wrap(linha, width=max(1, largura_max // 9)):
             if coord_end[1] < altura_verso:
-                desenho_verso.text(tuple(coord_end), lq,
-                                   fill=(0, 0, 0), font=fonte_endereco)
+                if fonte_endereco:
+                    desenho_verso.text(tuple(coord_end), lq,
+                                       fill=(0, 0, 0), font=fonte_endereco)
+                else:
+                    desenho_verso.text(tuple(coord_end), lq, fill=(0, 0, 0))
                 coord_end[1] += 40
 
     _desenhar_texto_quebrado(
@@ -192,78 +166,45 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
         f"{latitude}  {longitude}",
         fonte, largura_max, altura_verso)
 
-<<<<<<< HEAD
-    # ── Salvar como PDF e mesclar ─────────────────────────────────────────────
-=======
->>>>>>> f4a3e3b (.)
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
-        path_frente = tf.name
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tv:
-        path_verso = tv.name
-
+    path_frente = path_verso = None
     try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
+            path_frente = tf.name
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tv:
+            path_verso = tv.name
+
         modelo.save(path_frente, format="PDF")
         modelo_verso.save(path_verso, format="PDF")
 
         merger = PyPDF2.PdfMerger()
         merger.append(PyPDF2.PdfReader(path_frente))
         merger.append(PyPDF2.PdfReader(path_verso))
-
         buf = io.BytesIO()
         merger.write(buf)
         merger.close()
         return buf.getvalue()
     finally:
         for p in (path_frente, path_verso):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
 
-<<<<<<< HEAD
-
-# ── Controller ────────────────────────────────────────────────────────────────
 
 class BatchCarteiraController:
-    """
-    Controller de lote — usado exclusivamente por BatchCarteiraView.
-
-    Parâmetros
-    ----------
-    usuario    : str  — nome do usuário logado
-    repo       : objeto com método .salvar(...)      — CarteirasRepository
-    sefaz_repo : objeto com método .obter_credencial() → dict | None
-    """
-=======
-# ──────────────────────────────────────────────────────────────────────────────
-# CONTROLLER
-# ──────────────────────────────────────────────────────────────────────────────
-class BatchCarteiraController:
->>>>>>> f4a3e3b (.)
 
     def __init__(self, usuario: str, repo, sefaz_repo):
-        self.usuario      = usuario
-        self._repo        = repo
-        self._sefaz_repo  = sefaz_repo
-<<<<<<< HEAD
-
-        self._rodando     = False
-        self._parar_flag  = False
-        self._driver      = None
-
-    # ── Helpers estáticos ────────────────────────────────────────────────────
+        self.usuario     = usuario
+        self._repo       = repo
+        self._sefaz_repo = sefaz_repo
+        self._lock       = threading.Lock()
+        self._rodando    = False
+        self._parar_flag = False
+        self._driver     = None
 
     @staticmethod
     def cpf_do_arquivo(nome_arquivo: str) -> Optional[str]:
-        """Extrai CPF (11 dígitos) do nome do arquivo. None se inválido."""
-=======
-        self._rodando     = False
-        self._parar_flag  = False
-        self._driver      = None
-
-    @staticmethod
-    def cpf_do_arquivo(nome_arquivo: str) -> Optional[str]:
->>>>>>> f4a3e3b (.)
         stem   = os.path.splitext(nome_arquivo)[0]
         digits = re.sub(r"\D", "", stem)
         return digits if len(digits) == 11 else None
@@ -276,80 +217,39 @@ class BatchCarteiraController:
         return d
 
     def esta_rodando(self) -> bool:
-        return self._rodando
+        with self._lock:
+            return self._rodando
 
     def parar(self) -> None:
-        self._parar_flag = True
+        with self._lock:
+            self._parar_flag = True
 
-<<<<<<< HEAD
-    # ── Ponto de entrada ─────────────────────────────────────────────────────
-
-    def executar_lote(
-        self,
-        caminhos_pdf: list,
-        log_cb:       Callable,
-        progress_cb:  Callable,
-        concluido_cb: Callable,
-    ) -> None:
-        """
-        Dispara processamento em lote em thread daemon.
-
-        Callbacks:
-          log_cb(msg, tipo)              tipo ∈ {info, sucesso, erro, aviso}
-          progress_cb(atual, total, nome)
-          concluido_cb(sucesso, erro, ignorado)
-        """
-        if self._rodando:
-            return
-        self._parar_flag = False
+    def executar_lote(self, caminhos_pdf: list, log_cb: Callable,
+                      progress_cb: Callable, concluido_cb: Callable) -> None:
+        with self._lock:
+            if self._rodando:
+                return
+            self._rodando    = True
+            self._parar_flag = False
         threading.Thread(
             target=self._worker,
             args=(caminhos_pdf, log_cb, progress_cb, concluido_cb),
             daemon=True,
         ).start()
 
-    # ── Worker ───────────────────────────────────────────────────────────────
-
-=======
-    def executar_lote(self, caminhos_pdf: list, log_cb: Callable, progress_cb: Callable, concluido_cb: Callable) -> None:
-        if self._rodando:
-            return
-        self._parar_flag = False
-        threading.Thread(target=self._worker, args=(caminhos_pdf, log_cb, progress_cb, concluido_cb), daemon=True).start()
-
->>>>>>> f4a3e3b (.)
     def _worker(self, caminhos_pdf, log_cb, progress_cb, concluido_cb):
-        self._rodando = True
         sucesso = erro = ignorado = 0
         total   = len(caminhos_pdf)
-
         try:
-<<<<<<< HEAD
-            # 1. Credenciais SEFAZ
-            cred = None
-            if self._sefaz_repo:
-                try:
-                    cred = self._sefaz_repo.obter_credencial()
-                except Exception as exc:
-                    log_cb(f"Aviso: não foi possível obter credenciais — {exc}", "aviso")
-
-            if not cred:
-                log_cb("Credenciais SEFAZ não encontradas no banco. Abortando.", "erro")
-                concluido_cb(0, total, 0)
-                return
-
-            # 2. Abrir Chrome + login
-            log_cb("Abrindo Chrome e fazendo login no SEFAZ...", "info")
-=======
-            cred = None
             if self._sefaz_repo is None:
-                log_cb("ERRO: sefaz_repo é None", "erro")
+                log_cb("ERRO: repositório SEFAZ não configurado.", "erro")
                 concluido_cb(0, total, 0)
                 return
+
             try:
                 cred = self._sefaz_repo.obter_credencial()
             except Exception as exc:
-                log_cb(f"Erro ao obter credencial: {exc}", "erro")
+                log_cb(f"Erro ao obter credencial SEFAZ: {exc}", "erro")
                 concluido_cb(0, total, 0)
                 return
 
@@ -359,60 +259,53 @@ class BatchCarteiraController:
                 return
 
             log_cb("Abrindo navegador...", "info")
->>>>>>> f4a3e3b (.)
             try:
                 self._driver = self._abrir_driver(cred["usuario"], cred["senha"])
-                time.sleep(2)  # Aguarda carregamento
             except Exception as exc:
                 log_cb(f"Erro ao abrir navegador: {exc}", "erro")
                 concluido_cb(0, total, 0)
                 return
 
             log_cb("Login realizado. Iniciando processamento...", "sucesso")
-            time.sleep(1)
 
-            # 3. Processar cada PDF
             for idx, caminho in enumerate(caminhos_pdf, start=1):
-                if self._parar_flag:
-                    log_cb("Processamento interrompido.", "aviso")
+                with self._lock:
+                    deve_parar = self._parar_flag
+                if deve_parar:
+                    log_cb("Processamento interrompido pelo usuário.", "aviso")
                     ignorado += total - idx + 1
                     break
 
                 nome       = os.path.basename(caminho)
                 cpf_digits = self.cpf_do_arquivo(nome)
-                cpf_fmt    = self.formatar_cpf(cpf_digits) if cpf_digits else nome
+
+                if not cpf_digits:
+                    log_cb(f"[{idx}/{total}] {nome} — CPF não encontrado no nome do arquivo; ignorado.", "aviso")
+                    ignorado += 1
+                    continue
+
+                cpf_fmt = self.formatar_cpf(cpf_digits)
 
                 progress_cb(idx, total, nome)
                 log_cb(f"[{idx}/{total}] {cpf_fmt} — consultando SEFAZ...", "info")
 
-                # Consulta SEFAZ
                 try:
                     dados = self._consultar_sefaz(cpf_fmt)
                 except Exception as exc:
-<<<<<<< HEAD
                     log_cb(f"[{idx}/{total}] {cpf_fmt} — erro na consulta: {exc}", "erro")
-=======
-                    log_cb(f"[{idx}/{total}] {cpf_fmt} — erro: {exc}", "erro")
->>>>>>> f4a3e3b (.)
                     erro += 1
                     continue
 
                 if not dados:
-<<<<<<< HEAD
-                    log_cb(f"[{idx}/{total}] {cpf_fmt} — não encontrado no SEFAZ.", "aviso")
-=======
                     log_cb(f"[{idx}/{total}] {cpf_fmt} — não encontrado.", "aviso")
->>>>>>> f4a3e3b (.)
                     ignorado += 1
                     continue
 
-                # Gerar PDF + salvar banco
                 try:
                     pdf_bytes = _gerar_pdf_bytes(dados)
-
                     self._repo.salvar(
                         registro     = dados.get("rp", ""),
-                        cpf          = cpf_digits or "",
+                        cpf          = cpf_digits or cpf_fmt,
                         nome         = dados.get("nome", ""),
                         propriedade  = dados.get("propriedade", ""),
                         unloc        = dados.get("unloc", ""),
@@ -421,20 +314,14 @@ class BatchCarteiraController:
                         endereco     = dados.get("endereco", ""),
                         atividade1   = dados.get("atv1", ""),
                         atividade2   = dados.get("atv2", ""),
-<<<<<<< HEAD
-                        georef       = (f"{dados.get('latitude', '')}  "
-                                        f"{dados.get('longitude', '')}"),
-=======
-                        georef       = f"{dados.get('latitude', '')}  {dados.get('longitude', '')}",
->>>>>>> f4a3e3b (.)
+                        georef       = (f"{dados.get('latitude','')}"
+                                        f"  {dados.get('longitude','')}").strip(),
                         pdf_conteudo = pdf_bytes,
                         foto1=None, foto2=None, foto3=None,
                         usuario      = self.usuario,
                     )
-
                     sucesso += 1
-                    log_cb(f"[{idx}/{total}] {cpf_fmt} — ✓ salvo com sucesso.", "sucesso")
-
+                    log_cb(f"[{idx}/{total}] {cpf_fmt} — ✓ salvo.", "sucesso")
                 except Exception as exc:
                     log_cb(f"[{idx}/{total}] {cpf_fmt} — erro ao salvar: {exc}", "erro")
                     erro += 1
@@ -443,126 +330,129 @@ class BatchCarteiraController:
             log_cb(f"Erro inesperado: {exc}", "erro")
         finally:
             self._fechar_driver()
-            self._rodando = False
+            with self._lock:
+                self._rodando = False
             concluido_cb(sucesso, erro, ignorado)
 
     def _abrir_driver(self, usuario: str, senha: str):
         import shutil
         from selenium import webdriver
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
 
         driver = None
 
-        edge_driver_paths = [
+        for ep in [
+            shutil.which("msedgedriver"),
             r"C:\Program Files (x86)\Microsoft\EdgeWebDriver\msedgedriver.exe",
             r"C:\Program Files\Microsoft\EdgeWebDriver\msedgedriver.exe",
             r"C:\Windows\System32\msedgedriver.exe",
-        ]
-        which = shutil.which("msedgedriver")
-        if which:
-            edge_driver_paths.insert(0, which)
-
-        for edge_driver in edge_driver_paths:
-            if not edge_driver or not os.path.exists(edge_driver):
+        ]:
+            if not ep or not os.path.exists(ep):
                 continue
             try:
                 from selenium.webdriver.edge.service import Service as EdgeService
-                options = webdriver.EdgeOptions()
-                options.add_argument("--start-maximized")
-                options.add_experimental_option("detach", True)
-                driver = webdriver.Edge(service=EdgeService(edge_driver), options=options)
+                opts = webdriver.EdgeOptions()
+                opts.add_argument("--start-maximized")
+                opts.add_experimental_option("detach", True)
+                driver = webdriver.Edge(service=EdgeService(ep), options=opts)
                 break
             except Exception:
                 continue
 
         if driver is None:
-            try:
-                options = webdriver.EdgeOptions()
-                options.add_argument("--start-maximized")
-                options.add_experimental_option("detach", True)
-                driver = webdriver.Edge(options=options)
-            except Exception:
-                pass
+            for try_fn in [
+                lambda: webdriver.Edge(options=_edge_opts()),
+                lambda: webdriver.Chrome(options=_chrome_opts()),
+            ]:
+                try:
+                    driver = try_fn()
+                    break
+                except Exception:
+                    pass
 
         if driver is None:
-            try:
-                options = webdriver.ChromeOptions()
-                options.add_argument("--start-maximized")
-                options.add_experimental_option("detach", True)
-                driver = webdriver.Chrome(options=options)
-            except Exception:
-                pass
-
-        if driver is None:
-            raise RuntimeError("Nenhum navegador encontrado.")
+            raise RuntimeError(
+                "Nenhum navegador compatível encontrado.\n"
+                "Instale Edge WebDriver ou ChromeDriver e adicione ao PATH."
+            )
 
         driver.get(SEFAZ_URL)
-        time.sleep(2)
-
+        WebDriverWait(driver, 15).until(
+            lambda d: d.find_element("id", "username"))
         driver.find_element("id", "username").send_keys(usuario)
         driver.find_element("id", "password").send_keys(senha)
-        driver.find_element("xpath", '//*[@id="fm1"]/fieldset/div[3]/div/div[4]/input[4]').click()
+        driver.find_element(
+            "xpath",
+            '//*[@id="fm1"]/fieldset/div[3]/div/div[4]/input[4]'
+        ).click()
         time.sleep(3)
         return driver
 
     def _consultar_sefaz(self, cpf_fmt: str) -> Optional[dict]:
         from selenium.webdriver.common.by import By
-        from selenium.common.exceptions import NoSuchElementException
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
-        d = self._driver
+        d    = self._driver
+        wait = WebDriverWait(d, 10)
 
-<<<<<<< HEAD
-        # Navegar no menu SEFAZ (idêntico ao APP_SETOR)
-        d.find_element(By.XPATH, _XPATH["menu_gcc"]).click()
-        time.sleep(1)
-        d.find_element(By.XPATH, _XPATH["menu_cad"]).click()
-        time.sleep(1)
+        # Remove formatação do CPF para envio puro
+        cpf_limpo = re.sub(r"\D", "", cpf_fmt)
 
-        # Preencher CPF e pesquisar
-        campo = d.find_element(By.XPATH, _XPATH["cpf_field"])
-        campo.click()
-        campo.send_keys(cpf_fmt)
-        d.find_element(By.XPATH, _XPATH["pesquisar"]).click()
-        time.sleep(1)
-=======
         try:
-            d.find_element(By.XPATH, _XPATH["menu_gcc"]).click()
-            time.sleep(0.8)
-            d.find_element(By.XPATH, _XPATH["menu_cad"]).click()
-            time.sleep(0.8)
-        except Exception:
+            wait.until(EC.element_to_be_clickable(
+                (By.XPATH, _XPATH["menu_gcc"]))).click()
+            time.sleep(0.4)
+            wait.until(EC.element_to_be_clickable(
+                (By.XPATH, _XPATH["menu_cad"]))).click()
+            time.sleep(0.4)
+        except (NoSuchElementException, TimeoutException):
             return None
->>>>>>> f4a3e3b (.)
 
-        # Ordenar por situação e abrir declaração mais recente
         try:
-<<<<<<< HEAD
-            d.find_element(By.XPATH, _XPATH["th_situacao"]).click()
-            time.sleep(2)
-            d.find_element(By.XPATH, _XPATH["btn_abrir"]).click()
-            time.sleep(3)
-=======
-            campo = d.find_element(By.XPATH, _XPATH["cpf_field"])
+            campo = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, _XPATH["cpf_field"])))
             campo.click()
+            time.sleep(0.2)
             campo.clear()
-            campo.send_keys(cpf_fmt)
-            d.find_element(By.XPATH, _XPATH["pesquisar"]).click()
+            time.sleep(0.1)
+            
+            # Método 1: Injeta valor via JavaScript (mais confiável para campos com máscara)
+            d.execute_script(f"arguments[0].value = '{cpf_limpo}';", campo)
+            d.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", campo)
+            d.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo)
+            
+            time.sleep(0.3)
+            
+            # Se JavaScript não funcionou, tenta send_keys como fallback
+            if not campo.get_attribute("value"):
+                campo.send_keys(cpf_limpo)
+                time.sleep(0.2)
+            
+            # Clica no botão pesquisar
+            pesquisar_btn = d.find_element(By.XPATH, _XPATH["pesquisar"])
+            pesquisar_btn.click()
             time.sleep(1.5)
-        except Exception:
+        except Exception as e:
             return None
 
         try:
-            d.find_element(By.XPATH, _XPATH["th_situacao"]).click()
-            time.sleep(1.5)
-            d.find_element(By.XPATH, _XPATH["btn_abrir"]).click()
-            time.sleep(2.5)
->>>>>>> f4a3e3b (.)
-        except NoSuchElementException:
+            wait.until(EC.element_to_be_clickable(
+                (By.XPATH, _XPATH["th_situacao"]))).click()
+            time.sleep(0.8)
+            wait.until(EC.element_to_be_clickable(
+                (By.XPATH, _XPATH["btn_abrir"]))).click()
+            time.sleep(2)
+        except (NoSuchElementException, TimeoutException):
             return None
 
         def val(key: str) -> str:
             try:
                 el = d.find_element(By.XPATH, _XPATH[key])
-                return d.execute_script("return arguments[0].value;", el) or ""
+                return (d.execute_script(
+                    "return arguments[0].value;", el) or "").strip()
             except Exception:
                 return ""
 
@@ -570,52 +460,29 @@ class BatchCarteiraController:
         if not nome:
             return None
 
-        rp          = val("rp")
-        cpf_pg      = val("cpf_pg")
-        propriedade = val("propriedade")
-        endereco    = val("endereco")
         unloc_raw   = val("unloc")
-        latitude    = val("latitude").replace(",", ".")
-        longitude   = val("longitude").replace(",", ".")
-        atv1        = val("atv1")
-        atv2        = val("atv2")
-        inicioatv   = val("inicioatv")
         numcontrole = val("numcontrole")
-        cnae1       = val("cnae1")
-        cnae2       = val("cnae2")
-        validade    = val("validade")
-
-        if not atv2:
-            cnae2 = ""
-
-        # Mapeamento UNLOC (idêntico ao APP_SETOR)
-        unloc_da_pagina = _normalizar_unloc(unloc_raw)
-        unloc_completo  = f"PR-{unloc_da_pagina}/{numcontrole}"
+        atv2        = val("atv2")
+        cnae2       = val("cnae2") if atv2 else ""
 
         return {
-            "nome":            nome,
-            "rp":              rp,
-            "cpf":             cpf_pg or cpf_fmt,
-            "propriedade":     propriedade,
-            "endereco":        endereco,
-            "unloc_da_pagina": unloc_da_pagina,
-            "unloc":           unloc_completo,
-            "latitude":        latitude,
-            "longitude":       longitude,
-            "atv1":            atv1,
-            "atv2":            atv2,
-            "inicioatv":       inicioatv,
-            "numcontrole":     numcontrole,
-            "cnae1":           cnae1,
-            "cnae2":           cnae2,
-            "validade":        validade,
+            "nome":        nome,
+            "rp":          val("rp"),
+            "cpf":         val("cpf_pg") or cpf_fmt,
+            "propriedade": val("propriedade"),
+            "endereco":    val("endereco"),
+            "unloc":       f"PR-{_normalizar_unloc(unloc_raw)}/{numcontrole}",
+            "latitude":    val("latitude").replace(",", "."),
+            "longitude":   val("longitude").replace(",", "."),
+            "atv1":        val("atv1"),
+            "atv2":        atv2,
+            "inicioatv":   val("inicioatv"),
+            "numcontrole": numcontrole,
+            "cnae1":       val("cnae1"),
+            "cnae2":       cnae2,
+            "validade":    val("validade"),
         }
 
-<<<<<<< HEAD
-    # ── Fechar driver ─────────────────────────────────────────────────────────
-
-=======
->>>>>>> f4a3e3b (.)
     def _fechar_driver(self) -> None:
         if self._driver:
             try:
@@ -623,3 +490,19 @@ class BatchCarteiraController:
             except Exception:
                 pass
             self._driver = None
+
+
+def _edge_opts():
+    from selenium import webdriver
+    opts = webdriver.EdgeOptions()
+    opts.add_argument("--start-maximized")
+    opts.add_experimental_option("detach", True)
+    return opts
+
+
+def _chrome_opts():
+    from selenium import webdriver
+    opts = webdriver.ChromeOptions()
+    opts.add_argument("--start-maximized")
+    opts.add_experimental_option("detach", True)
+    return opts

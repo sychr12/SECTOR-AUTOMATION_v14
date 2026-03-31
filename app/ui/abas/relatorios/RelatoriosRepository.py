@@ -1,38 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-<<<<<<< HEAD
-Repositório PostgreSQL - tabela relatorios_sefaz.
-
-IMPORTANTE: usa importação ABSOLUTA de services.database porque
-esse módulo é sempre chamado de dentro do pacote app/, onde o
-sys.path já inclui a raiz do projeto.
-=======
 Repositório SQL Server 2016 - tabela relatorios_sefaz.
 Usa pyodbc via services.database (get_connection, fetch_all_as_dict, fetch_one_as_dict).
->>>>>>> f4a3e3b (.)
 """
 import traceback
 import sys
 import io
 from typing import Optional
 
-<<<<<<< HEAD
-# Garante que prints com Unicode nao quebrem no terminal Windows (cp1252)
-if hasattr(sys.stdout, "buffer"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-# Importação absoluta - funciona independente de como o Python é iniciado
-from services.database import get_connection
-=======
 # Garante que prints com Unicode não quebrem no terminal Windows
 if hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 from services.database import get_connection, fetch_all_as_dict, fetch_one_as_dict
->>>>>>> f4a3e3b (.)
 
 
 class RelatoriosRepository:
@@ -92,19 +72,7 @@ class RelatoriosRepository:
                usuario:     str,
                xls_insc:    Optional[bytes] = None,
                xls_renov:   Optional[bytes] = None) -> int:
-<<<<<<< HEAD
-        """Insere um registro de relatório SEFAZ no banco e retorna o id gerado."""
-        sql = """
-        INSERT INTO public.relatorios_sefaz
-            (municipio, periodo_ini, periodo_fim,
-             total_insc, total_renov, usuario,
-             xls_insc, xls_renov, criado_em)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        RETURNING id
-        """
-=======
         """Insere um registro de relatório e retorna o id gerado."""
->>>>>>> f4a3e3b (.)
         print(f"[RelatoriosRepository] Salvando -> {municipio} | "
               f"insc={total_insc} renov={total_renov} usuario='{usuario}'")
 
@@ -134,13 +102,8 @@ class RelatoriosRepository:
                 xls_renov,
             ))
             conn.commit()
-<<<<<<< HEAD
-            print(f"[RelatoriosRepository] [OK] Salvo com id={rec_id}")
-            return rec_id
-=======
             print(f"[RelatoriosRepository] [OK] Salvo com id={novo_id}")
             return novo_id
->>>>>>> f4a3e3b (.)
         except Exception as exc:
             conn.rollback()
             print(f"[RelatoriosRepository] ERRO ao salvar '{municipio}': {exc}")
@@ -187,13 +150,8 @@ class RelatoriosRepository:
                 if v and hasattr(v, "strftime"):
                     d["criado_em"] = v.strftime("%d/%m/%Y %H:%M")
 
-<<<<<<< HEAD
-            print(f"[RelatoriosRepository] listar() -> {len(resultado)} registro(s)")
-            return resultado
-=======
             print(f"[RelatoriosRepository] listar() -> {len(rows)} registro(s)")
             return rows
->>>>>>> f4a3e3b (.)
 
         except Exception as exc:
             print(f"[RelatoriosRepository] ERRO ao listar: {exc}")
@@ -229,13 +187,8 @@ class RelatoriosRepository:
 
             print(
                 f"[RelatoriosRepository] [OK] id={record_id} "
-<<<<<<< HEAD
-                f"xls_insc={'sim' if d.get('xls_insc') else 'NAO'} "
-                f"xls_renov={'sim' if d.get('xls_renov') else 'NAO'}"
-=======
                 f"xls_insc={'sim' if row.get('xls_insc') else 'NAO'} "
                 f"xls_renov={'sim' if row.get('xls_renov') else 'NAO'}"
->>>>>>> f4a3e3b (.)
             )
             return row
 
@@ -269,11 +222,7 @@ class RelatoriosRepository:
         finally:
             conn.close()
 
-<<<<<<< HEAD
-    # -- Por hora (últimos N dias) ----------------------------------------------
-=======
     # ── Por hora (últimos N dias) ─────────────────────────────────────────────
->>>>>>> f4a3e3b (.)
     def por_hora(self, dias: int = 7) -> list:
         """Agrupa geração de relatórios por hora nos últimos N dias."""
         conn = get_connection()

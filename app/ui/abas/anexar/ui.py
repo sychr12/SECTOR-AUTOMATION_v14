@@ -546,7 +546,10 @@ class AnexarUI(ctk.CTkFrame):
         self.tree_log, c4 = LogTable.criar(aba_log)
         c4.pack(fill="both", expand=True, padx=12, pady=12)
         
-        abas_erros = _aba()
+        # Aba Erros
+        aba_erros = _aba(" Erros ")
+        self.tree_erros, c5 = ErrorsTable.criar(aba_erros)
+        c5.pack(fill="both", expand=True, padx=12, pady=12)
 
         # Aba Prontos
         aba_prontos = _aba(" Prontos ")
@@ -653,15 +656,18 @@ class AnexarUI(ctk.CTkFrame):
         """Adiciona mensagem ao log"""
         safe_print(f"[{status}] {mensagem}")
         self.after(0, LogTable.add, self.tree_log, status, mensagem, tag)
-        
+
         if tag.lower() == "sucesso":
             self._sucesso += 1
-            self.after(0, self._stat_cards["sucesso"].configure, text=str(self._sucesso))
+            self.after(0, lambda v=self._sucesso: self._stat_cards["sucesso"].configure(text=str(v)))
             if self._prontos_view:
                 self.after(500, self._prontos_view.recarregar)
         elif tag.lower() == "erro":
             self._erro += 1
-            self.after(0, self._stat_cards["erro"].configure, text=str(self._erro))
+            self.after(0, lambda v=self._erro: self._stat_cards["erro"].configure(text=str(v)))
+            if self.tree_erros is not None:
+                self.after(0, ErrorsTable.adicionar, self.tree_erros,
+                           status, mensagem, "erro")
 
     def _set_status(self, texto, tipo="info"):
         """Atualiza o status badge"""

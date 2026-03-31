@@ -1,5 +1,9 @@
+# ui.py
 # -*- coding: utf-8 -*-
-"""Interface de Carteira Digital do Produtor Rural."""
+"""
+ui.py — Interface principal da Carteira Digital do Produtor Rural.
+Local: app/ui/abas/Carteira/ui.py
+"""
 import io
 import os
 import re
@@ -10,24 +14,22 @@ import tempfile
 import threading
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from PIL import Image, Image as PILImage, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import PyPDF2
 
 from ui.base_ui import BaseUI
 from app.theme import AppTheme
 from .controller import CarteiraController
-from .services import CarteiraService
+from .carteira_service import CarteiraService
 from .views.historico_view import HistoricoView
-<<<<<<< HEAD
-from .views.batch_view import BatchCarteiraView   # ← aba de lote separada
+from .views.batch_view import BatchCarteiraView
+from .assets import get_img_frente, get_img_verso, get_pil_font, open_image
+from .utils.constants import *
+from .utils.formatters import format_cpf, format_date
 
-=======
-from .views.batch_view import BatchCarteiraView 
 
-
->>>>>>> f4a3e3b (.)
-MAX_FILENAME_DISPLAY    = 30
-DEBOUNCE_DELAY          = 120
+MAX_FILENAME_DISPLAY = 30
+DEBOUNCE_DELAY = 120
 SUPPORTED_IMAGE_FORMATS = [
     ("Imagens", "*.png *.jpg *.jpeg *.bmp *.webp"),
     ("Todos",   "*.*"),
@@ -40,131 +42,6 @@ _AZULH  = "#2563eb"
 _MUTED  = "#64748b"
 _VERM   = "#ef4444"
 _AMBER  = "#f59e0b"
-
-# ── Paths dos assets ──────────────────────────────────────────────────────────
-IMG_FRENTE = r"Q:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images\frente.png"
-IMG_VERSO  = r"Q:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images\verso.png"
-FONTE_PATH = r"Q:\ARQUIVOS CPCPR\fabio jr\CARTAO-DIGITAL\Roboto-Regular.ttf"
-SEFAZ_URL  = "http://sistemas.sefaz.am.gov.br/gcc/entrada.do"
-
-# ── Mapeamento UNLOC ──────────────────────────────────────────────────────────
-UNLOC_MAP = {
-    "BAE":     "BAR",
-    "MTS-ATZ": "ATZ-MTS", "MTS": "ATZ-MTS",
-    "NRO-ITR": "ITR-NRO", "NRO": "ITR-NRO",
-    "MTP-MNX": "MNX-MTP", "MTP": "MNX-MTP",
-    "VE-LBR":  "LBR-VE",  "VE":  "LBR-VE",
-    "VRC-MPU": "MPU-VRC", "VRC": "MPU-VRC",
-    "BNA-PRF": "PRF-BNA", "BNA": "PRF-BNA",
-    "VDL-ITR": "ITR-VDL", "VDL": "ITR-VDL",
-    "RLD-HIA": "HIA-RLD", "RLD": "HIA-RLD",
-    "CAN-SUL": "SUL-CAN",
-    "ZL-MAO":  "MAO-ZL",  "ZL":  "MAO-ZL",
-}
-
-
-def _normalizar_unloc(unloc: str) -> str:
-    return UNLOC_MAP.get(unloc, unloc)
-
-
-def _limitar_texto(texto: str, n: int) -> str:
-    return texto[:n - 3] + "..." if len(texto) > n else texto
-
-
-def _desenhar_texto_quebrado(draw, coordenadas, texto, fonte, largura_max, altura_max):
-    x, y = coordenadas
-    for linha in textwrap.wrap(texto or "", width=largura_max // 9):
-        if y >= altura_max:
-            break
-        draw.text((x, y), linha, fill=(0, 0, 0), font=fonte)
-        y += 40
-
-
-def _gerar_pdf_lote(dados: dict) -> bytes:
-    """
-    Replica APP_SETOR.fazer_carteiras:
-    Desenha frente + verso com Pillow, mescla com PyPDF2.
-    """
-    largura_max    = 540
-    fonte          = ImageFont.truetype(FONTE_PATH, 41)
-    fonte_endereco = ImageFont.truetype(FONTE_PATH, 38)
-
-    nome        = dados.get("nome", "")
-    rp          = dados.get("rp", "")
-    cpf         = dados.get("cpf", "")
-    propriedade = dados.get("propriedade", "")
-    unloc       = dados.get("unloc", "")
-    inicioatv   = dados.get("inicioatv", "")
-    validade    = dados.get("validade", "")
-    endereco    = _limitar_texto(dados.get("endereco", ""), 50)
-    atv1        = dados.get("atv1", "")
-    atv2        = _limitar_texto(dados.get("atv2", ""), 60)
-    cnae1       = dados.get("cnae1", "")
-    cnae2       = dados.get("cnae2", "") if atv2 else ""
-    latitude    = dados.get("latitude", "")
-    longitude   = dados.get("longitude", "")
-
-    # FRENTE
-    modelo  = PILImage.open(IMG_FRENTE)
-    desenho = ImageDraw.Draw(modelo)
-    desenho.text((217, 393),  rp,          fill=(0, 0, 0), font=fonte)
-    desenho.text((95,  518),  nome,        fill=(0, 0, 0), font=fonte)
-    desenho.text((864, 392),  cpf,         fill=(0, 0, 0), font=fonte)
-    desenho.text((100, 660),  propriedade, fill=(0, 0, 0), font=fonte)
-    desenho.text((212, 824),  unloc,       fill=(0, 0, 0), font=fonte)
-    desenho.text((751, 824),  inicioatv,   fill=(0, 0, 0), font=fonte)
-    desenho.text((1063, 825), validade,    fill=(0, 0, 0), font=fonte)
-
-    # VERSO
-    modelo_verso  = PILImage.open(IMG_VERSO)
-    desenho_verso = ImageDraw.Draw(modelo_verso)
-    altura_verso  = modelo_verso.size[1]
-
-    linhas_endereco = textwrap.wrap(endereco, largura_max)
-    coord_end = [89, 285]
-    for linha in linhas_endereco:
-        for lq in textwrap.wrap(linha, width=largura_max // 9):
-            if coord_end[1] < altura_verso:
-                desenho_verso.text(tuple(coord_end), lq,
-                                   fill=(0, 0, 0), font=fonte_endereco)
-                coord_end[1] += 40
-
-    _desenhar_texto_quebrado(
-        desenho_verso, (89, 473),
-        f"{cnae1} - {atv1}" if cnae1 else atv1,
-        fonte, largura_max, altura_verso)
-
-    if atv2:
-        _desenhar_texto_quebrado(
-            desenho_verso, (89, 631),
-            f"{cnae2} - {atv2}" if cnae2 else atv2,
-            fonte, largura_max, altura_verso)
-
-    _desenhar_texto_quebrado(
-        desenho_verso, (382, 804),
-        f"{latitude}  {longitude}",
-        fonte, largura_max, altura_verso)
-
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
-        path_frente = tf.name
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tv:
-        path_verso = tv.name
-    try:
-        modelo.save(path_frente, format="PDF")
-        modelo_verso.save(path_verso, format="PDF")
-        merger = PyPDF2.PdfMerger()
-        merger.append(PyPDF2.PdfReader(path_frente))
-        merger.append(PyPDF2.PdfReader(path_verso))
-        buf = io.BytesIO()
-        merger.write(buf)
-        merger.close()
-        return buf.getvalue()
-    finally:
-        for p in (path_frente, path_verso):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
 
 
 class CarteiraDigitalUI(BaseUI):
@@ -187,14 +64,17 @@ class CarteiraDigitalUI(BaseUI):
         self._layout()
         self._configurar_atalhos()
 
+ 
     # ── Atalhos ───────────────────────────────────────────────────────────────
+
     def _configurar_atalhos(self):
         self.bind("<Control-s>", lambda _: self._salvar_banco())
         self.bind("<Control-l>", lambda _: self._confirmar_limpar())
         self.bind("<F5>",        lambda _: self._virar_cartao())
         self.focus_set()
 
-    # ── Layout: notebook com 2 abas ───────────────────────────────────────────
+    # ── Layout ────────────────────────────────────────────────────────────────
+
     def _layout(self):
         from tkinter import ttk
 
@@ -214,11 +94,9 @@ class CarteiraDigitalUI(BaseUI):
         nb = ttk.Notebook(self, style="Cart.TNotebook")
         nb.pack(fill="both", expand=True)
 
-        # Aba 1 — Gerar em Lote (BatchCarteiraView)
+        # Aba 1 — Gerar em Lote
         aba1 = ctk.CTkFrame(nb, fg_color=AppTheme.BG_APP)
         nb.add(aba1, text="  Gerar em Lote  ")
-
-        # Instancia a view de lote passando repo e sefaz_repo do service
         sefaz_repo = getattr(self.service, "sefaz_repo", None)
         BatchCarteiraView(
             aba1,
@@ -232,9 +110,8 @@ class CarteiraDigitalUI(BaseUI):
         nb.add(aba2, text="  Cadastro Individual  ")
         self._build_individual(aba2)
 
-    # =========================================================================
-    # ABA 2 — CADASTRO INDIVIDUAL
-    # =========================================================================
+    # ── Aba 2: Cadastro Individual ────────────────────────────────────────────
+
     def _build_individual(self, parent):
         wrap = ctk.CTkFrame(parent, fg_color="transparent")
         wrap.pack(fill="both", expand=True, padx=36, pady=28)
@@ -243,7 +120,6 @@ class CarteiraDigitalUI(BaseUI):
         self._coluna_cartao(wrap)
         self._coluna_formulario(wrap)
 
-    # ── Coluna esquerda: cartão + botões ──────────────────────────────────────
     def _coluna_cartao(self, parent):
         col = ctk.CTkFrame(parent, fg_color="transparent")
         col.grid(row=0, column=0, sticky="n", padx=(0, 28))
@@ -272,10 +148,10 @@ class CarteiraDigitalUI(BaseUI):
 
         W = self.controller.CARD_W
         for txt, cor, corh, cmd, bold in [
-            ("🔄  Virar cartão",       AppTheme.BG_INPUT, AppTheme.BORDER, self._virar_cartao,    False),
-            ("💾  Salvar no Banco",     _VERDE,            _VERDEH,         self._salvar_banco,    True),
-            ("📜  Histórico",           _AZUL,             _AZULH,          self.abrir_historico,  False),
-            ("🗑️  Limpar Formulário",  AppTheme.BG_INPUT, AppTheme.BORDER, self._confirmar_limpar, False),
+            ("🔄  Virar cartão",      AppTheme.BG_INPUT, AppTheme.BORDER, self._virar_cartao,     False),
+            ("💾  Salvar no Banco",    _VERDE,            _VERDEH,         self._salvar_banco,     True),
+            ("📜  Histórico",          _AZUL,             _AZULH,          self.abrir_historico,   False),
+            ("🗑️  Limpar Formulário", AppTheme.BG_INPUT, AppTheme.BORDER, self._confirmar_limpar, False),
         ]:
             ctk.CTkButton(
                 col, text=txt,
@@ -287,28 +163,34 @@ class CarteiraDigitalUI(BaseUI):
             ).pack(pady=(6, 0))
 
     def _render_cartao(self):
+        """Renderiza a prévia do cartão. Nunca lança exceção."""
         img_path = (self.controller.IMG_FRENTE
                     if self.lado == "frente" else self.controller.IMG_VERSO)
         try:
-            img = Image.open(img_path).resize(
-                (self.controller.CARD_W, self.controller.CARD_H))
+            pil_img = open_image(img_path,
+                                 "FRENTE" if self.lado == "frente" else "VERSO")
+            pil_img = pil_img.resize(
+                (self.controller.CARD_W, self.controller.CARD_H), Image.Resampling.LANCZOS)
             ctk_img = ctk.CTkImage(
-                light_image=img,
+                light_image=pil_img,
                 size=(self.controller.CARD_W, self.controller.CARD_H))
             self.lbl_bg.configure(image=ctk_img, text="")
             self.lbl_bg.image = ctk_img
         except Exception:
+            label = "FRENTE" if self.lado == "frente" else "VERSO"
             self.lbl_bg.configure(
                 image=None,
-                text=f"[ {'FRENTE' if self.lado == 'frente' else 'VERSO'} ]",
+                text=f"[ {label} ]",
                 font=("Segoe UI", 14),
                 text_color=AppTheme.TXT_MUTED,
             )
+
         for w in self.card.winfo_children():
             if w is not self.lbl_bg:
                 w.destroy()
         self._labels_frente.clear()
         self._labels_verso.clear()
+
         if self.lado == "frente":
             self._conteudo_frente()
         else:
@@ -342,7 +224,6 @@ class CarteiraDigitalUI(BaseUI):
             "georef":     self._txt(self.card, 21, 206, 385, font=("Segoe UI", 12)),
         }
 
-    # ── Coluna direita: formulário ────────────────────────────────────────────
     def _coluna_formulario(self, parent):
         scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent")
         scroll.grid(row=0, column=1, sticky="nsew")
@@ -350,7 +231,44 @@ class CarteiraDigitalUI(BaseUI):
         self._secao(scroll, "DADOS DO PRODUTOR")
         p1 = self._painel(scroll)
         self.registro    = self._campo(p1, "Registro estadual")
-        self.cpf         = self._campo(p1, "CPF", tipo="cpf")
+
+        cpf_row = ctk.CTkFrame(p1, fg_color="transparent")
+        cpf_row.pack(fill="x", padx=16, pady=4)
+
+        self.cpf = ctk.CTkEntry(
+            cpf_row,
+            placeholder_text="CPF",
+            fg_color=AppTheme.BG_INPUT,
+            border_color=AppTheme.BORDER,
+            text_color=AppTheme.TXT_MAIN,
+            height=36,
+            corner_radius=8,
+        )
+        self.cpf.pack(side="left", fill="x", expand=True)
+        self.cpf.bind("<KeyRelease>", self._debounce_preview)
+
+        self._btn_buscar_cpf = ctk.CTkButton(
+            cpf_row,
+            text="🔍 Buscar CPF",
+            width=130,
+            height=36,
+            corner_radius=8,
+            fg_color=_AZUL,
+            hover_color=_AZULH,
+            text_color="#fff",
+            font=("Segoe UI", 10, "bold"),
+            command=self._buscar_por_cpf,
+        )
+        self._btn_buscar_cpf.pack(side="left", padx=(8, 0))
+
+        self._lbl_buscar_status = ctk.CTkLabel(
+            cpf_row,
+            text="",
+            font=("Segoe UI", 9),
+            text_color=_MUTED,
+        )
+        self._lbl_buscar_status.pack(side="left", padx=(8, 0))
+
         self.nome        = self._campo(p1, "Nome do produtor")
         self.propriedade = self._campo(p1, "Propriedade")
 
@@ -384,8 +302,8 @@ class CarteiraDigitalUI(BaseUI):
                 text_color="#fff", corner_radius=8,
                 command=lambda c=chave: self._selecionar_foto(c),
             ).pack(side="left")
-            lbl = ctk.CTkLabel(row, text="—", text_color=_MUTED,
-                               font=("Segoe UI", 11))
+            lbl = ctk.CTkLabel(row, text="—",
+                               text_color=_MUTED, font=("Segoe UI", 11))
             lbl.pack(side="left", padx=10)
             self._lbl_fotos[chave] = lbl
 
@@ -409,10 +327,6 @@ class CarteiraDigitalUI(BaseUI):
         )
         e.pack(fill="x", padx=16, pady=4)
         e.bind("<KeyRelease>", self._debounce_preview)
-        if tipo == "cpf":
-            e.bind("<KeyRelease>", lambda _: self._fmt_cpf(e), add="+")
-        elif tipo == "data":
-            e.bind("<KeyRelease>", lambda _: self._fmt_data(e), add="+")
         return e
 
     def _campo_grid(self, parent, placeholder, col, tipo=None):
@@ -423,34 +337,84 @@ class CarteiraDigitalUI(BaseUI):
         )
         e.grid(row=0, column=col, sticky="ew", padx=4, pady=4)
         e.bind("<KeyRelease>", self._debounce_preview)
-        if tipo == "data":
-            e.bind("<KeyRelease>", lambda _: self._fmt_data(e), add="+")
         return e
 
     def _fmt_cpf(self, entry):
+        """Apenas valida e deixa a exibição como está (sem delete/insert)."""
         try:
-            d = re.sub(r"\D", "", entry.get())[:11]
-            if   len(d) <= 3: r = d
-            elif len(d) <= 6: r = f"{d[:3]}.{d[3:]}"
-            elif len(d) <= 9: r = f"{d[:3]}.{d[3:6]}.{d[6:]}"
-            else:             r = f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}"
-            if r != entry.get():
+            d = re.sub(r"\D", "", entry.get())
+            if len(d) > 11:
+                d = d[:11]
                 entry.delete(0, "end")
-                entry.insert(0, r)
+                entry.insert(0, d)
         except Exception:
             pass
 
     def _fmt_data(self, entry):
+        """Apenas valida e limita a 8 dígitos se necessário"""
         try:
-            d = re.sub(r"\D", "", entry.get())[:8]
-            if   len(d) <= 2: r = d
-            elif len(d) <= 4: r = f"{d[:2]}/{d[2:]}"
-            else:             r = f"{d[:2]}/{d[2:4]}/{d[4:]}"
-            if r != entry.get():
+            d = re.sub(r"\D", "", entry.get())
+            if len(d) > 8:
                 entry.delete(0, "end")
-                entry.insert(0, r)
+                entry.insert(0, d[:8])
         except Exception:
             pass
+
+    def _buscar_por_cpf(self):
+        cpf_text = self.cpf.get().strip()
+        cpf_limpo = re.sub(r"\D", "", cpf_text)
+
+        if not cpf_limpo:
+            messagebox.showwarning("CPF obrigatório", "Digite um CPF antes de pesquisar.")
+            return
+
+        if len(cpf_limpo) != 11:
+            messagebox.showwarning("CPF inválido", "CPF deve ter 11 dígitos.")
+            return
+
+        self._btn_buscar_cpf.configure(state="disabled")
+        self._lbl_buscar_status.configure(text="Pesquisando...")
+
+        self.after(700, lambda: self._buscar_por_cpf_exec(cpf_limpo))
+
+    def _buscar_por_cpf_exec(self, cpf_limpo):
+        try:
+            resultado = self.controller.buscar_por_cpf(cpf_limpo)
+
+            if not resultado:
+                messagebox.showinfo("Não encontrado", "Nenhum cadastro encontrado para este CPF.")
+                return
+
+            self.registro.delete(0, "end")
+            self.registro.insert(0, resultado.get("registro", ""))
+            self.cpf.delete(0, "end")
+            self.cpf.insert(0, format_cpf(resultado.get("cpf", "")))
+            self.nome.delete(0, "end")
+            self.nome.insert(0, resultado.get("nome", ""))
+            self.propriedade.delete(0, "end")
+            self.propriedade.insert(0, resultado.get("propriedade", ""))
+            self.unloc.delete(0, "end")
+            self.unloc.insert(0, resultado.get("unloc", ""))
+            self.inicio.delete(0, "end")
+            self.inicio.insert(0, resultado.get("inicio", ""))
+            self.validade.delete(0, "end")
+            self.validade.insert(0, resultado.get("validade", ""))
+            self.endereco.delete(0, "end")
+            self.endereco.insert(0, resultado.get("endereco", ""))
+            self.atividade1.delete(0, "end")
+            self.atividade1.insert(0, resultado.get("atividade1", ""))
+            self.atividade2.delete(0, "end")
+            self.atividade2.insert(0, resultado.get("atividade2", ""))
+            self.georef.delete(0, "end")
+            self.georef.insert(0, resultado.get("georef", ""))
+
+            self._atualizar_preview()
+            messagebox.showinfo("Encontrado", "Dados carregados a partir do CPF encontrado.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao buscar CPF:\n{e}")
+        finally:
+            self._btn_buscar_cpf.configure(state="normal")
+            self._lbl_buscar_status.configure(text="")
 
     def _debounce_preview(self, *_):
         if self._after_id:
@@ -468,7 +432,8 @@ class CarteiraDigitalUI(BaseUI):
         if self.lado == "frente":
             lf = self._labels_frente
             self._safe_set(lf.get("registro"),    self.registro.get())
-            self._safe_set(lf.get("cpf"),         self.controller.formatar_cpf_exibicao(self.cpf.get()))
+            self._safe_set(lf.get("cpf"),
+                           format_cpf(self.cpf.get()))
             self._safe_set(lf.get("nome"),        self.nome.get())
             self._safe_set(lf.get("propriedade"), self.propriedade.get())
             self._safe_set(lf.get("unloc"),       self.unloc.get())
@@ -495,15 +460,15 @@ class CarteiraDigitalUI(BaseUI):
             return
         mb = os.path.getsize(caminho) / (1024 * 1024)
         if mb > 10:
-            messagebox.showerror("Erro",
-                                  f"Arquivo muito grande ({mb:.1f} MB). Máximo: 10 MB")
+            messagebox.showerror(
+                "Erro", f"Arquivo muito grande ({mb:.1f} MB). Máximo: 10 MB")
             return
         try:
             with Image.open(caminho) as img:
                 img.verify()
             with Image.open(caminho) as img:
                 w, h = img.size
-                fmt = img.format
+                fmt  = img.format
         except Exception as exc:
             messagebox.showerror("Erro", f"Imagem inválida:\n{exc}")
             return
@@ -517,6 +482,7 @@ class CarteiraDigitalUI(BaseUI):
     def _build_importar_pdf(self, parent):
         row1 = ctk.CTkFrame(parent, fg_color="transparent")
         row1.pack(fill="x", padx=16, pady=(12, 6))
+
         self._btn_importar_pdf = ctk.CTkButton(
             row1, text="📄 Selecionar PDF",
             width=160, height=38, corner_radius=8,
@@ -524,6 +490,7 @@ class CarteiraDigitalUI(BaseUI):
             text_color="#fff", font=("Segoe UI", 12, "bold"),
             command=self._selecionar_pdf)
         self._btn_importar_pdf.pack(side="left")
+
         self._lbl_pdf = ctk.CTkLabel(
             row1, text="Nenhum PDF selecionado",
             font=("Segoe UI", 11), text_color=_MUTED)
@@ -531,6 +498,7 @@ class CarteiraDigitalUI(BaseUI):
 
         row2 = ctk.CTkFrame(parent, fg_color="transparent")
         row2.pack(fill="x", padx=16, pady=(0, 12))
+
         self._btn_extrair = ctk.CTkButton(
             row2, text="🔍 Extrair Informações do PDF",
             width=220, height=38, corner_radius=8,
@@ -538,6 +506,7 @@ class CarteiraDigitalUI(BaseUI):
             text_color=AppTheme.TXT_MAIN, font=("Segoe UI", 11),
             command=self._extrair_pdf, state="disabled")
         self._btn_extrair.pack(side="left")
+
         self._lbl_extrair_status = ctk.CTkLabel(
             row2, text="", font=("Segoe UI", 11), text_color=_MUTED)
         self._lbl_extrair_status.pack(side="left", padx=12)
@@ -566,69 +535,16 @@ class CarteiraDigitalUI(BaseUI):
 
     def _worker_extrair_pdf(self):
         try:
-            texto = self._ler_texto_pdf(self._pdf_path)
-            if not texto.strip():
+            from .utils.pdf_parser import PDFParser
+            parser = PDFParser()
+            dados = parser.extract_and_parse(self._pdf_path)
+            if not dados:
                 self.after(0, self._exibir_resultado_extracao,
                            None, "PDF sem texto legível (pode ser imagem escaneada).")
                 return
-            dados = self._parsear_texto_carteira(texto)
             self.after(0, self._exibir_resultado_extracao, dados, None)
         except Exception as e:
             self.after(0, self._exibir_resultado_extracao, None, str(e))
-
-    def _ler_texto_pdf(self, caminho: str) -> str:
-        texto = ""
-        try:
-            import pypdf
-            with open(caminho, "rb") as f:
-                for page in pypdf.PdfReader(f).pages:
-                    texto += (page.extract_text() or "") + "\n"
-            return texto
-        except ImportError:
-            pass
-        with open(caminho, "rb") as f:
-            for page in PyPDF2.PdfReader(f).pages:
-                texto += (page.extract_text() or "") + "\n"
-        return texto
-
-    def _parsear_texto_carteira(self, texto: str) -> dict:
-        dados = {}
-        texto_upper = texto.upper()
-
-        cpf_m = re.search(r"\b(\d{3}[\.\ ]?\d{3}[\.\ ]?\d{3}[-\ ]?\d{2})\b", texto)
-        if cpf_m:
-            d = re.sub(r"\D", "", cpf_m.group(1))
-            dados["cpf"] = f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}"
-
-        for k, pattern in [
-            ("registro",   r"(?:REGISTRO|R\.P\.|RP|IE|INSCRIÇÃO ESTADUAL)[:\s]+([0-9\-\.\/]+)"),
-            ("propriedade",r"(?:PROPRIEDADE|NOME DA PROPRIEDADE|IMÓVEL)[:\s]+([^\n\r]+)"),
-            ("unloc",      r"PR-([A-Z\-]+)/(\d+)"),
-            ("validade",   r"(?:VALIDADE|VÁLIDO ATÉ|VENCIMENTO)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})"),
-            ("inicio",     r"(?:INÍCIO|INICIO|ANO DE INÍCIO)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4})"),
-            ("endereco",   r"(?:ENDEREÇO|ENDERECO|END\.)[:\s]+([^\n\r]+)"),
-            ("atividade1", r"(?:ATIVIDADE PRINCIPAL|CNAE PRINCIPAL|ATV\.?\s*1)[:\s]+([^\n\r]+)"),
-            ("atividade2", r"(?:ATIVIDADE SECUNDÁRIA|CNAE SECUNDÁRIO|ATV\.?\s*2)[:\s]+([^\n\r]+)"),
-        ]:
-            m = re.search(pattern, texto_upper)
-            if m:
-                val = m.group(1).strip()
-                dados[k] = (f"PR-{m.group(1)}/{m.group(2)}"
-                            if k == "unloc"
-                            else val.title() if k in ("propriedade","endereco","atividade1","atividade2")
-                            else val.replace("-", "/"))
-
-        nome_m = re.search(
-            r"(?:NOME|PRODUTOR)[:\s]+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇa-záàâãéèêíïóôõúüç\s]+)",
-            texto_upper)
-        if nome_m:
-            dados["nome"] = nome_m.group(1).strip().title()
-
-        geo_m = re.search(r"(-?\d{1,3}[,\.]\d+)\s+(-?\d{1,3}[,\.]\d+)", texto)
-        if geo_m:
-            dados["georef"] = f"{geo_m.group(1)}  {geo_m.group(2)}"
-
-        return dados
 
     def _exibir_resultado_extracao(self, dados: dict, erro: str):
         self._btn_extrair.configure(state="normal",
@@ -642,6 +558,7 @@ class CarteiraDigitalUI(BaseUI):
             self._lbl_extrair_status.configure(
                 text="⚠️ Nenhum campo identificado.", text_color=_VERM)
             return
+
         mapa = {
             "registro":   self.registro,   "cpf":        self.cpf,
             "nome":       self.nome,       "propriedade":self.propriedade,
@@ -658,20 +575,11 @@ class CarteiraDigitalUI(BaseUI):
                 entry.insert(0, valor)
                 preenchidos += 1
         self._atualizar_preview()
+
         total = len(mapa)
-        cor = _VERDE if preenchidos >= total // 2 else _MUTED
+        cor   = _VERDE if preenchidos >= total // 2 else _MUTED
         self._lbl_extrair_status.configure(
             text=f"✅ {preenchidos}/{total} campos preenchidos", text_color=cor)
-        if preenchidos == 0:
-            messagebox.showwarning(
-                "Extração",
-                "Nenhum campo identificado automaticamente.\n"
-                "Preencha os campos manualmente.")
-        elif preenchidos < total // 2:
-            messagebox.showinfo(
-                "Extração parcial",
-                f"{preenchidos} campo(s) preenchido(s) automaticamente.\n"
-                "Verifique e complete os campos restantes.")
 
     def _salvar_banco(self):
         dados = {
@@ -688,12 +596,12 @@ class CarteiraDigitalUI(BaseUI):
             "georef":      self.georef.get().strip(),
         }
         vazios = [n for c, n in [
-            ("registro", "Registro Estadual"), ("cpf", "CPF"),
-            ("nome", "Nome do Produtor"),      ("propriedade", "Propriedade"),
+            ("registro", "Registro Estadual"), ("cpf",  "CPF"),
+            ("nome",     "Nome do Produtor"),  ("propriedade", "Propriedade"),
         ] if not dados.get(c)]
         if vazios:
             messagebox.showwarning("Validação",
-                                    "Campos obrigatórios:\n• " + "\n• ".join(vazios))
+                                   "Campos obrigatórios:\n• " + "\n• ".join(vazios))
             return
         if len(re.sub(r"\D", "", dados["cpf"])) != 11:
             messagebox.showwarning("Validação", "CPF deve ter 11 dígitos.")
@@ -702,11 +610,12 @@ class CarteiraDigitalUI(BaseUI):
             v = dados.get(campo, "")
             if v and not re.match(r"^\d{2}/\d{2}/\d{4}$", v):
                 messagebox.showwarning("Validação",
-                                        f"{nome} inválida. Use dd/mm/aaaa.")
+                                       f"{nome} inválida. Use dd/mm/aaaa.")
                 return
         if not any(self.fotos.values()):
-            if not messagebox.askyesno("Aviso",
-                                        "Nenhuma foto selecionada. Continuar mesmo assim?"):
+            if not messagebox.askyesno(
+                    "Aviso",
+                    "Nenhuma foto selecionada. Continuar mesmo assim?"):
                 return
         ok, msg = self.controller.salvar_carteira(dados, self.fotos)
         if ok:
@@ -735,7 +644,8 @@ class CarteiraDigitalUI(BaseUI):
             self.nome.get().strip(),
             any(self.fotos.values()),
         ])
-        if tem and not messagebox.askyesno("Confirmação", "Limpar todos os campos?"):
+        if tem and not messagebox.askyesno("Confirmação",
+                                            "Limpar todos os campos?"):
             return
         self._limpar_formulario()
 

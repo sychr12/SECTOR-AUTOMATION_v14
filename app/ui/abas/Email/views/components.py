@@ -6,7 +6,16 @@ Componentes de UI reutilizáveis para a interface de download de emails
 
 import customtkinter as ctk
 from tkinter import ttk
-from app.theme import AppTheme
+
+
+class AppTheme:
+    """Paleta local — espelha app.theme.AppTheme sem depender do caminho absoluto."""
+    BG_INPUT         = "#ffffff"
+    BG_CARD          = "#f1f5f9"
+    TXT_MAIN         = "#0f172a"
+    TXT_MUTED        = "#64748b"
+    BTN_PRIMARY      = "#2c6e9e"
+    BTN_PRIMARY_HOVER = "#1e4a6e"
 
 class HeaderCard(ctk.CTkFrame):
     """Card de cabeçalho estilizado"""

@@ -11,10 +11,9 @@ from tkinter import ttk
 from PIL import Image, ImageOps
 import os
 
-from app.theme import AppTheme
 from .controller import EmailDownloadController
 from .services import EmailDownloadService
-from .views import HeaderCard, ActionButton, ProgressoDownload, EstatisticasDownload, CardInfo
+from .views import ProgressoDownload, EstatisticasDownload
 from .repository import EmailDownloadRepository
 
 

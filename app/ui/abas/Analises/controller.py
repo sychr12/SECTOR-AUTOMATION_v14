@@ -128,10 +128,19 @@ class AnaliseController:
     def processar_registros(self, ids, novo_status):
         """Processa registros selecionados"""
         try:
+            # Busca o status atual de cada registro antes de alterar
+            status_anterior = "PENDENTE"
+            try:
+                primeiro = self.repo.buscar_por_id(ids[0])
+                if primeiro and primeiro.get("status"):
+                    status_anterior = primeiro["status"]
+            except Exception:
+                pass
+
             self.repo.atualizar_status(ids, novo_status)
             self.repo.salvar_historico(
                 ids=ids,
-                status_anterior="PENDENTE",
+                status_anterior=status_anterior,
                 novo_status=novo_status,
                 usuario=self.usuario
             )
@@ -142,10 +151,19 @@ class AnaliseController:
     def processar_devolucao(self, ids, motivo):
         """Processa devolução de registros"""
         try:
+            # Busca o status atual de cada registro antes de alterar
+            status_anterior = "PENDENTE"
+            try:
+                primeiro = self.repo.buscar_por_id(ids[0])
+                if primeiro and primeiro.get("status"):
+                    status_anterior = primeiro["status"]
+            except Exception:
+                pass
+
             self.repo.atualizar_status(ids, "DEVOLUCAO", motivo)
             self.repo.salvar_historico(
                 ids=ids,
-                status_anterior="PENDENTE",
+                status_anterior=status_anterior,
                 novo_status="DEVOLUCAO",
                 usuario=self.usuario,
                 motivo=motivo,

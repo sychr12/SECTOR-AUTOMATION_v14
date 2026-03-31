@@ -2,16 +2,6 @@ import pyodbc
 
 
 def get_connection():
-<<<<<<< HEAD
-    return psycopg2.connect(
-        host="localhost",
-        port=5432,
-        database="sistemadocumentos",  # ← SEM ;
-        user="postgres",
-        password="120506",
-        cursor_factory=RealDictCursor
-    )
-=======
     try:
         conn = pyodbc.connect(
             "DRIVER={ODBC Driver 18 for SQL Server};"
@@ -26,7 +16,6 @@ def get_connection():
 
     except Exception as e:
         raise Exception(f"Erro ao conectar no banco: {e}")
->>>>>>> f4a3e3b (.)
 
 
 def get_cursor(conn):

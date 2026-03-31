@@ -207,10 +207,6 @@ class MemorandoUI(BaseUI):
     def __init__(self, parent, usuario=None):
         super().__init__(parent)
         self.usuario = usuario or "sistema"
-<<<<<<< HEAD
-        self.controller = MemorandoController(self.usuario)  
-        self.configure(fg_color=AppTheme.BG_APP)
-=======
         self.controller = MemorandoController(self.usuario)
 
         # Inicializar ícones
@@ -218,7 +214,6 @@ class MemorandoUI(BaseUI):
         self.icons = self.icon_manager.setup_icons()
 
         self.configure(fg_color=_CINZA_BG)
->>>>>>> f4a3e3b (.)
         self._layout()
 
     def _layout(self):
@@ -405,53 +400,7 @@ class MemorandoUI(BaseUI):
             on_baixar=self.baixar_memorando,
             icons=self.icons,
         )
-<<<<<<< HEAD
-
-        self._carregar_historico()
-
-        # função de pesquisa com município
-        def pesquisar(*_):
-            municipio_raw = self.historico_view.municipio_var.get()
-            ano = self.historico_view.ano_var.get()
-            ordem = self.historico_view.ordem_var.get()
-            
-            if municipio_raw == "Todos":
-                municipio = "Todos"
-            else:
-                municipio = municipio_raw.split(" - ")[0]
-
-            self._carregar_historico(
-                termo=self.historico_view.pesquisa_var.get(),
-                municipio=municipio,
-                ano=ano,
-                ordem = ordem
-            )
-            
-        self.historico_view.on_filtro_change = pesquisar
-
-        self.historico_view.pesquisa_var.trace("w", pesquisar)
-
-        self.historico_view.municipio_var.trace("w", pesquisar)
-        
-        self.historico_view.ano_var.trace("w", pesquisar)
-        
-        self.historico_view.ordem_var.trace("w", pesquisar)
-
-    def _carregar_historico(self, termo="", municipio="Todos", ano="Todos", ordem="Recentes"):
-        if hasattr(self, "historico_view") and self.historico_view.winfo_exists():
-            ok, msg, registros = self.controller.buscar_historico(
-                termo, 
-                municipio,
-                ano,
-                ordem
-                )
-            if ok:
-                self.historico_view.atualizar_lista(registros)
-            else:
-                messagebox.showerror("Erro", msg)
-=======
         # O _carregar_dados() já é chamado no __init__ de HistoricoMemorandoView
->>>>>>> f4a3e3b (.)
 
     def visualizar_memorando(self, mid):
         ok, msg = self.controller.visualizar_memorando(mid)
@@ -474,14 +423,6 @@ class MemorandoUI(BaseUI):
     _CORES = {"ok": _VERDE_STATUS, "err": _VERMELHO, "muted": _MUTED}
 
     def _log(self, texto, tipo="muted"):
-<<<<<<< HEAD
-        self.confirmacao.configure(state="normal")
-        tag = f"tag_{tipo}"
-        self.confirmacao.tag_config(tag, foreground=self._CORES.get(tipo, "#e2e8f0"))
-        self.confirmacao.insert("end", texto + "\n", tag)
-        self.confirmacao.see("end")
-        self.confirmacao.configure(state="disabled")
-=======
         try:
             self.confirmacao.configure(state="normal")
             tag = f"tag_{tipo}"
@@ -492,7 +433,6 @@ class MemorandoUI(BaseUI):
             self.confirmacao.configure(state="disabled")
         except Exception:
             pass
->>>>>>> f4a3e3b (.)
 
     def _limpar_log(self):
         try:

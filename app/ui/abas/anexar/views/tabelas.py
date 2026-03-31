@@ -5,12 +5,18 @@ from tkinter import ttk
 
 import customtkinter as ctk
 
-from app.theme import AppTheme
 from .theme import (
     VERDE, VERDE_H, VERDE_T, AMBER_B, AMBER_T,
     VERM, AMBER, INFO, MUTED, SLATE,
     fmt_data, fmt_data_curta,
 )
+
+# Constantes de layout (equivalentes ao AppTheme global)
+class AppTheme:
+    BG_APP   = "#f8fafc"
+    BG_CARD  = "#f1f5f9"
+    BG_INPUT = "#ffffff"
+    TXT_MAIN = "#0f172a"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

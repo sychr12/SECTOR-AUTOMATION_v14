@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """Interface de Análise de Processos — design refinado + bugs corrigidos."""
-import smtplib
+import base64
+import os
 import threading
 from datetime import datetime
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from tkinter import END, filedialog, messagebox
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 import customtkinter as ctk
 
@@ -16,6 +22,12 @@ from .controller import AnaliseController
 from .services import AnaliseService
 from .views.devolucao_view import DevolucaoPopup
 from .views.historico_view import HistoricoView
+
+# ── Caminhos dos arquivos OAuth2 ─────────────────────────────────────────────
+_BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
+_TOKEN_PATH      = os.path.join(_BASE_DIR, "token.json")
+_CREDENTIALS_PATH = os.path.join(_BASE_DIR, "credentials.json")
+_GMAIL_SCOPES    = ["https://www.googleapis.com/auth/gmail.send"]
 # ── Paleta ───────────────────────────────────────────────────────────────
 _VERDE    = "#22c55e"
 _VERDE_H  = "#16a34a"
@@ -888,7 +900,7 @@ class AnaliseUI(BaseUI):
     }
 
     def abrir_popup_email(self):
-        """Abre popup para selecionar unidade e enviar e-mail com os PDFs selecionados."""
+        """Abre popup para selecionar unidade e enviar e-mail com os PDFs selecionados via OAuth2."""
         ids = [i for i, v in self.registros_vars.items() if v.get()]
         if not ids:
             messagebox.showwarning("Atenção", "Selecione ao menos um PDF para enviar.")
@@ -896,14 +908,14 @@ class AnaliseUI(BaseUI):
 
         popup = ctk.CTkToplevel(self)
         popup.title("Enviar E-mail para Unidade Local")
-        popup.geometry("560x620")
+        popup.geometry("520x420")
         popup.resizable(False, False)
         popup.configure(fg_color=AppTheme.BG_APP)
         popup.grab_set()
         popup.after(0, lambda: popup.geometry(
-            f"560x620+"
-            f"{popup.winfo_screenwidth()  // 2 - 280}+"
-            f"{popup.winfo_screenheight() // 2 - 310}"
+            f"520x420+"
+            f"{popup.winfo_screenwidth()  // 2 - 260}+"
+            f"{popup.winfo_screenheight() // 2 - 210}"
         ))
 
         wrap = ctk.CTkFrame(popup, fg_color="transparent")
@@ -912,14 +924,6 @@ class AnaliseUI(BaseUI):
         ctk.CTkLabel(wrap, text="Enviar E-mail para Unidade Local",
                      font=("Segoe UI", 18, "bold"),
                      text_color=AppTheme.TXT_MAIN).pack(anchor="w", pady=(0, 20))
-
-        # ── Remetente ────────────────────────────────────────────────
-        card_rem = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD, corner_radius=14)
-        card_rem.pack(fill="x", pady=(0, 12))
-
-        ctk.CTkLabel(card_rem, text="Configuração do Remetente",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w", padx=20, pady=(14, 8))
 
         def _entry_card(parent, placeholder):
             return ctk.CTkEntry(
@@ -930,19 +934,6 @@ class AnaliseUI(BaseUI):
                 border_color=AppTheme.BG_INPUT,
                 text_color=AppTheme.TXT_MAIN,
             )
-
-        ctk.CTkLabel(card_rem, text="E-mail remetente:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_email_rem = _entry_card(card_rem, "seu.email@gmail.com")
-        entry_email_rem.pack(fill="x", padx=20, pady=(2, 8))
-
-        ctk.CTkLabel(card_rem, text="Senha do app (Gmail):",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_senha = _entry_card(card_rem, "Senha de app do Google")
-        entry_senha.configure(show="*")
-        entry_senha.pack(fill="x", padx=20, pady=(2, 14))
 
         # ── Destinatário ─────────────────────────────────────────────
         card_dest = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD, corner_radius=14)
@@ -975,11 +966,11 @@ class AnaliseUI(BaseUI):
 
         def _on_muni_change(choice):
             email = self._EMAILS_UNIDADES.get(choice, "")
-            lbl_email_dest.configure(text=f"  {email}")
+            lbl_email_dest.configure(text=f"  ✉  {email}")
 
         combo_muni.configure(command=_on_muni_change)
 
-        # ── Assunto e mensagem ────────────────────────────────────────
+        # ── Assunto ────────────────────────────────────────────────────
         card_msg = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD, corner_radius=14)
         card_msg.pack(fill="x", pady=(0, 16))
 
@@ -1000,7 +991,8 @@ class AnaliseUI(BaseUI):
             text_color=AppTheme.TXT_MAIN,
         )
         txt_mensagem.pack(fill="x", padx=20, pady=(2, 14))
-        txt_mensagem.insert("1.0", f"Prezados,\n\nSegue(m) em anexo o(s) PDF(s) referente(s) ao(s) processo(s) selecionado(s).\n\nAtenciosamente,\n{self.usuario}")
+        txt_mensagem.insert("1.0",
+            f"Prezados,\n\nSegue(m) em anexo o(s) PDF(s) referente(s) ao(s) processo(s) selecionado(s).\n\nAtenciosamente,\n{self.usuario}")
 
         # ── Botões ────────────────────────────────────────────────────
         btns = ctk.CTkFrame(wrap, fg_color="transparent")
@@ -1008,16 +1000,10 @@ class AnaliseUI(BaseUI):
         btns.grid_columnconfigure((0, 1), weight=1)
 
         def _confirmar():
-            remetente = entry_email_rem.get().strip()
-            senha     = entry_senha.get().strip()
             municipio = combo_muni.get().strip()
             assunto   = entry_assunto.get().strip()
             mensagem  = txt_mensagem.get("1.0", "end-1c").strip()
 
-            if not remetente or not senha:
-                messagebox.showwarning("Atenção", "Preencha o e-mail e a senha do remetente.",
-                                       parent=popup)
-                return
             if not municipio or municipio not in self._EMAILS_UNIDADES:
                 messagebox.showwarning("Atenção", "Selecione uma unidade local válida.",
                                        parent=popup)
@@ -1031,7 +1017,7 @@ class AnaliseUI(BaseUI):
             popup.destroy()
             threading.Thread(
                 target=self._enviar_email,
-                args=(remetente, senha, destinatario, municipio, assunto, mensagem, ids),
+                args=(destinatario, municipio, assunto, mensagem, ids),
                 daemon=True
             ).start()
 
@@ -1053,25 +1039,45 @@ class AnaliseUI(BaseUI):
             command=popup.destroy,
         ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
 
-    def _enviar_email(self, remetente, senha, destinatario, municipio,
-                      assunto, mensagem, ids):
-        """Envia e-mail com os PDFs como anexo via Gmail SMTP (roda em thread)."""
+    # ── Gmail OAuth2 ────────────────────────────────────────────────────────
+    def _get_gmail_service(self):
+        """Retorna serviço autenticado da Gmail API via OAuth2 (token.json)."""
+        creds = None
+        if os.path.exists(_TOKEN_PATH):
+            creds = Credentials.from_authorized_user_file(_TOKEN_PATH, _GMAIL_SCOPES)
+
+        # Renova token expirado automaticamente usando refresh_token
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(_TOKEN_PATH, "w") as fh:
+                fh.write(creds.to_json())
+
+        if not creds or not creds.valid:
+            raise RuntimeError(
+                "Token OAuth2 inválido ou ausente.\n"
+                "Execute o script de autenticação uma vez para gerar o token.json."
+            )
+
+        return build("gmail", "v1", credentials=creds)
+
+    def _enviar_email(self, destinatario, municipio, assunto, mensagem, ids):
+        """Envia e-mail com PDFs como anexo via Gmail API OAuth2 (roda em thread)."""
         try:
+            service = self._get_gmail_service()
+
             msg = MIMEMultipart()
-            msg["From"]    = remetente
             msg["To"]      = destinatario
             msg["Subject"] = assunto
             msg.attach(MIMEText(mensagem, "plain", "utf-8"))
 
             anexos_ok = 0
             for analise_id in ids:
-                resultado = self.controller.repo.buscar_pdf_binario(analise_id)
+                resultado = self.service.buscar_pdf_binario(analise_id)
                 if not resultado or not resultado.get("pdf_conteudo"):
                     continue
-                nome = resultado.get("nome_pdf", f"processo_{analise_id}.pdf")
+                nome  = resultado.get("nome_pdf", f"processo_{analise_id}.pdf")
                 parte = MIMEApplication(resultado["pdf_conteudo"], _subtype="pdf")
-                parte.add_header("Content-Disposition", "attachment",
-                                 filename=nome)
+                parte.add_header("Content-Disposition", "attachment", filename=nome)
                 msg.attach(parte)
                 anexos_ok += 1
 
@@ -1080,22 +1086,21 @@ class AnaliseUI(BaseUI):
                            "Nenhum PDF encontrado no banco para os registros selecionados.")
                 return
 
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-                smtp.login(remetente, senha)
-                smtp.sendmail(remetente, destinatario, msg.as_bytes())
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+            service.users().messages().send(
+                userId="me", body={"raw": raw}
+            ).execute()
 
             self.after(0, messagebox.showinfo, "Sucesso",
                        f"E-mail enviado com sucesso para {municipio}!\n"
                        f"Destinatário: {destinatario}\n"
                        f"Anexos: {anexos_ok} PDF(s)")
 
-        except smtplib.SMTPAuthenticationError:
-            self.after(0, messagebox.showerror, "Erro de Autenticação",
-                       "E-mail ou senha incorretos.\n"
-                       "Use uma Senha de App do Google (não a senha da conta).\n"
-                       "Acesse: myaccount.google.com → Segurança → Senhas de app")
-        except smtplib.SMTPException as e:
-            self.after(0, messagebox.showerror, "Erro SMTP", str(e))
+        except HttpError as e:
+            self.after(0, messagebox.showerror, "Erro Gmail API",
+                       f"Erro ao enviar pelo Gmail:\n{e}")
+        except RuntimeError as e:
+            self.after(0, messagebox.showerror, "Erro de Autenticação", str(e))
         except Exception as e:
             self.after(0, messagebox.showerror, "Erro",
                        f"Falha ao enviar e-mail:\n{str(e)}")
@@ -1156,29 +1161,6 @@ class AnaliseUI(BaseUI):
             if show:
                 e.configure(show=show)
             return e
-
-        # ── Remetente ──────────────────────────────────────────────
-        card_rem = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                corner_radius=14)
-        card_rem.pack(fill="x", pady=(0, 12))
-
-        ctk.CTkLabel(card_rem, text="Remetente",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w", padx=20,
-                                              pady=(14, 6))
-
-        ctk.CTkLabel(card_rem, text="E-mail:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_rem = _entry_card(card_rem, "seu.email@gmail.com")
-        entry_rem.pack(fill="x", padx=20, pady=(2, 8))
-
-        ctk.CTkLabel(card_rem, text="Senha de App (Gmail):",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_senha = _entry_card(card_rem, "Senha de app do Google",
-                                  show="*")
-        entry_senha.pack(fill="x", padx=20, pady=(2, 14))
 
         # ── Destinatário ───────────────────────────────────────────
         card_dest = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
@@ -1320,16 +1302,9 @@ class AnaliseUI(BaseUI):
         btns.grid_columnconfigure((0, 1), weight=1)
 
         def _confirmar():
-            remetente = entry_rem.get().strip()
-            senha     = entry_senha.get().strip()
             municipio = combo_muni.get().strip()
             assunto   = entry_assunto.get().strip()
 
-            if not remetente or not senha:
-                messagebox.showwarning("Atenção",
-                    "Preencha o e-mail e a senha do remetente.",
-                    parent=popup)
-                return
             if not municipio or municipio not in self._EMAILS_UNIDADES:
                 messagebox.showwarning("Atenção",
                     "Selecione uma unidade local válida.",
@@ -1379,8 +1354,7 @@ class AnaliseUI(BaseUI):
             popup.destroy()
             threading.Thread(
                 target=self._enviar_email_simples,
-                args=(remetente, senha, destinatario,
-                      municipio, assunto, corpo),
+                args=(destinatario, municipio, assunto, corpo),
                 daemon=True,
             ).start()
 
@@ -1402,31 +1376,30 @@ class AnaliseUI(BaseUI):
             command=popup.destroy,
         ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
 
-    def _enviar_email_simples(self, remetente, senha, destinatario,
-                               municipio, assunto, corpo):
-        """Envia e-mail de texto simples (sem anexo) via Gmail SMTP."""
+    def _enviar_email_simples(self, destinatario, municipio, assunto, corpo):
+        """Envia e-mail de texto simples (sem anexo) via Gmail API OAuth2."""
         try:
+            service = self._get_gmail_service()
+
             msg = MIMEMultipart()
-            msg["From"]    = remetente
             msg["To"]      = destinatario
             msg["Subject"] = assunto
             msg.attach(MIMEText(corpo, "plain", "utf-8"))
 
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-                smtp.login(remetente, senha)
-                smtp.sendmail(remetente, destinatario, msg.as_bytes())
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+            service.users().messages().send(
+                userId="me", body={"raw": raw}
+            ).execute()
 
             self.after(0, messagebox.showinfo, "Sucesso",
                        f"E-mail enviado com sucesso para {municipio}!\n"
                        f"Destinatário: {destinatario}")
 
-        except smtplib.SMTPAuthenticationError:
-            self.after(0, messagebox.showerror, "Erro de Autenticação",
-                       "E-mail ou senha incorretos.\n"
-                       "Use uma Senha de App do Google (não a senha da conta).\n"
-                       "Acesse: myaccount.google.com → Segurança → Senhas de app")
-        except smtplib.SMTPException as e:
-            self.after(0, messagebox.showerror, "Erro SMTP", str(e))
+        except HttpError as e:
+            self.after(0, messagebox.showerror, "Erro Gmail API",
+                       f"Erro ao enviar pelo Gmail:\n{e}")
+        except RuntimeError as e:
+            self.after(0, messagebox.showerror, "Erro de Autenticação", str(e))
         except Exception as e:
             self.after(0, messagebox.showerror, "Erro",
                        f"Falha ao enviar e-mail:\n{str(e)}")

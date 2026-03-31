@@ -166,45 +166,6 @@ class MemorandoService:
             conn.close()
 
     @staticmethod
-<<<<<<< HEAD
-    def buscar_memorandos(termo_pesquisa: str = "", municipio: str = "Todos", ano = "Todos" , ordem="Recentes", limite: int = 50) -> list:
-        conn = get_connection()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                
-                query = """
-                    SELECT id, numero, unloc, municipio, data_emissao,
-                       criado_em, usuario, descricao
-                    FROM memorandos
-                    WHERE 1=1
-                """
-                params = []
-                
-                if termo_pesquisa.strip():
-                    query += " AND (numero ILIKE %s OR unloc ILIKE %s)"
-                    params.extend([f"%{termo_pesquisa}%", f"%{termo_pesquisa}%"])
-                    
-                if municipio != "Todos":
-                    query += " AND unloc = %s"
-                    params.append(municipio)
-                    
-                if ano != "Todos" and ano.isdigit() :
-                    query += " AND EXTRACT(YEAR FROM data_emissao) = %s"
-                    params.append(int(ano))
-
-                # ordenação
-                if ordem == "Antigos":
-                    query += " ORDER BY criado_em ASC"
-                else:
-                    query += " ORDER BY criado_em DESC"
-
-                query += " LIMIT %s"
-                params.append(limite)
-                
-
-                cur.execute(query, tuple(params))
-                rows = cur.fetchall()
-=======
     def buscar_memorandos(termo_pesquisa: str = "", limite: int = 50) -> list:
         """Busca histórico de memorandos com termo simples"""
         conn = get_connection()
@@ -231,7 +192,6 @@ class MemorandoService:
 
             rows = cursor.fetchall()
             cursor.close()
->>>>>>> f4a3e3b (.)
 
             return [
                 {
@@ -258,7 +218,6 @@ class MemorandoService:
         try:
             from psycopg2.extras import RealDictCursor
 
-<<<<<<< HEAD
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT DISTINCT EXTRACT(YEAR FROM data_emissao)::INT AS ano
@@ -275,8 +234,6 @@ class MemorandoService:
     # ------------------------------------------------------------------
     # BUSCAR POR ID
     # ------------------------------------------------------------------
-=======
->>>>>>> f4a3e3b (.)
     @staticmethod
     def buscar_memorandos_com_filtros(
         termo: str = "",

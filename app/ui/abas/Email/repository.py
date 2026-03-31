@@ -90,7 +90,10 @@ class EmailDownloadRepository:
         Retorna o id gerado.
         """
         # SQL Server usa MERGE para UPSERT
+        # SET NOCOUNT ON é obrigatório para que OUTPUT INSERTED.id seja retornado
+        # via cursor.fetchone() com pyodbc — sem ele, fetchone() retorna None.
         sql = """
+        SET NOCOUNT ON;
         MERGE INTO [dbo].[emails_anexos] AS target
         USING (SELECT ? AS email_id) AS source
         ON target.email_id = source.email_id

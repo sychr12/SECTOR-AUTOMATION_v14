@@ -251,9 +251,11 @@ class HistoricoView(ctk.CTkToplevel):
         iid = sel[0]
         # iid = "{analise_id}__{idx}"
         parte = iid.split("__")[0]
+        if not parte:
+            return None
         try:
-            return int(parte) if parte else None
-        except ValueError:
+            return int(parte)
+        except (ValueError, TypeError):
             return None
 
     def _visualizar_selecionado(self):

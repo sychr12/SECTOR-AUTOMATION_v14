@@ -1,9 +1,8 @@
+# services/credenciais_service.py
 # -*- coding: utf-8 -*-
 """
 credenciais_service.py — Repositório de credenciais SEFAZ.
-Local: app/ui/abas/Carteira/services/credenciais_service.py
 """
-
 from typing import Optional
 from services.database import get_connection
 
@@ -34,6 +33,7 @@ class SefazCredentialRepository:
                 print("[SefazCredentialRepository] Nenhuma credencial ativa encontrada na tabela sefaz_credenciais.")
                 return None
 
+            print(f"[SefazCredentialRepository] Credencial encontrada: {row[0]}")
             return {"usuario": row[0], "senha": row[1]}
 
         except Exception as e:

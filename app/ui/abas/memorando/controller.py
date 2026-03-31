@@ -62,12 +62,7 @@ class MemorandoController:
             traceback.print_exc()
             return False, f"{type(e).__name__}: {e}", None
 
-<<<<<<< HEAD
     def buscar_historico(self, termo_pesquisa="", municipio="Todos", ano="Todos", ordem="Recentes"):
-=======
-    def buscar_historico(self, termo_pesquisa=""):
-        """Busca histórico com termo de pesquisa simples"""
->>>>>>> f4a3e3b (.)
         try:
             registros = MemorandoService.buscar_memorandos(
                 termo_pesquisa, 

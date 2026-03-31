@@ -1,22 +1,7 @@
+# views/batch_view.py
 # -*- coding: utf-8 -*-
 """
 batch_view.py — Aba de geração em LOTE de carteiras digitais.
-<<<<<<< HEAD
-
-Fluxo:
-  1. Usuário seleciona uma pasta OU múltiplos PDFs
-     (nome do arquivo = CPF sem formatação, ex: 01234567890.pdf)
-  2. Sistema exibe a lista com status de cada um
-  3. Ao clicar "Gerar Carteiras", o BatchCarteiraController:
-     - Obtém credenciais SEFAZ do banco
-     - Abre Chrome → loga no SEFAZ
-     - Para cada PDF: consulta dados pelo CPF → gera PDF → salva no banco
-  4. Log em tempo real + barra de progresso + resumo final
-
-Salvar em: app/ui/abas/carteira/views/batch_view.py
-=======
-Local: app/ui/abas/Carteira/views/batch_view.py
->>>>>>> f4a3e3b (.)
 """
 import os
 import re
@@ -26,18 +11,9 @@ from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 
 from app.theme import AppTheme
-<<<<<<< HEAD
-try:
-    from .batch_controller import BatchCarteiraController
-except ImportError as _err:
-    raise ImportError(
-        "BatchCarteiraController não encontrado. "
-        "Certifique-se de que batch_controller.py está na mesma pasta."
-        f" ({_err})"
-    ) from _err
-=======
-from .batch_controller import BatchCarteiraController  # ← import relativo
->>>>>>> f4a3e3b (.)
+from ..utils.constants import VERDE, VERDE_HOVER, AZUL, AZUL_HOVER, MUTED, VERMELHO, AMBER
+from .batch_controller import BatchCarteiraController
+
 
 # ── Cores ─────────────────────────────────────────────────────────────────────
 _VERDE   = "#22c55e"
@@ -64,17 +40,10 @@ class BatchCarteiraView(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.usuario   = usuario
         self._ctrl     = BatchCarteiraController(usuario, repo, sefaz_repo)
-<<<<<<< HEAD
-        self._arquivos: list = []   # lista de dict: {caminho, nome, cpf, status}
-
-        self._build()
-
-=======
         self._arquivos: list = []
 
         self._build()
         
->>>>>>> f4a3e3b (.)
     # ── Layout principal ──────────────────────────────────────────────────────
     def _build(self):
         wrap = ctk.CTkFrame(self, fg_color="transparent")
@@ -443,20 +412,6 @@ class BatchCarteiraView(ctk.CTkFrame):
             text=f"{atual}/{total}  —  {nome}"))
 
     def _on_concluido(self, sucesso: int, erro: int, ignorado: int):
-<<<<<<< HEAD
-        self.after(0, self._sc_sucesso.configure,  {"text": str(sucesso)})
-        self.after(0, self._sc_erro.configure,     {"text": str(erro)})
-        self.after(0, self._sc_ignorado.configure, {"text": str(ignorado)})
-        self.after(0, self._progress.set, 1.0)
-        self.after(0, self._progress.configure,
-                   {"progress_color": _VERDE if erro == 0 else _AMBER})
-        self.after(0, self._lbl_prog.configure,
-                   {"text": f"Concluído — {sucesso} salvo(s)"})
-        self.after(0, self._btn_gerar.configure,
-                   {"state": "normal", "text": "🚀 Gerar Carteiras",
-                    "fg_color": _VERDE})
-        self.after(0, self._btn_parar.configure, {"state": "disabled"})
-=======
         self.after(0, lambda: self._sc_sucesso.configure(text=str(sucesso)))
         self.after(0, lambda: self._sc_erro.configure(text=str(erro)))
         self.after(0, lambda: self._sc_ignorado.configure(text=str(ignorado)))
@@ -468,7 +423,6 @@ class BatchCarteiraView(ctk.CTkFrame):
         self.after(0, lambda: self._btn_gerar.configure(
             state="normal", text="🚀 Gerar Carteiras", fg_color=_VERDE))
         self.after(0, lambda: self._btn_parar.configure(state="disabled"))
->>>>>>> f4a3e3b (.)
 
         if erro == 0:
             self.after(0, messagebox.showinfo,
