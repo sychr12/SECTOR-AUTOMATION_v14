@@ -37,6 +37,20 @@ class CarteirasRepository:
         foto3:        Optional[bytes],
         usuario:      Optional[str],
     ) -> Optional[int]:
+        # Validações
+        if not isinstance(cpf, str):
+            cpf = str(cpf)
+        if not isinstance(nome, str):
+            nome = str(nome)
+            
+        # Verifica PDF
+        if pdf_conteudo and not isinstance(pdf_conteudo, bytes):
+            raise TypeError(f"pdf_conteudo deve ser bytes, recebido {type(pdf_conteudo)}")
+        
+        pdf_size = len(pdf_conteudo) if pdf_conteudo else 0
+        if pdf_size > 10 * 1024 * 1024:  # 10MB max
+            raise ValueError(f"PDF muito grande ({pdf_size / (1024*1024):.1f}MB). Máximo: 10MB")
+        
         sql = """
         INSERT INTO carteiras_digitais
             (nome, cpf, unloc, validade, pdf_conteudo,
@@ -44,20 +58,14 @@ class CarteirasRepository:
              atividade1, atividade2, georef,
              foto1, foto2, foto3, usuario, criado_em)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
-        SELECT SCOPE_IDENTITY() AS id;
         """
+        
         conn = get_connection()
         try:
             cursor = conn.cursor()
             
-            # Verifica tamanho do PDF
-            pdf_size = len(pdf_conteudo) if pdf_conteudo else 0
-            
-            # Limite máximo de 5MB para PDF
-            if pdf_size > 5 * 1024 * 1024:
-                raise ValueError(f"PDF muito grande ({pdf_size / (1024*1024):.1f}MB). Máximo: 5MB")
-            
-            cursor.execute(sql, (
+            # Executa INSERT
+            params = (
                 nome, cpf, unloc, validade,
                 pyodbc.Binary(pdf_conteudo) if pdf_conteudo else None,
                 registro, propriedade, inicio, endereco,
@@ -66,14 +74,29 @@ class CarteirasRepository:
                 pyodbc.Binary(foto2) if foto2 else None,
                 pyodbc.Binary(foto3) if foto3 else None,
                 usuario,
-            ))
+            )
+            
+            cursor.execute(sql, params)
+            
+            # Busca o ID inserido
+            cursor.execute("SELECT SCOPE_IDENTITY() AS id;")
             row = cursor.fetchone()
+            inserted_id = row[0] if row else None
+            
             cursor.close()
             conn.commit()
-            return row[0] if row else None
-        except pyodbc.Error as db_err:
+            
+            return inserted_id
+            
+        except pyodbc.ProgrammingError as e:
             conn.rollback()
-            raise Exception(f"Erro de banco de dados: {db_err}") from db_err
+            raise Exception(f"Erro SQL: {str(e)}") from e
+        except pyodbc.DatabaseError as e:
+            conn.rollback()
+            raise Exception(f"Erro de banco de dados: {str(e)}") from e
+        except pyodbc.Error as e:
+            conn.rollback()
+            raise Exception(f"Erro ODBC: {str(e)}") from e
         except Exception as e:
             conn.rollback()
             raise Exception(f"Erro ao salvar carteira: {str(e)}") from e
