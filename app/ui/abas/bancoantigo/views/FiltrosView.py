@@ -327,7 +327,26 @@ class FiltrosView(ctk.CTkFrame):
 
     # ── API pública ───────────────────────────────────────────────────────────
     def popular_municipios(self, municipios: list):
-        self._combo_municipio.configure(values=["TODOS"] + municipios)
+        try:
+            if not self.winfo_exists():
+                return
+
+            if not hasattr(self, "_combo_municipio") or self._combo_municipio is None:
+                return
+
+            if not self._combo_municipio.winfo_exists():
+                return
+
+            valores = ["TODOS"] + list(municipios or [])
+            self._combo_municipio.configure(values=valores)
+
+            atual = self._var_municipio.get().strip()
+            if atual not in valores:
+                self._var_municipio.set("TODOS")
+                self._combo_municipio.set("TODOS")
+
+        except Exception as e:
+            print(f"[FiltrosView] erro ao popular municípios: {e}")
 
     def obter_valores(self) -> dict:
         return {

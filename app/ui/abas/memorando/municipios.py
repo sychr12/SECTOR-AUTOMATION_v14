@@ -1,0 +1,89 @@
+# -*- coding: utf-8 -*-
+
+MUNICIPIOS = {
+    "ALV": "ALVARÃES",
+    "AMT": "AMATURÁ",
+    "ANA": "ANAMÃ",
+    "ANO": "ANORI",
+    "APU": "APUÍ",
+    "ATN": "ATALAIA DO NORTE",
+    "ATZ": "AUTAZES",
+    "BAZ": "BARCELOS",
+    "BAR": "BARREIRINHA",
+    "BJC": "BENJAMIN CONSTANT",
+    "BER": "BERURI",
+    "BVR": "BOA VISTA DO RAMOS",
+    "BOA": "BOCA DO ACRE",
+    "BBA": "BORBA",
+    "CAP": "CAAPIRANGA",
+    "CAN": "CANUTAMA",
+    "CAF": "CARAUARI",
+    "CAR": "CAREIRO",
+    "CAZ": "CAREIRO DA VÁRZEA",
+    "CIZ": "COARI",
+    "COD": "CODAJÁS",
+    "ERN": "EIRUNEPÉ",
+    "ENV": "ENVIRA",
+    "FBA": "FONTE BOA",
+    "GAJ": "GUAJARÁ",
+    "HIA": "HUMAITÁ",
+    "IPX": "IPIXUNA",
+    "IRB": "IRANDUBA",
+    "ITA": "ITAMARATI",
+    "ITR": "ITACOATIARA",
+    "ITG": "ITAPIRANGA",
+    "JPR": "JAPURÁ",
+    "JUR": "JURUÁ",
+    "JUT": "JUTAÍ",
+    "LBR": "LÁBREA",
+    "MPU": "MANACAPURU",
+    "MQR": "MANAQUIRI",
+    "MAO": "MANAUS",
+    "MAO-ZL": "MANAUS ZONA LESTE",
+    "MNX": "MANICORÉ",
+    "MTS-ATZ": "MONTE SINAI",
+    "MRA": "MARAÃ",
+    "MBZ": "MAUÉS",
+    "NMD": "NHAMUNDÁ",
+    "ITR-NRO": "NOVO REMANSO",
+    "MNX-MTP": "SANTO ANTÔNIO DO MATUPI",
+    "LBR-VE": "VILA EXTREMA",
+    "VRC": "VILA RICA DE CAVIANA",
+    "PRF-BNA": "BALBINA",
+    "VLD": "VILA DE LINDÓIA",
+    "RLD": "VILA DA REALIDADE",
+    "NON": "NOVA OLINDA DO NORTE",
+    "NAR": "NOVO AIRÃO",
+    "NAP": "NOVO ARIPUANÃ",
+    "PAR": "PARINTINS",
+    "PUI": "PAUINI",
+    "PRF": "PRESIDENTE FIGUEIREDO",
+    "RPE": "RIO PRETO DA EVA",
+    "SIR": "SANTA ISABEL DO RIO NEGRO",
+    "SAI": "SANTO ANTÔNIO DO IÇÁ",
+    "SJL": "SÃO GABRIEL DA CACHOEIRA",
+    "SPO": "SÃO PAULO DE OLIVENÇA",
+    "SSU": "SÃO SEBASTIÃO DO UATUMÃ",
+    "SUL-CAN": "SUL DE CANUTAMA",
+    "SLV": "SILVES",
+    "TBT": "TABATINGA",
+    "TPA": "TAPAUÁ",
+    "TFF": "TEFÉ",
+    "TNT": "TONANTINS",
+    "UAN": "UARINI",
+    "URC": "URUCARÁ",
+    "UCB": "URUCURITUBA",
+    "FOZ": "FOZ DE CANUMÃ"
+}
+
+def lista_formatada():
+    return sorted([f"{cod} - {nome}" for cod, nome in MUNICIPIOS.items()])
+
+def lista_codigos():
+    """Retorna só os códigos: ['MAO', 'IRU', ...]"""
+    return list(MUNICIPIOS.keys())
+
+
+def dict_reverso():
+    """Retorna {'MAO - MANAUS': 'MAO'}"""
+    return {f"{cod} - {nome}": cod for cod, nome in MUNICIPIOS.items()}

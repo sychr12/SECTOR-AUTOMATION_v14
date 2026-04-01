@@ -3,7 +3,6 @@ import sys
 import ctypes
 import customtkinter as ctk
 
-# eu odeio essa parte sempre da dublicidade
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
@@ -11,10 +10,8 @@ except Exception:
 
 ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("green")
-
 ctk.set_widget_scaling(1.0)
 ctk.set_window_scaling(1.0)
-
 
 try:
     _orig_ctk_scroll_init = ctk.CTkScrollableFrame.__init__
@@ -55,30 +52,34 @@ class MainApp(ctk.CTk):
         self.geometry("1600x900")
         self.minsize(1200, 700)
 
+        self.login_frame = None
+        self.mostrar_login()
+
+    def mostrar_login(self):
+        if self.login_frame:
+            self.login_frame.destroy()
+
+        self.deiconify()  # mostra janela
         self.login_frame = Login(self, self.login_sucesso)
 
     def login_sucesso(self, usuario):
         self.login_frame.destroy()
+        self.withdraw()
 
         perfil = usuario.get("perfil", "usuario")
-
-        
-        self.withdraw()
 
         if perfil in ("administrador", "chefe"):
             win = MenuAdministrador(usuario, master=self)
         else:
             win = AppPrincipal(usuario, master=self)
 
-        
         win.deiconify()
         win.lift()
         win.focus_force()
 
         self.wait_window(win)
-
         
-        self.destroy()
+        self.mostrar_login()
 
 
 if __name__ == "__main__":

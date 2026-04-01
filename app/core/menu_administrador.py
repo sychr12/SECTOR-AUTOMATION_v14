@@ -205,7 +205,7 @@ class NavItem(ctk.CTkFrame):
 # ── Janela principal ─────────────────────────────────────────────────────────
 class MenuAdministrador(ctk.CTkToplevel):
 
-    def __init__(self, usuario_dados, master=None):
+    def __init__(self, usuario_dados, master=None, on_logout=None):
         apply_theme()
         super().__init__(master)
         self.title("Sector Automation — Sistema Administrativo")
@@ -224,6 +224,7 @@ class MenuAdministrador(ctk.CTkToplevel):
         self.tela_atual = None
         self.nav_items: list[tuple[str, NavItem]] = []
         self.carregando = False
+        self.on_logout = on_logout
 
         self._build()
         self._abrir(HomeUI, "Dashboard")
@@ -516,4 +517,7 @@ class MenuAdministrador(ctk.CTkToplevel):
             "Tem certeza que deseja encerrar a sessão?\n\nDados não salvos serão perdidos.",
             icon="question",
         ):
+            callback = getattr(self, "on_logout", None)
             self.destroy()
+            if callable(callback):
+                callback()

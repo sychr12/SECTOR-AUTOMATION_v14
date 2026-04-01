@@ -173,7 +173,7 @@ class NavItem(ctk.CTkFrame):
 # ── Janela principal ─────────────────────────────────────────────────────────
 class AppPrincipal(ctk.CTkToplevel):
 
-    def __init__(self, usuario_dados, master=None):
+    def __init__(self, usuario_dados, master=None, on_logout=None):
         apply_theme()
         super().__init__(master)
         self.title("Sector Automation — Sistema Corporativo")
@@ -188,9 +188,11 @@ class AppPrincipal(ctk.CTkToplevel):
 
         self.usuario    = usuario_dados["username"]
         self.perfil     = usuario_dados.get("perfil", "usuario")
+        self.on_logout = on_logout
         self.tela_atual = None
         self.nav_items: list[tuple[str, NavItem]] = []
         self.carregando = False
+    
 
         self._build()
         self._abrir(ConsultarUI, "Consulta")
@@ -438,12 +440,13 @@ class AppPrincipal(ctk.CTkToplevel):
         self.lbl_bread.configure(text=f"Sistema  /  {titulo}")
 
         for w in self.main.winfo_children():
-            w.destroy()
-        self.tela_atual = None
+            try:
+                w.destroy()
+            except Exception:
+                pass
 
-        threading.Thread(
-            target=self._load, args=(tela_class, titulo), daemon=True
-        ).start()
+        self.tela_atual = None
+        self.after(10, lambda: self._load(tela_class, titulo))
 
     def _load(self, tela_class, titulo: str):
         try:
@@ -470,4 +473,7 @@ class AppPrincipal(ctk.CTkToplevel):
     # ── Sair ─────────────────────────────────────────────────────────────────
     def sair(self):
         if messagebox.askyesno("Sair", "Deseja encerrar a sessão?"):
+            callback = getattr(self, "on_logout", None)
             self.destroy()
+            if callable(callback):
+                callback()

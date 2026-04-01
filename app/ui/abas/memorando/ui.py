@@ -7,94 +7,14 @@ import os
 from PIL import Image
 from datetime import datetime
 
-from app.theme import AppTheme
 from ui.base_ui import BaseUI
 from .controller import MemorandoController
 from .views import MemorandoFormView, HistoricoMemorandoView
+from .municipios import lista_formatada, dict_reverso
+from app.theme import AppTheme
 
-
-# ── Lista de MUNICÍPIOS com códigos UNLOC ─────────────────────────────────────────
-MUNICIPIOS = {
-    "ALV": "ALVARÃES",
-    "AMT": "AMATURÁ",
-    "ANA": "ANAMÃ",
-    "ANO": "ANORI",
-    "APU": "APUÍ",
-    "ATN": "ATALAIA DO NORTE",
-    "ATZ": "AUTAZES",
-    "BAZ": "BARCELOS",
-    "BAR": "BARREIRINHA",
-    "BJC": "BENJAMIN CONSTANT",
-    "BER": "BERURI",
-    "BVR": "BOA VISTA DO RAMOS",
-    "BOA": "BOCA DO ACRE",
-    "BBA": "BORBA",
-    "CAP": "CAAPIRANGA",
-    "CAN": "CANUTAMA",
-    "CAF": "CARAUARI",
-    "CAR": "CAREIRO",
-    "CAZ": "CAREIRO DA VÁRZEA",
-    "CIZ": "COARI",
-    "COD": "CODAJÁS",
-    "ERN": "EIRUNEPÉ",
-    "ENV": "ENVIRA",
-    "FBA": "FONTE BOA",
-    "GAJ": "GUAJARÁ",
-    "HIA": "HUMAITÁ",
-    "IPX": "IPIXUNA",
-    "IRB": "IRANDUBA",
-    "ITA": "ITAMARATI",
-    "ITR": "ITACOATIARA",
-    "ITG": "ITAPIRANGA",
-    "JPR": "JAPURÁ",
-    "JUR": "JURUÁ",
-    "JUT": "JUTAÍ",
-    "LBR": "LÁBREA",
-    "MPU": "MANACAPURU",
-    "MQR": "MANAQUIRI",
-    "MAO": "MANAUS",
-    "MAO-ZL": "MANAUS ZONA LESTE",
-    "MNX": "MANICORÉ",
-    "MTS-ATZ": "MONTE SINAI",
-    "MRA": "MARAÃ",
-    "MBZ": "MAUÉS",
-    "NMD": "NHAMUNDÁ",
-    "ITR-NRO": "NOVO REMANSO",
-    "MNX-MTP": "SANTO ANTÔNIO DO MATUPI",
-    "LBR-VE": "VILA EXTREMA",
-    "VRC": "VILA RICA DE CAVIANA",
-    "PRF-BNA": "BALBINA",
-    "VLD": "VILA DE LINDÓIA",
-    "RLD": "VILA DA REALIDADE",
-    "NON": "NOVA OLINDA DO NORTE",
-    "NAR": "NOVO AIRÃO",
-    "NAP": "NOVO ARIPUANÃ",
-    "PAR": "PARINTINS",
-    "PUI": "PAUINI",
-    "PRF": "PRESIDENTE FIGUEIREDO",
-    "RPE": "RIO PRETO DA EVA",
-    "SIR": "SANTA ISABEL DO RIO NEGRO",
-    "SAI": "SANTO ANTÔNIO DO IÇÁ",
-    "SJL": "SÃO GABRIEL DA CACHOEIRA",
-    "SPO": "SÃO PAULO DE OLIVENÇA",
-    "SSU": "SÃO SEBASTIÃO DO UATUMÃ",
-    "SUL-CAN": "SUL DE CANUTAMA",
-    "SLV": "SILVES",
-    "TBT": "TABATINGA",
-    "TPA": "TAPAUÁ",
-    "TFF": "TEFÉ",
-    "TNT": "TONANTINS",
-    "UAN": "UARINI",
-    "URC": "URUCARÁ",
-    "UCB": "URUCURITUBA",
-    "FOZ": "FOZ DE CANUMÃ"
-}
-
-# ── Criar lista formatada para o ComboBox ────────────────────────────────────────
-UNLOC_LIST_FORMATADO = [f"{codigo} - {nome}" for codigo, nome in MUNICIPIOS.items()]
-
-# ── Dicionário para converter de volta ───────────────────────────────────────────
-UNLOC_CODIGOS = {f"{codigo} - {nome}": codigo for codigo, nome in MUNICIPIOS.items()}
+UNLOC_LIST_FORMATADO = lista_formatada()
+UNLOC_CODIGOS = dict_reverso()
 
 _ICON_COLOR = "#1e293b"
 
@@ -130,10 +50,10 @@ class IconManager:
     def _find_icons_path(self):
         """Encontra o caminho correto para a pasta de ícones"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
+
         possible_paths = [
-            os.path.join(current_dir, "..", "..", "..", "images", "icons", "memorando"),
-            os.path.join(current_dir, "..", "..", "..", "..", "images", "icons", "memorando"),
-            r"C:\Users\Administrador\Documents\SECTOR AUTOMATION_v14\images\icons\memorando",
+            os.path.normpath(os.path.join(current_dir, "..", "..", "..", "assets", "icons", "memorando")),
+            os.path.normpath(os.path.join(current_dir, "..", "..", "assets", "icons", "memorando")),
         ]
 
         for path in possible_paths:
@@ -144,7 +64,7 @@ class IconManager:
 
         self.icons_dir = possible_paths[0]
         print(f"[IconManager] ⚠️ Pasta de ícones não encontrada: {self.icons_dir}")
-
+        
     def load_icon(self, filename, size=(24, 24), colorize_to=None):
         """Carrega um ícone da pasta e aplica cor se necessário"""
         try:
@@ -179,17 +99,26 @@ class IconManager:
         except Exception as e:
             print(f"[IconManager] Erro ao carregar {filename}: {e}")
         return None
-
+    
     def setup_icons(self):
-        """Configura todos os ícones com cor preta"""
+        """Configura todos os ícones"""
         icons_config = {
-            "document": ("document.png", (36, 36), _ICON_COLOR),
-            "history":  ("history.png",  (26, 26), _ICON_COLOR),
-            "save":     ("save.png",     (22, 22), _ICON_COLOR),
-            "search":   ("search.png",   (20, 20), _ICON_COLOR),
-            "delete":   ("delete.png",   (20, 20), _ICON_COLOR),
-            "download": ("download.png", (22, 22), _ICON_COLOR),
-            "eye":      ("eye.png",      (22, 22), _ICON_COLOR),
+            "document": ("file.png",      (36, 36), _ICON_COLOR),
+            "file_text": ("file-text.png", (22, 22), _ICON_COLOR),
+            "history":  ("history.png",   (26, 26), _ICON_COLOR),
+            "save": ("save.png", (22, 22), (255, 255, 255)),
+            "search":   ("search.png",    (18, 18), _ICON_COLOR),
+            "delete":   ("delete.png",    (20, 20), _ICON_COLOR),
+            "download": ("download.png",  (22, 22), _ICON_COLOR),
+            "eye":      ("eye.png",       (22, 22), (255, 255, 255)),
+
+            "calendar_search": ("calendar-search.png", (18, 18), _ICON_COLOR),
+            "calendar_days": ("calendar-days.png", (16, 16), _ICON_COLOR),
+            "clock": ("clock.png", (16, 16), _ICON_COLOR),
+            "user": ("user.png", (16, 16), _ICON_COLOR),
+
+            "location": ("location.png",  (18, 18), _ICON_COLOR),
+            "filter":   ("filter.png",    (18, 18), _ICON_COLOR),
         }
 
         for name, (filename, size, color) in icons_config.items():
@@ -315,10 +244,14 @@ class MemorandoUI(BaseUI):
         log_hdr.pack(fill="x", padx=24, pady=(20, 12))
 
         # Ícone do log
-        ctk.CTkLabel(
-            log_hdr, text="📋", font=("Segoe UI", 20),
-            text_color=_ACCENT
-        ).pack(side="left", padx=(0, 12))
+        if self.icons.get("file_text"):
+            ctk.CTkLabel(
+                log_hdr,
+                text="",
+                image=self.icons["file_text"],
+                width=24,
+                height=24
+            ).pack(side="left", padx=(0, 12))
 
         ctk.CTkLabel(log_hdr, text="Registro de Atividade",
                      font=("Segoe UI", 16, "bold"),

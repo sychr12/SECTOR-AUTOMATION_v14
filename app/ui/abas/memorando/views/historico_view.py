@@ -7,6 +7,16 @@ from app.theme import AppTheme
 import hashlib
 from datetime import datetime
 
+from app.ui.abas.memorando.views.municipio_selector import MunicipioSelector
+from app.ui.abas.memorando.municipios import lista_formatada
+
+from app.ui.abas.memorando.style import (
+    FILTER_RADIUS,
+    FILTER_BORDER,
+    FILTER_HOVER,
+    FILTER_INPUT_BG,
+    FILTER_DROPDOWN_BG,
+)
 
 # ── Paleta de cores para UNLOC ──────────────────────────────────────────────────
 UNLOC_CORES = {
@@ -31,84 +41,6 @@ CORES_ALTERNATIVAS = [
 ]
 
 
-# ── MUNICIPIOS ──────────────────────────────────────────────────────────────────
-MUNICIPIOS = {
-    "ALV": "ALVARÃES",
-    "AMT": "AMATURÁ",
-    "ANA": "ANAMÃ",
-    "ANO": "ANORI",
-    "APU": "APUÍ",
-    "ATN": "ATALAIA DO NORTE",
-    "ATZ": "AUTAZES",
-    "BAZ": "BARCELOS",
-    "BAR": "BARREIRINHA",
-    "BJC": "BENJAMIN CONSTANT",
-    "BER": "BERURI",
-    "BVR": "BOA VISTA DO RAMOS",
-    "BOA": "BOCA DO ACRE",
-    "BBA": "BORBA",
-    "CAP": "CAAPIRANGA",
-    "CAN": "CANUTAMA",
-    "CAF": "CARAUARI",
-    "CAR": "CAREIRO",
-    "CAZ": "CAREIRO DA VÁRZEA",
-    "CIZ": "COARI",
-    "COD": "CODAJÁS",
-    "ERN": "EIRUNEPÉ",
-    "ENV": "ENVIRA",
-    "FBA": "FONTE BOA",
-    "GAJ": "GUAJARÁ",
-    "HIA": "HUMAITÁ",
-    "IPX": "IPIXUNA",
-    "IRB": "IRANDUBA",
-    "ITA": "ITAMARATI",
-    "ITR": "ITACOATIARA",
-    "ITG": "ITAPIRANGA",
-    "JPR": "JAPURÁ",
-    "JUR": "JURUÁ",
-    "JUT": "JUTAÍ",
-    "LBR": "LÁBREA",
-    "MPU": "MANACAPURU",
-    "MQR": "MANAQUIRI",
-    "MAO": "MANAUS",
-    "MAO-ZL": "MANAUS ZONA LESTE",
-    "MNX": "MANICORÉ",
-    "MTS-ATZ": "MONTE SINAI",
-    "MRA": "MARAÃ",
-    "MBZ": "MAUÉS",
-    "NMD": "NHAMUNDÁ",
-    "ITR-NRO": "NOVO REMANSO",
-    "MNX-MTP": "SANTO ANTÔNIO DO MATUPI",
-    "LBR-VE": "VILA EXTREMA",
-    "VRC": "VILA RICA DE CAVIANA",
-    "PRF-BNA": "BALBINA",
-    "VLD": "VILA DE LINDÓIA",
-    "RLD": "VILA DA REALIDADE",
-    "NON": "NOVA OLINDA DO NORTE",
-    "NAR": "NOVO AIRÃO",
-    "NAP": "NOVO ARIPUANÃ",
-    "PAR": "PARINTINS",
-    "PUI": "PAUINI",
-    "PRF": "PRESIDENTE FIGUEIREDO",
-    "RPE": "RIO PRETO DA EVA",
-    "SIR": "SANTA ISABEL DO RIO NEGRO",
-    "SAI": "SANTO ANTÔNIO DO IÇÁ",
-    "SJL": "SÃO GABRIEL DA CACHOEIRA",
-    "SPO": "SÃO PAULO DE OLIVENÇA",
-    "SSU": "SÃO SEBASTIÃO DO UATUMÃ",
-    "SUL-CAN": "SUL DE CANUTAMA",
-    "SLV": "SILVES",
-    "TBT": "TABATINGA",
-    "TPA": "TAPAUÁ",
-    "TFF": "TEFÉ",
-    "TNT": "TONANTINS",
-    "UAN": "UARINI",
-    "URC": "URUCARÁ",
-    "UCB": "URUCURITUBA",
-    "FOZ": "FOZ DE CANUMÃ"
-}
-
-
 def get_unloc_color(unloc: str) -> str:
     """Retorna uma cor consistente para cada UNLOC"""
     if not unloc or unloc == "—":
@@ -123,84 +55,6 @@ def get_unloc_color(unloc: str) -> str:
     # Gerar cor baseada no hash do UNLOC
     hash_val = int(hashlib.md5(unloc_upper.encode()).hexdigest()[:8], 16)
     return CORES_ALTERNATIVAS[hash_val % len(CORES_ALTERNATIVAS)]
-
-# ───────────────── Municipios ─────────────────
-
-MUNICIPIOS = {
-    "ALV": "ALVARÃES",
-    "AMT": "AMATURÁ",
-    "ANA": "ANAMÃ",
-    "ANO": "ANORI",
-    "APU": "APUÍ",
-    "ATN": "ATALAIA DO NORTE",
-    "ATZ": "AUTAZES",
-    "BAZ": "BARCELOS",
-    "BAR": "BARREIRINHA",
-    "BJC": "BENJAMIN CONSTANT",
-    "BER": "BERURI",
-    "BVR": "BOA VISTA DO RAMOS",
-    "BOA": "BOCA DO ACRE",
-    "BBA": "BORBA",
-    "CAP": "CAAPIRANGA",
-    "CAN": "CANUTAMA",
-    "CAF": "CARAUARI",
-    "CAR": "CAREIRO",
-    "CAZ": "CAREIRO DA VÁRZEA",
-    "CIZ": "COARI",
-    "COD": "CODAJÁS",
-    "ERN": "EIRUNEPÉ",
-    "ENV": "ENVIRA",
-    "FBA": "FONTE BOA",
-    "GAJ": "GUAJARÁ",
-    "HIA": "HUMAITÁ",
-    "IPX": "IPIXUNA",
-    "IRB": "IRANDUBA",
-    "ITA": "ITAMARATI",
-    "ITR": "ITACOATIARA",
-    "ITG": "ITAPIRANGA",
-    "JPR": "JAPURÁ",
-    "JUR": "JURUÁ",
-    "JUT": "JUTAÍ",
-    "LBR": "LÁBREA",
-    "MPU": "MANACAPURU",
-    "MQR": "MANAQUIRI",
-    "MAO": "MANAUS",
-    "MAO-ZL": "MANAUS ZONA LESTE",
-    "MNX": "MANICORÉ",
-    "MTS-ATZ": "MONTE SINAI",
-    "MRA": "MARAÃ",
-    "MBZ": "MAUÉS",
-    "NMD": "NHAMUNDÁ",
-    "ITR-NRO": "NOVO REMANSO",
-    "MNX-MTP": "SANTO ANTÔNIO DO MATUPI",
-    "LBR-VE": "VILA EXTREMA",
-    "VRC": "VILA RICA DE CAVIANA",
-    "PRF-BNA": "BALBINA",
-    "VLD": "VILA DE LINDÓIA",
-    "RLD": "VILA DA REALIDADE",
-    "NON": "NOVA OLINDA DO NORTE",
-    "NAR": "NOVO AIRÃO",
-    "NAP": "NOVO ARIPUANÃ",
-    "PAR": "PARINTINS",
-    "PUI": "PAUINI",
-    "PRF": "PRESIDENTE FIGUEIREDO",
-    "RPE": "RIO PRETO DA EVA",
-    "SIR": "SANTA ISABEL DO RIO NEGRO",
-    "SAI": "SANTO ANTÔNIO DO IÇÁ",
-    "SJL": "SÃO GABRIEL DA CACHOEIRA",
-    "SPO": "SÃO PAULO DE OLIVENÇA",
-    "SSU": "SÃO SEBASTIÃO DO UATUMÃ",
-    "SUL-CAN": "SUL DE CANUTAMA",
-    "SLV": "SILVES",
-    "TBT": "TABATINGA",
-    "TPA": "TAPAUÁ",
-    "TFF": "TEFÉ",
-    "TNT": "TONANTINS",
-    "UAN": "UARINI",
-    "URC": "URUCARÁ",
-    "UCB": "URUCURITUBA",
-    "FOZ": "FOZ DE CANUMÃ"
-}
 
 class HistoricoMemorandoView(ctk.CTkToplevel):
     
@@ -257,16 +111,14 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         self.lista_scroll.pack(fill="both", expand=True)
         
     # ── Limpar tudo dos filtros ────────────────────────────────────────────       
+
     def _limpar_filtros(self):
+        """Limpa todos os filtros e recarrega os dados."""
         self.pesquisa_var.set("")
-        self.municipio_var.set("Todos")
+        self.municipio_selector.set("Todos")
         self.ano_var.set("Todos")
         self.ordem_var.set("Recentes")
-
-        # força atualização da lista após limpar
-        if hasattr(self, "on_filtro_change"):
-            self.on_filtro_change()
-            
+        self._carregar_dados()
 
     def _build_header(self, parent):
         """Cabeçalho com título e ícone"""
@@ -303,15 +155,15 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
 
         # Status badge
         status_badge = ctk.CTkLabel(
-            hdr, text="📋 Lista de memorandos",
-            font=("Segoe UI", 11, "bold"), text_color=AppTheme.TXT_MUTED,
+            hdr, text="Lista de memorandos",
+            font=("Segoe UI", 14, "bold"), text_color=AppTheme.TXT_MUTED,
             fg_color=AppTheme.BG_CARD, corner_radius=20, padx=14, pady=6
         )
         status_badge.pack(side="right")
 
     def _build_filters(self, parent):
         """Barra de filtros completa"""
-        bar = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD, corner_radius=14)
+        bar = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD, corner_radius=16)
         bar.pack(fill="x", pady=(0, 20))
 
         HEIGHT = 38
@@ -321,10 +173,22 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         FONT_BOLD = ("Segoe UI", 11, "bold")
 
         # ── Buscar ─────────────────────────────
-        ctk.CTkLabel(bar, text="🔍",
-                     font=("Segoe UI", 14),
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(16, 4), pady=PAD_Y)
-        
+        if self.icons.get("search"):
+            ctk.CTkLabel(
+                bar,
+                text="",
+                image=self.icons["search"],
+                width=18,
+                height=18
+            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
+        else:
+            ctk.CTkLabel(
+                bar,
+                text="Buscar",
+                font=("Segoe UI", 14),
+                text_color=AppTheme.TXT_MUTED
+            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
+            
         ctk.CTkLabel(bar, text="Buscar",
                      font=FONT_BOLD,
                      text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
@@ -337,48 +201,76 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             textvariable=self.pesquisa_var,
             placeholder_text="Número do memo ou UNLOC...",
             height=HEIGHT,
-            corner_radius=10,
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
+            corner_radius=FILTER_RADIUS,
+            fg_color=FILTER_INPUT_BG,
+            border_color=FILTER_BORDER,
+            border_width=1,
             font=FONT,
             text_color=AppTheme.TXT_MAIN,
         ).pack(side="left", fill="x", expand=True, padx=(0, PAD_X), pady=PAD_Y)
-
-        # ── Município ─────────────────────────────
-        ctk.CTkLabel(bar, text="📍",
-                     font=("Segoe UI", 14),
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(12, 4), pady=PAD_Y)
         
+        # ── Município ─────────────────────────────
+        if self.icons.get("location"):
+            ctk.CTkLabel(
+                bar,
+                text="",
+                image=self.icons["location"],
+                width=18,
+                height=18
+            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
+        else:
+            ctk.CTkLabel(
+                bar,
+                text="Buscar",
+                font=("Segoe UI", 14),
+                text_color=AppTheme.TXT_MUTED
+            ).pack(side="left", padx=(16, 4), pady=PAD_Y)   
+            
         ctk.CTkLabel(bar, text="Município",
                      font=FONT_BOLD,
                      text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
 
         self.municipio_var = ctk.StringVar(value="Todos")
 
-        lista_municipios = ["Todos"] + [
-            f"{codigo} - {nome}" for codigo, nome in MUNICIPIOS.items()
-        ]
+        lista_municipios = ["Todos"] + lista_formatada()
 
-        ctk.CTkOptionMenu(
+        self.municipio_selector = MunicipioSelector(
             bar,
             values=lista_municipios,
-            variable=self.municipio_var,
+            default="Todos",
             width=200,
             height=HEIGHT,
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
+            corner_radius=FILTER_RADIUS,
+            fg_color=FILTER_INPUT_BG,
             text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
+            button_color=FILTER_INPUT_BG,
+            button_hover_color=FILTER_HOVER,
+            dropdown_fg_color=FILTER_DROPDOWN_BG,
+            border_color=FILTER_BORDER,
+            border_width=1,
             font=FONT,
-            command=lambda _: self._carregar_dados()
-        ).pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+            placeholder="Município",
+            command=lambda _: self._carregar_dados(),
+        )
+        self.municipio_selector.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
 
         # ── Ano ─────────────────────────────
-        ctk.CTkLabel(bar, text="📅",
-                     font=("Segoe UI", 14),
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(12, 4), pady=PAD_Y)
-        
+        if self.icons.get("calendar_search"):
+            ctk.CTkLabel(
+                bar,
+                text="",
+                image=self.icons["calendar_search"],
+                width=18,
+                height=18
+            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
+        else:
+            ctk.CTkLabel(
+                bar,
+                text="Ano",
+                font=("Segoe UI", 14),
+                text_color=AppTheme.TXT_MUTED
+            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
+                    
         ctk.CTkLabel(bar, text="Ano",
                      font=FONT_BOLD,
                      text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
@@ -386,78 +278,118 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         self.ano_var = ctk.StringVar(value="Todos")
 
         # Buscar anos disponíveis
+        # Buscar anos disponíveis
         ok, anos = self.controller.listar_anos() if hasattr(self.controller, 'listar_anos') else (False, [])
         lista_anos = ["Todos"] + anos if ok and anos else ["Todos"]
 
-        ctk.CTkOptionMenu(
+        ano_wrap = ctk.CTkFrame(
             bar,
-            values=lista_anos,
-            variable=self.ano_var,
             width=100,
             height=HEIGHT,
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            font=FONT,
-            command=lambda _: self._carregar_dados()
-        ).pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+            fg_color=FILTER_INPUT_BG,
+            border_width=1,
+            border_color=FILTER_BORDER,
+            corner_radius=FILTER_RADIUS
+        )
+        ano_wrap.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+        ano_wrap.pack_propagate(False)
 
-        # ── Ordem ─────────────────────────────
-        ctk.CTkLabel(bar, text="🔄",
-                     font=("Segoe UI", 14),
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(12, 4), pady=PAD_Y)
+        self.ano_menu = ctk.CTkOptionMenu(
+            ano_wrap,
+            values=lista_anos,
+            variable=self.ano_var,
+            width=96,
+            height=HEIGHT - 4,
+            fg_color=FILTER_INPUT_BG,
+            button_color=FILTER_INPUT_BG,
+            button_hover_color=FILTER_HOVER,
+            dropdown_fg_color=FILTER_DROPDOWN_BG,
+            text_color=AppTheme.TXT_MAIN,
+            dropdown_text_color=AppTheme.TXT_MAIN,
+            corner_radius=FILTER_RADIUS - 2,
+            font=FONT,
+            dynamic_resizing=False,
+            command=lambda _: self._carregar_dados()
+        )
+        self.ano_menu.place(relx=0.5, rely=0.5, anchor="center")
         
+        # ── Ordem ─────────────────────────────
+        if self.icons.get("filter"):
+            ctk.CTkLabel(
+                bar,
+                text="",
+                image=self.icons["filter"],
+                width=18,
+                height=18
+            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
+        else:
+            ctk.CTkLabel(
+                bar,
+                text="Buscar",
+                font=("Segoe UI", 14),
+                text_color=AppTheme.TXT_MUTED
+            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
+            
         ctk.CTkLabel(bar, text="Ordem",
                      font=FONT_BOLD,
                      text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
 
         self.ordem_var = ctk.StringVar(value="Recentes")
 
-        ctk.CTkOptionMenu(
+        ordem_wrap = ctk.CTkFrame(
             bar,
-            values=["Recentes", "Antigos"],
-            variable=self.ordem_var,
             width=120,
             height=HEIGHT,
-            fg_color=AppTheme.BG_INPUT,
-            button_color=AppTheme.BG_INPUT,
-            button_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            font=FONT,
-            command=lambda _: self._carregar_dados()
-        ).pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+            fg_color=FILTER_INPUT_BG,
+            border_width=1,
+            border_color=FILTER_BORDER,
+            corner_radius=FILTER_RADIUS
+        )
+        ordem_wrap.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+        ordem_wrap.pack_propagate(False)
 
+        self.ordem_menu = ctk.CTkOptionMenu(
+            ordem_wrap,
+            values=["Recentes", "Antigos"],
+            variable=self.ordem_var,
+            width=116,
+            height=HEIGHT - 4,
+            fg_color=FILTER_INPUT_BG,
+            button_color=FILTER_INPUT_BG,
+            button_hover_color=FILTER_HOVER,
+            dropdown_fg_color=FILTER_DROPDOWN_BG,
+            text_color=AppTheme.TXT_MAIN,
+            dropdown_text_color=AppTheme.TXT_MAIN,
+            corner_radius=FILTER_RADIUS - 2,
+            font=FONT,
+            dynamic_resizing=False,
+            command=lambda _: self._carregar_dados()
+        )
+        self.ordem_menu.place(relx=0.5, rely=0.5, anchor="center")
+        
         # ── Botão Limpar ─────────────────────────────
-        ctk.CTkButton(
+        self.btn_limpar = ctk.CTkButton(
             bar,
             text=" Limpar Filtros",
             image=self.icons.get("delete") if self.icons.get("delete") else None,
             compound="left",
-            width=120,
+            width=130,
             height=HEIGHT,
-            corner_radius=10,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
+            corner_radius=FILTER_RADIUS,
+            fg_color=FILTER_INPUT_BG,
+            hover_color=FILTER_HOVER,
+            border_width=1,
+            border_color=FILTER_BORDER,
             text_color=AppTheme.TXT_MUTED,
             font=("Segoe UI", 11),
             command=self._limpar_filtros
-        ).pack(side="right", padx=14, pady=PAD_Y)
-
-    def _limpar_filtros(self):
-        """Limpa todos os filtros e recarrega os dados."""
-        self.pesquisa_var.set("")
-        self.municipio_var.set("Todos")
-        self.ano_var.set("Todos")
-        self.ordem_var.set("Recentes")
-        self._carregar_dados()
-
+        )
+        self.btn_limpar.pack(side="right", padx=14, pady=PAD_Y)
+        
     def _carregar_dados(self):
         """Carrega os dados com todos os filtros aplicados."""
         termo = self.pesquisa_var.get().strip()
-        municipio = self.municipio_var.get()
+        municipio = self.municipio_selector.get()
         ano = self.ano_var.get()
         ordem = self.ordem_var.get()
         
@@ -528,6 +460,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         """Cria um card para cada memorando."""
         # fundo alternado suave
         bg = AppTheme.BG_CARD if idx % 2 == 0 else AppTheme.BG_INPUT
+        hover_baixar = "#f1f5f9" if bg == AppTheme.BG_CARD else "#ffffff"
 
         card = ctk.CTkFrame(self.lista_scroll,
                             fg_color=bg, corner_radius=12)
@@ -542,11 +475,25 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         linha1 = ctk.CTkFrame(info, fg_color="transparent")
         linha1.pack(fill="x")
 
-        ctk.CTkLabel(linha1,
-                     text=f"📄 Memo Nº {reg.get('numero', '—')}",
-                     font=("Segoe UI", 15, "bold"),
-                     text_color=AppTheme.TXT_MAIN,
-                     anchor="w").pack(side="left")
+        memo_info = ctk.CTkFrame(linha1, fg_color="transparent")
+        memo_info.pack(side="left")
+
+        if self.icons.get("file_text"):
+            ctk.CTkLabel(
+                memo_info,
+                text="",
+                image=self.icons["file_text"],
+                width=20,
+                height=20
+            ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(
+            memo_info,
+            text=f"Memo Nº {reg.get('numero', '—')}",
+            font=("Segoe UI", 15, "bold"),
+            text_color=AppTheme.TXT_MAIN,
+            anchor="w"
+        ).pack(side="left")
 
         # badge UNLOC com cor personalizada
         unloc = reg.get("unloc", "—")
@@ -557,7 +504,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                                  corner_radius=6)
             badge.pack(side="left", padx=(12, 0))
             ctk.CTkLabel(badge,
-                         text=f"📍 {unloc}",
+                         text=unloc,
                          font=("Segoe UI", 11, "bold"),
                          text_color="#ffffff",
                          padx=12, pady=3).pack()
@@ -567,20 +514,41 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         linha2.pack(fill="x", pady=(10, 0))
 
         meta = [
-            ("📅 Emissão",   reg.get("data_emissao", "—")),
-            ("🕐 Criado em", reg.get("criado_em", "—")),
-            ("👤 Usuário",   reg.get("usuario", "—")),
+            ("calendar_days", "Emissão", reg.get("data_emissao", "—")),
+            ("clock", "Criado em", reg.get("criado_em", "—")),
+            ("user", "Usuário", reg.get("usuario", "—")),
         ]
-        for titulo, valor in meta:
+
+        for icon_name, titulo, valor in meta:
             bloco = ctk.CTkFrame(linha2, fg_color="transparent")
             bloco.pack(side="left", padx=(0, 32))
-            ctk.CTkLabel(bloco, text=titulo,
-                         font=("Segoe UI", 10),
-                         text_color="#6b7280").pack(anchor="w")
-            ctk.CTkLabel(bloco, text=valor,
-                         font=("Segoe UI", 11),
-                         text_color=AppTheme.TXT_MUTED).pack(anchor="w")
 
+            titulo_row = ctk.CTkFrame(bloco, fg_color="transparent")
+            titulo_row.pack(anchor="w")
+
+            if self.icons.get(icon_name):
+                ctk.CTkLabel(
+                    titulo_row,
+                    text="",
+                    image=self.icons[icon_name],
+                    width=16,
+                    height=16
+                ).pack(side="left", padx=(0, 5))
+
+            ctk.CTkLabel(
+                titulo_row,
+                text=titulo,
+                font=("Segoe UI", 10),
+                text_color="#6b7280"
+            ).pack(side="left")
+
+            ctk.CTkLabel(
+                bloco,
+                text=valor,
+                font=("Segoe UI", 11),
+                text_color=AppTheme.TXT_MUTED
+            ).pack(anchor="w")
+            
         # ── lado direito — botões ───────────────────────────────────
         btns = ctk.CTkFrame(card, fg_color="transparent")
         btns.grid(row=0, column=1, sticky="ns", padx=(0, 20), pady=16)
@@ -609,10 +577,12 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 text=" Baixar",
                 image=self.icons.get("download") if self.icons.get("download") else None,
                 compound="left",
-                width=120, height=38,
+                width=120,
+                height=38,
                 corner_radius=10,
-                fg_color=AppTheme.BG_INPUT,
-                hover_color=AppTheme.BG_APP,
+                fg_color=bg,
+                hover_color=hover_baixar,
+                border_width=0,  # <- garante que não tenha borda
                 font=("Segoe UI", 12),
                 text_color=AppTheme.TXT_MAIN,
                 command=lambda mid=reg.get("id"), num=reg.get("numero", ""): self._baixar_com_tratamento(mid, num)

@@ -155,9 +155,3 @@ class MemorandoController:
             traceback.print_exc()
             return False, f"{type(e).__name__}: {e}"
         
-    def listar_anos(self):
-        try:
-            anos = MemorandoService.listar_anos()
-            return True, anos
-        except Exception as e:
-            return False, str(e)
