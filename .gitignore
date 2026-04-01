@@ -1,0 +1,114 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# =========================
+# Ambientes virtuais
+# =========================
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# Pip / dependências
+# =========================
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+
+# =========================
+# Build / distribuição
+# =========================
+build/
+dist/
+*.spec
+
+# =========================
+# Logs e temporários
+# =========================
+*.log
+*.tmp
+*.temp
+
+# =========================
+# Jupyter / IPython
+# =========================
+.ipynb_checkpoints/
+.profile_default/
+
+# =========================
+# IDEs
+# =========================
+.vscode/
+*.code-workspace
+.idea/
+
+# =========================
+# Sistema operacional
+# =========================
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# =========================
+# Configurações sensíveis
+# =========================
+.env
+.env.*
+*.env
+
+# =========================
+# Google API / OAuth
+# =========================
+token.json
+credentials.json
+
+# =========================
+# JSONs sensíveis (SEU PROJETO)
+# =========================
+
+# RECOMENDADO: renomear pasta para evitar espaço
+jsons_files/
+
+# Caso ainda use nome com espaço:
+jsons\ files/
+
+# Ignorar JSONs críticos
+DATABASE.json
+Emails_Dev.json
+Emails_recebimento.json
+motivos.json
+municipios.json
+senha.json
+usuarios.json
+
+# =========================
+# Cache de ferramentas
+# =========================
+.mypy_cache/
+.pytest_cache/
+.cache/
+
+# =========================
+# Arquivos gerados (opcional)
+# =========================
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# =========================
+# Banco de dados locais
+# =========================
+*.db
+*.sqlite
+*.sqlite3
