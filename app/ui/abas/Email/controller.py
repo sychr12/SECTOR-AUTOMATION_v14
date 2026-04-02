@@ -50,18 +50,30 @@ class EmailDownloadController:
         except Exception:
             return "Data_Desconhecida"
 
+    EXTENSOES_SUPORTADAS = (".pdf", ".doc", ".docx", ".zip")
+
     def extrair_parts_pdf(self, parts):
-        """Percorre partes do email e yielda apenas as que são PDF"""
+        """Percorre partes do email e yielda PDF, Word e ZIP"""
         for part in parts:
             filename = part.get("filename", "")
-            if filename.lower().endswith(".pdf"):
+            if filename.lower().endswith(self.EXTENSOES_SUPORTADAS):
                 yield part
             if part.get("parts"):
                 yield from self.extrair_parts_pdf(part["parts"])
 
+
+
+    # Mapeamento de extensão → mime_type
+    _MIME_TYPES = {
+        ".pdf":  "application/pdf",
+        ".doc":  "application/msword",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".zip":  "application/zip",
+    }
+
     def obter_bytes_anexo_pdf(self, service, msg_id: str, part: dict) -> tuple:
         """
-        Baixa o anexo PDF e retorna os bytes em memória.
+        Baixa o anexo (PDF, Word ou ZIP) e retorna os bytes em memória.
         NÃO salva nada no disco — os bytes vão direto para o banco.
 
         Retorna: (nome_arquivo: str, dados: bytes, erro: str | None)
@@ -74,14 +86,20 @@ class EmailDownloadController:
             ).execute()
 
             dados = base64.urlsafe_b64decode(att["data"])
-            # Sanitiza nome para exibição
-            nome = re.sub(r'[\\/:*?"<>|]+', "_", part.get("filename", "anexo.pdf"))
+            nome_original = part.get("filename", "anexo")
+            nome = re.sub(r'[\\/:*?"<>|]+', "_", nome_original)
             return nome, dados, None
 
         except HttpError as e:
             return None, None, f"HttpError {e.resp.status}: {e._get_reason()}"
         except Exception as e:
             return None, None, str(e)
+
+    def mime_type_por_nome(self, nome_arquivo: str) -> str:
+        """Retorna o mime_type correto baseado na extensão do arquivo"""
+        import os
+        ext = os.path.splitext(nome_arquivo)[1].lower()
+        return self._MIME_TYPES.get(ext, "application/octet-stream")
 
     def buscar_label_id(self, service, label_name: str):
         """Busca e cacheia o ID de uma label do Gmail"""
@@ -98,16 +116,20 @@ class EmailDownloadController:
         return None
 
     def marcar_email_como_processado(self, service, msg_id: str, label_name: str) -> bool:
-        """Adiciona label ao email para marcá-lo como processado"""
+        """Adiciona label ao email e marca como lido (remove UNREAD)"""
         try:
+            body = {"removeLabelIds": ["UNREAD"]}
+
             label_id = self.buscar_label_id(service, label_name)
             if label_id:
-                service.users().messages().modify(
-                    userId="me",
-                    id=msg_id,
-                    body={"addLabelIds": [label_id]},
-                ).execute()
-                return True
+                body["addLabelIds"] = [label_id]
+
+            service.users().messages().modify(
+                userId="me",
+                id=msg_id,
+                body=body,
+            ).execute()
+            return True
         except Exception as e:
             print(f"[Controller] Erro ao marcar email {msg_id}: {e}")
         return False

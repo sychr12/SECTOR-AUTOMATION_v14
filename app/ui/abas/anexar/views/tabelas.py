@@ -11,6 +11,12 @@ from .theme import (
     fmt_data, fmt_data_curta,
 )
 
+from .theme import (
+    VERDE, VERDE_H, VERDE_T, AMBER_B, AMBER_T,
+    VERM, AMBER, INFO, MUTED, SLATE, AZUL,  # Adicione AZUL aqui
+    fmt_data, fmt_data_curta,
+)
+
 # Constantes de layout (equivalentes ao AppTheme global)
 class AppTheme:
     BG_APP   = "#f8fafc"
@@ -78,15 +84,45 @@ class CarteirasTable:
     ]
 
     @classmethod
-    def criar(cls, parent, on_baixar):
+    def criar(cls, parent, on_baixar=None, on_visualizar=None, on_excluir=None):
+        """
+        Cria a tabela de carteiras.
+        
+        Args:
+            parent: Widget pai
+            on_baixar: Callback para baixar PDF (recebe record_id)
+            on_visualizar: Callback para visualizar PDF (recebe record_id)
+            on_excluir: Callback para excluir PDF (recebe record_id, nome)
+        """
         container = ctk.CTkFrame(parent, fg_color="transparent")
         _thead(container, cls._COLS)
         lista = _scroll(container)
         lista.pack(fill="both", expand=True)
+        
+        # Armazenar callbacks para uso no carregamento
+        lista._on_baixar = on_baixar
+        lista._on_visualizar = on_visualizar
+        lista._on_excluir = on_excluir
+        
         return lista, container
 
     @staticmethod
-    def carregar(lista, registros: list, on_baixar=None):
+    def carregar(lista, registros: list, on_baixar=None, on_visualizar=None, on_excluir=None):
+        """
+        Carrega os registros na tabela.
+        
+        Args:
+            lista: O widget lista (scrollable frame)
+            registros: Lista de dicionários com os dados
+            on_baixar: Callback para baixar PDF (recebe record_id)
+            on_visualizar: Callback para visualizar PDF (recebe record_id)
+            on_excluir: Callback para excluir PDF (recebe record_id, nome)
+        """
+        # Usar callbacks passados ou os armazenados
+        baixar_cb = on_baixar or getattr(lista, '_on_baixar', None)
+        visualizar_cb = on_visualizar or getattr(lista, '_on_visualizar', None)
+        excluir_cb = on_excluir or getattr(lista, '_on_excluir', None)
+        
         for w in lista.winfo_children():
             w.destroy()
 
@@ -123,12 +159,36 @@ class CarteirasTable:
                          ).pack(side="left", padx=(8, 0))
 
             if tem_pdf:
-                ctk.CTkButton(
-                    row, text="📄 Baixar", width=110, height=30,
-                    corner_radius=8, fg_color=VERDE, hover_color=VERDE_H,
-                    text_color=VERDE_T, font=("Segoe UI", 10, "bold"),
-                    command=lambda rid=r.get("id"): on_baixar(rid) if on_baixar else None,
-                ).pack(side="left", padx=(8, 12), pady=5)
+                # Frame para botões
+                btn_frame = ctk.CTkFrame(row, fg_color="transparent")
+                btn_frame.pack(side="left", padx=(8, 12), pady=5)
+                
+                # Botão Visualizar
+                if visualizar_cb:
+                    ctk.CTkButton(
+                        btn_frame, text="👁️", width=40, height=30,
+                        corner_radius=8, fg_color=AZUL, hover_color="#2563eb",
+                        text_color="white", font=("Segoe UI", 10, "bold"),
+                        command=lambda rid=r.get("id"): visualizar_cb(rid) if visualizar_cb else None,
+                    ).pack(side="left", padx=(0, 4))
+                
+                # Botão Baixar
+                if baixar_cb:
+                    ctk.CTkButton(
+                        btn_frame, text="📄", width=40, height=30,
+                        corner_radius=8, fg_color=VERDE, hover_color=VERDE_H,
+                        text_color=VERDE_T, font=("Segoe UI", 10, "bold"),
+                        command=lambda rid=r.get("id"): baixar_cb(rid) if baixar_cb else None,
+                    ).pack(side="left", padx=(0, 4))
+                
+                # Botão Excluir
+                if excluir_cb:
+                    ctk.CTkButton(
+                        btn_frame, text="🗑️", width=40, height=30,
+                        corner_radius=8, fg_color=VERM, hover_color="#b91c1c",
+                        text_color="white", font=("Segoe UI", 10, "bold"),
+                        command=lambda rid=r.get("id"), nome=r.get("nome", ""): excluir_cb(rid, nome) if excluir_cb else None,
+                    ).pack(side="left")
             else:
                 ctk.CTkLabel(
                     row, text="⏳ Pendente", width=110, height=30,

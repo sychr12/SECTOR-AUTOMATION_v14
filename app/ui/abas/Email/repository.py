@@ -104,10 +104,18 @@ class EmailDownloadRepository:
             cursor = conn.cursor()
             
             pdf_bytes = pyodbc.Binary(arquivo_bytes) if arquivo_bytes else None
-            
-            # isso aqui e so pra eu saber se ta chegando os dados certinho, pode tirar depois
-            print(f"[Repositório] Executando INSERT com email_id={unique_msg_id}, remetente={remetente}, assunto={assunto}, municipio={municipio}, data_email={data_email}, nome_arquivo={nome_arquivo}, bytes={len(arquivo_bytes) if arquivo_bytes else 0}")
-            
+
+            # Detecta mime_type pela extensão do arquivo
+            import os as _os
+            _ext = _os.path.splitext(nome_arquivo)[1].lower() if nome_arquivo else ""
+            _mime_map = {
+                ".pdf":  "application/pdf",
+                ".doc":  "application/msword",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".zip":  "application/zip",
+            }
+            mime_type = _mime_map.get(_ext, "application/octet-stream") if arquivo_bytes else None
+
             # Executar o INSERT
             cursor.execute(sql_insert, (
                 unique_msg_id,
@@ -116,9 +124,9 @@ class EmailDownloadRepository:
                 municipio or "",
                 data_email,
                 nome_arquivo,
-                "application/pdf" if arquivo_bytes else None,
+                mime_type,
                 pdf_bytes,
-                None,  # hash_sha256 pode ser calculado posteriormente
+                None,
             ))
             
             # Executar o SELECT para pegar o ID

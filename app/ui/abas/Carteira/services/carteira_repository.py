@@ -132,8 +132,7 @@ class CarteirasRepository:
         limit:    int = 300,
     ) -> List[dict]:
         where  = ["1=1"]
-        # BUG CORRIGIDO: `limit` era appendado ao FINAL de params, mas TOP (?) é o
-        # PRIMEIRO placeholder no SQL. Agora limit é passado como primeiro parâmetro.
+        # BUG CORRIGIDO: limit é o PRIMEIRO parâmetro (TOP ?)
         params = [limit]
 
         if termo:
@@ -226,6 +225,7 @@ class CarteirasRepository:
         finally:
             conn.close()
 
+    # ── Buscar por CPF ────────────────────────────────────────────────────────
     def buscar_por_cpf(self, cpf: str) -> Optional[dict]:
         """Busca o último registro de carteira por CPF (busca flexível com ou sem máscara)."""
         if not cpf:
@@ -271,3 +271,50 @@ class CarteirasRepository:
             return None
         finally:
             conn.close()
+
+    # ── Imagens de layout (frente/verso) ─────────────────────────────────────
+    def buscar_imagens_layout(self) -> dict:
+        """
+        Busca as imagens de layout frente e verso na tabela bancocpp.dbo.Imagens.
+
+        Estrutura da tabela:
+            NomeImagem  VARCHAR(100)   → 'frente.png' | 'verso.png'
+            Imagem      VARBINARY(MAX) → bytes da imagem
+
+        Retorna:
+            {'frente': bytes | None, 'verso': bytes | None}
+        """
+        sql = """
+        SELECT NomeImagem, Imagem
+        FROM   bancocpp.dbo.Imagens
+        WHERE  NomeImagem IN ('frente.png', 'verso.png')
+           AND Imagem IS NOT NULL;
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            cursor.close()
+
+            resultado = {"frente": None, "verso": None}
+            for row in rows:
+                nome  = (row[0] or "").lower().strip()
+                dados = row[1]
+                if dados:
+                    blob = bytes(dados) if not isinstance(dados, bytes) else dados
+                    if "frente" in nome:
+                        resultado["frente"] = blob
+                    elif "verso" in nome:
+                        resultado["verso"] = blob
+
+            return resultado
+
+        except Exception as e:
+            print(f"[CarteirasRepository] Erro ao buscar imagens de layout: {e}")
+            return {"frente": None, "verso": None}
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass

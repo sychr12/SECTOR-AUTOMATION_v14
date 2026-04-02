@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
 """
 assets.py — Resolução portátil de assets (imagens, fontes).
-Funciona em qualquer máquina, independente do drive/usuário.
 
-Ordem de busca:
-  1. Variáveis de ambiente (CARTEIRA_IMG_DIR, CARTEIRA_FONT_PATH)
-  2. Pasta 'images/' relativa ao executável / __file__
-  3. Pasta 'images/' na raiz do projeto (subindo até 4 níveis)
+Estrutura real da tabela Imagens (banco bancocpp):
+    Id          INT IDENTITY PK
+    NomeImagem  VARCHAR(100)   → 'frente.png' ou 'verso.png'
+    Imagem      VARBINARY(MAX) → conteúdo binário da imagem
+    TipoArquivo VARCHAR(50)    → 'image/png', etc.
+    DataCadastro DATETIME
+
+Ordem de busca das imagens frente/verso:
+  1. Banco de dados SQL Server (bancocpp.dbo.Imagens) ← PRIORIDADE
+  2. Variáveis de ambiente (CARTEIRA_IMG_DIR)
+  3. Pasta 'images/' relativa ao executável / __file__
   4. Paths hardcoded legados (Q:\...)
-  5. Fallback: gera imagem placeholder em memória (nunca trava)
+  5. Fallback: placeholder gerado em memória (nunca trava)
 """
 from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Union, Tuple, List
@@ -23,8 +30,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ── Constantes ───────────────────────────────────────────────────────────────
 FRENTE_NAMES: Tuple[str, ...] = ("frente.png", "FRENTE.png", "frente.jpg")
-VERSO_NAMES: Tuple[str, ...] = ("verso.png", "VERSO.png", "verso.jpg")
-FONT_NAMES: Tuple[str, ...] = ("Roboto-Regular.ttf", "Roboto.ttf", "Arial.ttf")
+VERSO_NAMES: Tuple[str, ...]  = ("verso.png",  "VERSO.png",  "verso.jpg")
+FONT_NAMES:  Tuple[str, ...]  = ("Roboto-Regular.ttf", "Roboto.ttf", "Arial.ttf")
 
 # ── Paths legados (máquinas originais) ───────────────────────────────────────
 _LEGACY_IMG_DIRS = [
@@ -32,7 +39,6 @@ _LEGACY_IMG_DIRS = [
     r"C:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images",
     r"D:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images",
 ]
-
 _LEGACY_FONT_PATHS = [
     r"Q:\ARQUIVOS CPCPR\fabio jr\CARTAO-DIGITAL\Roboto-Regular.ttf",
     r"C:\ARQUIVOS CPCPR\fabio jr\CARTAO-DIGITAL\Roboto-Regular.ttf",
@@ -40,116 +46,207 @@ _LEGACY_FONT_PATHS = [
 ]
 
 
-class AssetNotFoundError(Exception):
-    """Exceção customizada para assets não encontrados (opcional)"""
-    pass
+# ── Busca no Banco de Dados ───────────────────────────────────────────────────
 
+def _buscar_imagens_do_banco() -> Tuple[Optional[bytes], Optional[bytes]]:
+    """
+    Busca as imagens frente e verso na tabela bancocpp.dbo.Imagens.
+
+    Estrutura da tabela:
+        NomeImagem  VARCHAR(100)   → 'frente.png' | 'verso.png'
+        Imagem      VARBINARY(MAX) → bytes da imagem
+
+    Retorna:
+        (frente_bytes, verso_bytes) — qualquer um pode ser None.
+    """
+    try:
+        from services.database import get_connection
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT NomeImagem, Imagem
+                FROM   bancocpp.dbo.Imagens
+                WHERE  NomeImagem IN ('frente.png', 'verso.png')
+                   AND Imagem IS NOT NULL;
+            """)
+            rows = cursor.fetchall()
+            cursor.close()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        frente_bytes: Optional[bytes] = None
+        verso_bytes:  Optional[bytes] = None
+
+        for row in rows:
+            nome  = (row[0] or "").lower().strip()
+            dados = row[1]
+            if dados:
+                blob = bytes(dados) if not isinstance(dados, bytes) else dados
+                if "frente" in nome:
+                    frente_bytes = blob
+                    print(f"[Assets] frente carregada do banco ({len(blob):,} bytes).")
+                elif "verso" in nome:
+                    verso_bytes = blob
+                    print(f"[Assets] verso carregada do banco ({len(blob):,} bytes).")
+
+        if not frente_bytes:
+            print("[Assets] 'frente.png' não encontrada na tabela Imagens.")
+        if not verso_bytes:
+            print("[Assets] 'verso.png' não encontrada na tabela Imagens.")
+
+        return frente_bytes, verso_bytes
+
+    except ImportError:
+        print("[Assets] services.database não disponível — ignorando busca no banco.")
+        return None, None
+    except Exception as e:
+        print(f"[Assets] Erro ao buscar imagens no banco: {type(e).__name__}: {e}")
+        return None, None
+
+
+def _bytes_para_arquivo_temp(data: bytes, suffix: str = ".png") -> Optional[str]:
+    """Salva bytes em arquivo temporário e retorna o caminho."""
+    try:
+        tmp = tempfile.NamedTemporaryFile(
+            delete=False, suffix=suffix, prefix="carteira_img_"
+        )
+        tmp.write(data)
+        tmp.flush()
+        tmp.close()
+        return tmp.name
+    except Exception as e:
+        print(f"[Assets] Erro ao criar arquivo temporário: {e}")
+        return None
+
+
+# Cache das imagens vindas do banco
+_cache_db: dict = {}
+
+
+def _carregar_cache_banco() -> None:
+    """Carrega (uma única vez) as imagens do banco."""
+    if _cache_db:
+        return
+
+    frente_bytes, verso_bytes = _buscar_imagens_do_banco()
+
+    _cache_db["frente_bytes"] = frente_bytes
+    _cache_db["verso_bytes"]  = verso_bytes
+    _cache_db["frente_path"]  = _bytes_para_arquivo_temp(frente_bytes) if frente_bytes else None
+    _cache_db["verso_path"]   = _bytes_para_arquivo_temp(verso_bytes)  if verso_bytes  else None
+
+
+# ── Helpers de diretório ─────────────────────────────────────────────────────
 
 def _exe_dir() -> Path:
-    """Diretório base do executável ou do script."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    here = Path(__file__).resolve().parent
-    return here
+    return Path(__file__).resolve().parent
 
 
 def _candidate_img_dirs() -> List[Path]:
-    """Lista diretórios candidatos com deduplicação."""
     candidates: List[Path] = []
-    seen = set()
+    seen: set = set()
 
-    # 1. Variável de ambiente
     env = os.environ.get("CARTEIRA_IMG_DIR")
     if env:
-        path = Path(env).resolve()
-        if str(path) not in seen:
-            candidates.append(path)
-            seen.add(str(path))
+        p = Path(env).resolve()
+        if str(p) not in seen:
+            candidates.append(p); seen.add(str(p))
 
-    # 2. Busca relativa ao executável
     base = _exe_dir()
-    for level in range(5):
-        for subdir in ("images", "assets", "resources/images", "static/images"):
-            candidate = base / subdir
-            if str(candidate) not in seen:
-                candidates.append(candidate)
-                seen.add(str(candidate))
+    for _ in range(5):
+        for sub in ("images", "assets", "resources/images", "static/images"):
+            c = base / sub
+            if str(c) not in seen:
+                candidates.append(c); seen.add(str(c))
         base = base.parent
 
-    # 3. Paths legados
     for legacy in _LEGACY_IMG_DIRS:
-        path = Path(legacy).resolve()
-        if str(path) not in seen:
-            candidates.append(path)
-            seen.add(str(path))
+        p = Path(legacy).resolve()
+        if str(p) not in seen:
+            candidates.append(p); seen.add(str(p))
 
     return candidates
 
 
 @lru_cache(maxsize=1)
 def _find_img_dir() -> Optional[Path]:
-    """Encontra o diretório de imagens."""
     for d in _candidate_img_dirs():
         if d.is_dir():
-            # Verifica se tem pelo menos uma das imagens
             for name in FRENTE_NAMES + VERSO_NAMES:
                 if (d / name).exists():
                     return d
     return None
 
 
-def _find_image(names: List[str]) -> Optional[Path]:
-    """Busca imagem ignorando case."""
+def _find_image_on_disk(names: List[str]) -> Optional[Path]:
     img_dir = _find_img_dir()
     if img_dir:
-        # Primeiro busca exato
         for name in names:
             p = img_dir / name
             if p.exists():
                 return p
-
-        # Depois busca case insensitive
         try:
-            for file in img_dir.iterdir():
-                if file.is_file():
-                    file_lower = file.name.lower()
-                    if any(file_lower == name.lower() for name in names):
-                        return file
+            for f in img_dir.iterdir():
+                if f.is_file() and any(f.name.lower() == n.lower() for n in names):
+                    return f
         except PermissionError:
             pass
-
-    # Busca em variáveis de ambiente
-    for env_key in ("CARTEIRA_IMG_FRENTE", "CARTEIRA_IMG_VERSO"):
-        env_val = os.environ.get(env_key)
-        if env_val and Path(env_val).exists():
-            return Path(env_val)
-
     return None
 
 
+# ── API pública ───────────────────────────────────────────────────────────────
+
 @lru_cache(maxsize=1)
 def get_img_frente() -> Optional[str]:
-    """Retorna caminho da imagem frente."""
-    p = _find_image(list(FRENTE_NAMES))
+    """
+    Retorna o caminho da imagem frente (arquivo temporário gerado a partir
+    do banco, ou arquivo em disco como fallback).
+    """
+    _carregar_cache_banco()
+    if _cache_db.get("frente_path"):
+        return _cache_db["frente_path"]
+    p = _find_image_on_disk(list(FRENTE_NAMES))
     return str(p) if p else None
 
 
 @lru_cache(maxsize=1)
 def get_img_verso() -> Optional[str]:
-    """Retorna caminho da imagem verso."""
-    p = _find_image(list(VERSO_NAMES))
+    """
+    Retorna o caminho da imagem verso (arquivo temporário gerado a partir
+    do banco, ou arquivo em disco como fallback).
+    """
+    _carregar_cache_banco()
+    if _cache_db.get("verso_path"):
+        return _cache_db["verso_path"]
+    p = _find_image_on_disk(list(VERSO_NAMES))
     return str(p) if p else None
+
+
+def get_img_frente_bytes() -> Optional[bytes]:
+    """Retorna bytes brutos da imagem frente (sem gravar arquivo)."""
+    _carregar_cache_banco()
+    return _cache_db.get("frente_bytes")
+
+
+def get_img_verso_bytes() -> Optional[bytes]:
+    """Retorna bytes brutos da imagem verso (sem gravar arquivo)."""
+    _carregar_cache_banco()
+    return _cache_db.get("verso_bytes")
 
 
 @lru_cache(maxsize=1)
 def get_font_path() -> Optional[str]:
     """Retorna caminho da fonte."""
-    # 1. Variável de ambiente
     env = os.environ.get("CARTEIRA_FONT_PATH")
     if env and Path(env).exists():
         return env
 
-    # 2. Relativo ao projeto
     base = _exe_dir()
     for _ in range(5):
         for name in FONT_NAMES:
@@ -159,19 +256,16 @@ def get_font_path() -> Optional[str]:
                     return str(p)
         base = base.parent
 
-    # 3. Paths legados
     for p in _LEGACY_FONT_PATHS:
         if Path(p).exists():
             return p
 
-    # 4. Fontes do sistema (Windows)
     win_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
     for name in FONT_NAMES:
         p = win_fonts / name
         if p.exists():
             return str(p)
 
-    # 5. Fontes do sistema (Linux/Mac)
     for sys_dir in ["/usr/share/fonts", "/usr/local/share/fonts",
                     os.path.expanduser("~/.fonts"),
                     "/Library/Fonts", "/System/Library/Fonts"]:
@@ -185,23 +279,27 @@ def get_font_path() -> Optional[str]:
 
 def assets_status(verbose: bool = False) -> dict:
     """Retorna status de todos os assets para diagnóstico."""
+    _carregar_cache_banco()
     status = {
-        "img_frente": get_img_frente(),
-        "img_verso": get_img_verso(),
-        "font_path": get_font_path(),
-        "img_dir_found": str(_find_img_dir()) if _find_img_dir() else None,
+        "img_frente":       get_img_frente(),
+        "img_verso":        get_img_verso(),
+        "font_path":        get_font_path(),
+        "img_dir_found":    str(_find_img_dir()) if _find_img_dir() else None,
+        "frente_do_banco":  _cache_db.get("frente_bytes") is not None,
+        "verso_do_banco":   _cache_db.get("verso_bytes")  is not None,
+        "frente_tam_bytes": len(_cache_db["frente_bytes"]) if _cache_db.get("frente_bytes") else 0,
+        "verso_tam_bytes":  len(_cache_db["verso_bytes"])  if _cache_db.get("verso_bytes")  else 0,
     }
-
     if verbose:
-        # Adiciona informações de debug
         status.update({
             "candidate_dirs": [str(d) for d in _candidate_img_dirs()[:5]],
-            "exe_dir": str(_exe_dir()),
-            "sys_frozen": getattr(sys, "frozen", False),
+            "exe_dir":        str(_exe_dir()),
+            "sys_frozen":     getattr(sys, "frozen", False),
         })
-
     return status
 
+
+# ── Utilitários de imagem ─────────────────────────────────────────────────────
 
 def make_placeholder_image(
     width: int = 420,
@@ -209,30 +307,12 @@ def make_placeholder_image(
     label: str = "SEM IMAGEM",
     bg_color: Union[str, Tuple[int, int, int]] = (220, 220, 230),
     border_color: Union[str, Tuple[int, int, int]] = (150, 150, 170),
-    text_color: Union[str, Tuple[int, int, int]] = (120, 120, 140)
+    text_color: Union[str, Tuple[int, int, int]] = (120, 120, 140),
 ) -> Image.Image:
-    """
-    Gera imagem placeholder quando o arquivo real não é encontrado.
-
-    Args:
-        width: Largura da imagem
-        height: Altura da imagem
-        label: Texto a ser exibido
-        bg_color: Cor de fundo
-        border_color: Cor da borda
-        text_color: Cor do texto
-    """
-    img = Image.new("RGB", (width, height), color=bg_color)
+    img  = Image.new("RGB", (width, height), color=bg_color)
     draw = ImageDraw.Draw(img)
+    draw.rectangle([2, 2, width - 3, height - 3], outline=border_color, width=2)
 
-    # Desenha borda
-    draw.rectangle(
-        [2, 2, width - 3, height - 3],
-        outline=border_color,
-        width=2
-    )
-
-    # Tenta usar fonte com tamanho dinâmico
     font_size = min(width, height) // 10
     font = None
     try:
@@ -240,13 +320,10 @@ def make_placeholder_image(
     except Exception:
         pass
 
-    # Calcula posição central
     if font:
         bbox = draw.textbbox((0, 0), label, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        x = (width - text_width) // 2
-        y = (height - text_height) // 2
+        x = (width  - (bbox[2] - bbox[0])) // 2
+        y = (height - (bbox[3] - bbox[1])) // 2
         draw.text((x, y), label, fill=text_color, font=font)
     else:
         draw.text((width // 2, height // 2), label, fill=text_color, anchor="mm")
@@ -258,49 +335,31 @@ def open_image(
     path: Optional[str],
     fallback_label: str = "SEM IMAGEM",
     resize_to: Optional[Tuple[int, int]] = None,
-    convert_mode: Optional[str] = None
+    convert_mode: Optional[str] = None,
 ) -> Image.Image:
-    """
-    Abre imagem do path ou retorna placeholder. Nunca lança exceção.
-
-    Args:
-        path: Caminho da imagem
-        fallback_label: Texto do placeholder
-        resize_to: (width, height) para redimensionar
-        convert_mode: Modo de conversão ('RGB', 'RGBA', etc)
-    """
+    """Abre imagem do path ou retorna placeholder. Nunca lança exceção."""
     img = None
-
     if path and os.path.exists(path):
         try:
             img = Image.open(path)
         except Exception:
             pass
-
     if img is None:
         img = make_placeholder_image(label=fallback_label)
-
-    # Aplica conversão se necessário
     if convert_mode and img.mode != convert_mode:
         img = img.convert(convert_mode)
-
-    # Aplica redimensionamento
     if resize_to:
         img = img.resize(resize_to, Image.Resampling.LANCZOS)
-
     return img
 
 
 def get_pil_font(size: int) -> Optional[Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]]:
-    """Retorna ImageFont com o tamanho pedido, com fallback seguro."""
     font_path = get_font_path()
     if font_path:
         try:
             return ImageFont.truetype(font_path, size)
         except Exception:
             pass
-
-    # Fallback: fonte bitmap padrão do PIL
     try:
         return ImageFont.load_default()
     except Exception:
@@ -308,11 +367,11 @@ def get_pil_font(size: int) -> Optional[Union[ImageFont.FreeTypeFont, ImageFont.
 
 
 def reload_assets() -> dict:
-    """Força recarregamento de todos os assets (útil para desenvolvimento)."""
+    """Força recarregamento completo dos assets."""
+    global _cache_db
+    _cache_db = {}
     _find_img_dir.cache_clear()
     get_img_frente.cache_clear()
     get_img_verso.cache_clear()
     get_font_path.cache_clear()
-
-    # Recarrega e retorna novo status
     return assets_status(verbose=True)

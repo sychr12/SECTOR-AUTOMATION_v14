@@ -87,6 +87,31 @@ class AnexarRepository:
             print(f"[AnexarRepository] AVISO ao garantir colunas: {exc}")
         finally:
             conn.close()
+            
+# ------------------------------------------------------------------
+# Excluir PDF
+# ------------------------------------------------------------------
+    def excluir_pdf_por_id(self, record_id: int) -> bool:
+        """Exclui apenas o PDF (seta coluna pdf = NULL) e limpa dados de anexação"""
+        sql = """
+            UPDATE carteiras_digitais
+            SET pdf = NULL, 
+                anexado_por = NULL, 
+                anexado_em = NULL
+            WHERE id = ? AND pdf IS NOT NULL
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql, (record_id,))
+            cursor.close()
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     # ------------------------------------------------------------------
     # Credenciais SEFAZ
@@ -439,3 +464,4 @@ class AnexarRepository:
             }
         finally:
             conn.close()
+    

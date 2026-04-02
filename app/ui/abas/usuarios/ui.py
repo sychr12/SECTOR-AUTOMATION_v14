@@ -17,7 +17,6 @@ from app.theme  import AppTheme
 
 from .controller       import UsuarioController
 from .services         import ConfiguracaoUsuariosService, HistoricoUsuariosService
-from .user_edit_window import UserEditWindow
 from .views import (
     SearchFilterCard,
     UserListCard,
@@ -45,7 +44,6 @@ _AZUL_INFO_DARK  = "#2563eb"
 _PURPLE          = "#8b5cf6"
 _MUTED           = "#64748b"
 _ICON_COLOR      = "#1e293b"
-
 
 class IconManager:
     """Gerenciador de ícones para a interface de usuários"""
@@ -77,27 +75,22 @@ class IconManager:
         for path in possible_paths:
             if os.path.exists(path):
                 self.icons_dir = path
-                print(f"[IconManager] ✅ Ícones encontrados em: {self.icons_dir}")
                 # Listar arquivos encontrados
                 try:
                     files = os.listdir(path)
-                    print(f"[IconManager] Arquivos na pasta: {files}")
                 except:
                     pass
                 return
         
         # Se não encontrou, usar o caminho padrão
         self.icons_dir = possible_paths[0]
-        print(f"[IconManager] ⚠️ Pasta de ícones não encontrada. Tentando: {self.icons_dir}")
         
     def load_icon(self, filename, size=(32, 32), colorize_to=None):
         """Carrega um ícone e opcionalmente aplica cor"""
         try:
             path = os.path.join(self.icons_dir, filename)
-            print(f"[IconManager] Tentando carregar: {path}")
             
             if os.path.exists(path):
-                print(f"[IconManager] ✅ Arquivo encontrado: {filename}")
                 img = Image.open(path)
                 img = img.resize(size, Image.Resampling.LANCZOS)
                 
@@ -126,10 +119,8 @@ class IconManager:
                 
                 return ctk.CTkImage(light_image=img, dark_image=img, size=size)
             else:
-                print(f"[IconManager] ❌ Arquivo NÃO encontrado: {filename}")
                 return None
         except Exception as e:
-            print(f"[IconManager] ❌ Erro ao carregar ícone {filename}: {e}")
             return None
     
     def setup_icons(self):
@@ -146,16 +137,11 @@ class IconManager:
             "perfis": ("user.png", (32, 32), _ACCENT),      # Perfis disponíveis
         }
         
-        print("[IconManager] Iniciando carregamento dos ícones...")
         for name, (filename, size, color) in icons_config.items():
             self.icons[name] = self.load_icon(filename, size, color)
-            if self.icons[name]:
-                print(f"[IconManager] ✅ {name} carregado com sucesso")
-            else:
-                print(f"[IconManager] ❌ {name} NÃO carregado")
+            pass  # icon loaded
         
         return self.icons
-
 
 class GerenciarUsuariosUI(BaseUI):
 
@@ -167,7 +153,6 @@ class GerenciarUsuariosUI(BaseUI):
         self.conectar_bd    = conectar_bd
 
         # Inicializar gerenciador de ícones
-        print("[GerenciarUsuariosUI] Inicializando IconManager...")
         self.icon_manager = IconManager()
         self.icons = self.icon_manager.setup_icons()
 
@@ -214,7 +199,6 @@ class GerenciarUsuariosUI(BaseUI):
         
         # Ícone do título
         if self.icons.get("users"):
-            print("[GerenciarUsuariosUI] Exibindo ícone de usuários no título")
             icon_label = ctk.CTkLabel(
                 title_frame,
                 text="",
@@ -224,7 +208,7 @@ class GerenciarUsuariosUI(BaseUI):
             )
             icon_label.pack(side="left", padx=(0, 12))
         else:
-            print("[GerenciarUsuariosUI] Ícone de usuários NÃO encontrado")
+            pass
         
         title_text_frame = ctk.CTkFrame(title_frame, fg_color="transparent")
         title_text_frame.pack(side="left")
@@ -258,7 +242,6 @@ class GerenciarUsuariosUI(BaseUI):
         
         # Ícone do usuário
         if self.icons.get("user"):
-            print("[GerenciarUsuariosUI] Exibindo ícone de usuário no card")
             ctk.CTkLabel(
                 inner,
                 text="",
@@ -336,7 +319,6 @@ class GerenciarUsuariosUI(BaseUI):
             # Ícone do card
             icon = self.icons.get(key)
             if icon:
-                print(f"[GerenciarUsuariosUI] Exibindo ícone para card: {key}")
                 ctk.CTkLabel(
                     row_top,
                     text="",
@@ -345,7 +327,6 @@ class GerenciarUsuariosUI(BaseUI):
                     height=32
                 ).pack(side="left")
             else:
-                print(f"[GerenciarUsuariosUI] Ícone NÃO encontrado para card: {key}")
                 # Fallback visual temporário (apenas para debug)
                 ctk.CTkLabel(
                     row_top,
@@ -550,9 +531,40 @@ class GerenciarUsuariosUI(BaseUI):
     # ── Confirmar exclusão direto do card ─────────────────────────────────────
 
     def _confirmar_exclusao(self, usuario: dict):
-        """Acionado pelo botão 🗑️ direto no card — abre popup de edição
-        com o botão Excluir já visível, em vez de excluir sem ver os dados."""
-        self._abrir_popup_editar(usuario)
+        """Acionado pelo botão 🗑️ direto no card — pede confirmação e exclui."""
+        if usuario["username"] == self.usuario_logado:
+            messagebox.showerror(
+                "Erro",
+                "❌ Você não pode excluir seu próprio usuário!\n\nEsta ação está bloqueada por segurança.")
+            return
+
+        dlg = ConfirmationDialog(
+            self,
+            "⚠️ Confirmar Exclusão",
+            f"Tem certeza que deseja excluir o usuário\n\n👤 {usuario['username']}\n\nEsta ação é irreversível.",
+            type="warning",
+        )
+        if not dlg.show():
+            return
+
+        self.user_list_card.disable_user_actions(usuario["username"])
+
+        def _worker():
+            sucesso, msg = self.controller.excluir_usuario(usuario["username"])
+            self.after(0, self._on_delete_card_result, sucesso, msg, usuario)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_delete_card_result(self, sucesso: bool, msg: str, usuario: dict):
+        if sucesso:
+            self.historico_service.registrar_operacao(
+                self.usuario_logado, "excluir",
+                f"Excluiu usuário: {usuario['username']}")
+            messagebox.showinfo("Sucesso", f"✅ {msg}")
+            self._carregar_usuarios()
+        else:
+            messagebox.showerror("Erro", f"❌ {msg}")
+            self.user_list_card.enable_user_actions(usuario["username"])
 
     # ── Editar próprio usuário ────────────────────────────────────────────────
 
@@ -562,29 +574,9 @@ class GerenciarUsuariosUI(BaseUI):
              if u["username"] == self.usuario_logado),
             {"username": self.usuario_logado},
         )
-
-        def _on_confirm(dados):
-            form = {
-                "username":    self.usuario_logado,
-                "perfil":      usuario_atual.get("perfil", "Usuario"),
-                "email":       dados.get("email", ""),
-                "cpf":         dados.get("cpf", ""),
-                "senha":       dados.get("senha", ""),
-                "observacoes": usuario_atual.get("observacoes", ""),
-                "ativo":       True,
-            }
-            if form["cpf"]:
-                ok, cpf_limpo = self.controller.validar_cpf(form["cpf"])
-                if not ok:
-                    messagebox.showerror("Erro", "CPF inválido")
-                    return
-                form["cpf"] = cpf_limpo
-
-            sucesso, msg = self.controller.salvar_usuario(form, usuario_atual)
-            if sucesso:
-                messagebox.showinfo("Sucesso", "✅ Dados atualizados!")
-                self._carregar_usuarios()
-            else:
-                messagebox.showerror("Erro", f"❌ {msg}")
-
-        UserEditWindow(self, usuario_atual, _on_confirm)
+        UserFormPopup(
+            self,
+            on_save=self._on_popup_save,
+            on_delete=None,
+            user_data=usuario_atual,
+        )

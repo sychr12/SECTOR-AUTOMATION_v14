@@ -4,6 +4,23 @@
 import customtkinter as ctk
 from app.theme import AppTheme
 
+def _aplicar_mascara_cpf(entry):
+    """Aplica máscara CPF (000.000.000-00) em tempo real ao entry."""
+    def _on_key(event=None):
+        texto = entry.get()
+        apenas_numeros = ''.join(c for c in texto if c.isdigit())[:11]
+        mascara = ''
+        for i, d in enumerate(apenas_numeros):
+            if i == 3 or i == 6:
+                mascara += '.'
+            elif i == 9:
+                mascara += '-'
+            mascara += d
+        entry.delete(0, 'end')
+        entry.insert(0, mascara)
+    entry.bind('<KeyRelease>', _on_key)
+
+
 _VERDE  = "#22c55e"
 _VERDE_H = "#16a34a"
 _VERM   = "#ef4444"
@@ -87,6 +104,7 @@ class UserDetailsForm(ctk.CTkFrame):
         self._combo_perfil.set("usuario")  # padrão agora é "usuario"
 
         _lbl("CPF",         1, 0); self._e_cpf   = _entry("000.000.000-00",            1, 0)
+        _aplicar_mascara_cpf(self._e_cpf)
         _lbl("E-mail",      1, 1); self._e_email = _entry("usuario@dominio.com",        1, 1)
         _lbl("Senha",       2, 0); self._e_senha = _entry("Deixe em branco p/ manter", 2, 0, show="*")
         _lbl("Observações", 2, 1); self._e_obs   = _entry("Observações opcionais",      2, 1)
