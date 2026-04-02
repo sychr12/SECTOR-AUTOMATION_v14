@@ -245,17 +245,22 @@ class Login(ctk.CTkFrame):
             corner_radius=16,
             fg_color=_CINZA_CARD,
         )
-        self.card.place(relx=0.4, rely=0.5, anchor="w", relwidth=0.55, relheight=0.82)
+        
+        self.card.place(relx=0.7, rely=0.5, anchor="center", relwidth=0.55, relheight=0.82)
         
         # Borda sutil
         self.card.configure(border_width=1, border_color=_CINZA_BORDER)
 
-        # Container interno
+        # Container interno ocupando o cardno
         outer = ctk.CTkFrame(self.card, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=48, pady=48)
+        outer.pack(fill="both", expand=True)
+
+        # Bloco centralizado dentro do card
+        content = ctk.CTkFrame(outer, fg_color="transparent")
+        content.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.88)
 
         # Título
-        title_frame = ctk.CTkFrame(outer, fg_color="transparent")
+        title_frame = ctk.CTkFrame(content, fg_color="transparent")
         title_frame.pack(fill="x", pady=(0, 36))
         
         ctk.CTkLabel(
@@ -264,7 +269,7 @@ class Login(ctk.CTkFrame):
             font=("Segoe UI", 28, "bold"),
             text_color=_CINZA_TEXTO,
         ).pack(anchor="w")
-        
+
         ctk.CTkLabel(
             title_frame,
             text="Informe suas credenciais para continuar",
@@ -274,14 +279,14 @@ class Login(ctk.CTkFrame):
 
         # ── Campo Usuário ─────────────────────────────────────────────────────
         ctk.CTkLabel(
-            outer,
+            content,
             text="USUÁRIO",
             font=("Segoe UI", 11, "bold"),
             text_color=_MUTED,
         ).pack(anchor="w", pady=(0, 8))
 
         self.entry_usuario = ctk.CTkEntry(
-            outer,
+            content,
             placeholder_text="Digite seu nome de usuário",
             height=48,
             corner_radius=8,
@@ -293,16 +298,16 @@ class Login(ctk.CTkFrame):
         )
         self.entry_usuario.pack(fill="x", pady=(0, 24))
         self.entry_usuario.focus()
-
+        
         # ── Campo Senha ───────────────────────────────────────────────────────
         ctk.CTkLabel(
-            outer,
+            content,
             text="SENHA",
             font=("Segoe UI", 11, "bold"),
             text_color=_MUTED,
         ).pack(anchor="w", pady=(0, 8))
 
-        frame_senha = ctk.CTkFrame(outer, fg_color="transparent")
+        frame_senha = ctk.CTkFrame(content, fg_color="transparent")
         frame_senha.pack(fill="x", pady=(0, 8))
 
         self.entry_senha = ctk.CTkEntry(
@@ -336,10 +341,11 @@ class Login(ctk.CTkFrame):
         self.btn_ver_senha.pack(side="left")
 
         # ── Linha lembrar + esqueci ───────────────────────────────────────────
-        linha_opts = ctk.CTkFrame(outer, fg_color="transparent")
+        linha_opts = ctk.CTkFrame(content, fg_color="transparent")
         linha_opts.pack(fill="x", pady=(24, 32))
 
         self.var_lembrar = ctk.BooleanVar(value=False)
+
         self.chk_lembrar = ctk.CTkCheckBox(
             linha_opts,
             text="Lembrar-me",
@@ -356,7 +362,6 @@ class Login(ctk.CTkFrame):
         )
         self.chk_lembrar.pack(side="left")
 
-        # Label clicável para recuperar senha
         forgot_label = ctk.CTkLabel(
             linha_opts,
             text="Esqueci minha senha",
@@ -365,28 +370,30 @@ class Login(ctk.CTkFrame):
             cursor="hand2",
         )
         forgot_label.pack(side="right")
+
         forgot_label.bind("<Button-1>", lambda e: self._recuperar_senha())
         forgot_label.bind("<Enter>", lambda e: forgot_label.configure(text_color=_ACCENT_DARK))
         forgot_label.bind("<Leave>", lambda e: forgot_label.configure(text_color=_ACCENT))
-
+                
         # ── Botão entrar ──────────────────────────────────────────────────────
         self.btn_entrar = ctk.CTkButton(
-            outer,
+            content,
             text="Entrar no Sistema",
             height=52,
             corner_radius=8,
-            font=("Segoe UI", 14, "bold"),
+            font=("Segoe UI", 13, "bold"),
             fg_color=_ACCENT,
             hover_color=_ACCENT_DARK,
             text_color=_BRANCO,
             command=self.fazer_login,
         )
-        self.btn_entrar.pack(pady=(0, 24))
+        self.btn_entrar.pack(pady=(0, 20))
+        self.btn_entrar.configure(width=260)
 
         # ── Linha divisória ───────────────────────────────────────────────────
-        divider = ctk.CTkFrame(outer, fg_color="transparent")
+        divider = ctk.CTkFrame(content, fg_color="transparent")
         divider.pack(fill="x", pady=(0, 20))
-        
+
         ctk.CTkFrame(
             divider,
             height=1,
@@ -394,9 +401,9 @@ class Login(ctk.CTkFrame):
         ).pack(fill="x")
 
         # ── Rodapé institucional ──────────────────────────────────────────────
-        footer_frame = ctk.CTkFrame(outer, fg_color="transparent")
+        footer_frame = ctk.CTkFrame(content, fg_color="transparent")
         footer_frame.pack(fill="x")
-        
+
         ctk.CTkLabel(
             footer_frame,
             text="© 2026 IDAM - Instituto de Desenvolvimento Agropecuário do Amazonas",
@@ -405,7 +412,7 @@ class Login(ctk.CTkFrame):
             wraplength=380,
             justify="center",
         ).pack(pady=(16, 0))
-
+        
         # ── Botão tema (canto superior direito) ───────────────────────────────
         self.btn_tema = ctk.CTkButton(
             self,
