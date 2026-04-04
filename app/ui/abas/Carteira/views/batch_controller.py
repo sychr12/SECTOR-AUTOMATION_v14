@@ -198,19 +198,19 @@ def _gerar_pdf_bytes(dados: dict, pdf_scaneado_path: str = None) -> bytes:
         print(f"[batch_gerar_pdf] Anexando PDF scaneado: {pdf_scaneado_path}")
         try:
             from pypdf import PdfReader, PdfWriter, PaperSize
-            
+
             with open(pdf_scaneado_path, "rb") as f:
                 reader_scaneado = PdfReader(f)
                 paginas_scaneadas = len(reader_scaneado.pages)
                 print(f"[batch_gerar_pdf] {paginas_scaneadas} pagina(s) scaneada(s) encontradas")
-                
+
                 for i, page in enumerate(reader_scaneado.pages, 1):
                     page.mediabox.lower_left = (0, 0)
                     page.mediabox.upper_right = (842, 1190)
-                    
+
                     writer.add_page(page)
                     print(f"[batch_gerar_pdf] Pagina scaneada {i} anexada - tamanho forçado: 842x1190")
-                    
+
             print(f"[batch_gerar_pdf] Merge concluido - {len(writer.pages)} paginas totais")
         except Exception as e:
             print(f"[batch_gerar_pdf] Erro: {e}")
