@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 """
 batch_controller.py — Controller de geração em LOTE de carteiras digitais.
-Local: app/ui/abas/Carteira/views/batch_controller.py
 """
-from __future__ import annotations
 
 import io
 import os
@@ -14,7 +13,28 @@ import threading
 import time
 from typing import Callable, Optional
 
-import PyPDF2
+from pypdf import PdfReader, PdfWriter, PaperSize
+import fitz
+from PIL import Image
+
+from ..assets import get_img_frente, get_img_verso, get_pil_font, open_image
+
+# Importa bibliotecas PDF
+try:
+    from pypdf import PdfReader, PdfWriter
+    PDF_AVAILABLE = True
+    print("[BatchController] ✅ pypdf carregado com sucesso.")
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+        PDF_AVAILABLE = True
+        print("[BatchController] ✅ PyPDF2 carregado com sucesso.")
+    except ImportError:
+        PdfReader = None
+        PdfWriter = None
+        PDF_AVAILABLE = False
+        print("[BatchController] ❌ NENHUMA BIBLIOTECA PDF DISPONÍVEL")
+
 from PIL import Image as PILImage, ImageDraw
 
 from ..assets import get_img_frente, get_img_verso, get_pil_font, open_image
@@ -87,8 +107,19 @@ def _desenhar_texto_quebrado(draw, coordenadas, texto, fonte,
         y += 40
 
 
-def _gerar_pdf_bytes(dados: dict) -> bytes:
-    """Gera PDF frente+verso. Usa imagem real ou placeholder se não encontrada."""
+def _gerar_pdf_bytes(dados: dict, pdf_scaneado_path: str = None) -> bytes:
+    """
+    Gera PDF frente+verso e ANEXA o PDF scaneado se fornecido.
+    
+    Args:
+        dados: Dicionário com os dados do produtor
+        pdf_scaneado_path: Caminho do PDF scaneado para anexar
+    
+    Returns:
+        bytes: Conteúdo do PDF gerado
+    """
+    print(f"[batch_gerar_pdf] PDF scaneado: {pdf_scaneado_path}")
+    
     fonte          = get_pil_font(41)
     fonte_endereco = get_pil_font(38)
     largura_max    = 540
@@ -116,7 +147,7 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
         else:
             draw.text(pos, text, fill=(0, 0, 0))
 
-    # FRENTE
+    # ========== FRENTE ==========
     modelo  = open_image(get_img_frente(), "FRENTE").copy()
     desenho = ImageDraw.Draw(modelo)
     _txt(desenho, (217, 393),  rp)
@@ -127,7 +158,7 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
     _txt(desenho, (751, 824),  inicioatv)
     _txt(desenho, (1063, 825), validade)
 
-    # VERSO
+    # ========== VERSO ==========
     modelo_verso  = open_image(get_img_verso(), "VERSO").copy()
     desenho_verso = ImageDraw.Draw(modelo_verso)
     altura_verso  = modelo_verso.size[1]
@@ -158,7 +189,35 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
         desenho_verso, (382, 804),
         f"{latitude}  {longitude}",
         fonte, largura_max, altura_verso)
+    
+    # ========== MERGE DO PDF DA CARTEIRA ==========
+    
+    # kkkkkkk depois que o deepseek me xingou por causa de nem eu nem ele saber aonde ta o error finalmente chamaos e agora somos amigos do peito kkkkkkkkkkkkkkkkkkk =) ps: o erro era que eu tava usando "add.page" ao invés de "add_page" k
+    
+    if pdf_scaneado_path and os.path.exists(pdf_scaneado_path):
+        print(f"[batch_gerar_pdf] Anexando PDF scaneado: {pdf_scaneado_path}")
+        try:
+            from pypdf import PdfReader, PdfWriter, PaperSize
+            
+            with open(pdf_scaneado_path, "rb") as f:
+                reader_scaneado = PdfReader(f)
+                paginas_scaneadas = len(reader_scaneado.pages)
+                print(f"[batch_gerar_pdf] {paginas_scaneadas} pagina(s) scaneada(s) encontradas")
+                
+                for i, page in enumerate(reader_scaneado.pages, 1):
+                    page.mediabox.lower_left = (0, 0)
+                    page.mediabox.upper_right = (842, 1190)
+                    
+                    writer.add_page(page)
+                    print(f"[batch_gerar_pdf] Pagina scaneada {i} anexada - tamanho forçado: 842x1190")
+                    
+            print(f"[batch_gerar_pdf] Merge concluido - {len(writer.pages)} paginas totais")
+        except Exception as e:
+            print(f"[batch_gerar_pdf] Erro: {e}")
+            import traceback
+            traceback.print_exc()
 
+    # ========== SALVAR IMAGENS COMO PDF ==========
     path_frente = path_verso = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
@@ -169,13 +228,57 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
         modelo.save(path_frente, format="PDF")
         modelo_verso.save(path_verso, format="PDF")
 
-        merger = PyPDF2.PdfMerger()
-        merger.append(PyPDF2.PdfReader(path_frente))
-        merger.append(PyPDF2.PdfReader(path_verso))
+        # ========== MERGE DO PDF DA CARTEIRA ==========
+        if not PDF_AVAILABLE or PdfWriter is None:
+            print("[batch_gerar_pdf] ❌ Biblioteca PDF não disponível!")
+            # Fallback: retorna só o primeiro PDF
+            with open(path_frente, "rb") as f:
+                return f.read()
+        
+        writer = PdfWriter()
+        
+        # Adicionar frente
+        try:
+            reader_frente = PdfReader(path_frente)
+            for page in reader_frente.pages:
+                writer.add_page(page)
+            print("[batch_gerar_pdf] Frente adicionada")
+        except Exception as e:
+            print(f"[batch_gerar_pdf] Erro ao adicionar frente: {e}")
+        
+        # Adicionar verso
+        try:
+            reader_verso = PdfReader(path_verso)
+            for page in reader_verso.pages:
+                writer.add_page(page)
+            print("[batch_gerar_pdf] Verso adicionado")
+        except Exception as e:
+            print(f"[batch_gerar_pdf] Erro ao adicionar verso: {e}")
+        
+        # ========== ANEXAR PDF SCANEADO ==========
+        if pdf_scaneado_path and os.path.exists(pdf_scaneado_path):
+            print(f"[batch_gerar_pdf] 🔄 Anexando PDF scaneado: {pdf_scaneado_path}")
+            try:
+                with open(pdf_scaneado_path, "rb") as f:
+                    reader_scaneado = PdfReader(f)
+                    paginas_scaneadas = len(reader_scaneado.pages)
+                    print(f"[batch_gerar_pdf] 📄 Anexando {paginas_scaneadas} página(s) scaneada(s)")
+                    
+                    for i, page in enumerate(reader_scaneado.pages, 1):
+                        writer.add_page(page)
+                        print(f"[batch_gerar_pdf]   - Página scaneada {i}/{paginas_scaneadas} anexada")
+                    
+                    print(f"[batch_gerar_pdf] ✅ Merge concluído! Total: {len(writer.pages)} páginas")
+            except Exception as e:
+                print(f"[batch_gerar_pdf] ❌ Erro ao anexar PDF scaneado: {e}")
+        else:
+            print("[batch_gerar_pdf] ℹ️ Nenhum PDF scaneado para anexar")
+        
+        # Salvar PDF final
         buf = io.BytesIO()
-        merger.write(buf)
-        merger.close()
+        writer.write(buf)
         return buf.getvalue()
+                
     finally:
         for p in (path_frente, path_verso):
             if p:
@@ -185,10 +288,7 @@ def _gerar_pdf_bytes(dados: dict) -> bytes:
                     pass
 
 
-# BUG CORRIGIDO: _edge_opts e _chrome_opts eram funções de módulo que referenciavam
-# `webdriver` sem importá-lo. Selenium só é importado dentro de _abrir_driver.
-# Solução: cada helper importa selenium internamente.
-
+# Funções para navegador
 def _edge_opts():
     from selenium import webdriver
     opts = webdriver.EdgeOptions()
@@ -314,10 +414,15 @@ class BatchCarteiraController:
                     continue
 
                 try:
-                    pdf_bytes = _gerar_pdf_bytes(dados)
+                    # 🔥 AQUI É ONDE O PDF SCANEADO É ANEXADO!
+                    # O PRÓPRIO PDF DO CPF É O SCANEADO!
+                    log_cb(f"[{idx}/{total}] {cpf_fmt} — gerando PDF com anexo...", "info")
+                    pdf_bytes = _gerar_pdf_bytes(dados, pdf_scaneado_path=caminho)
+                    
                     lat = dados.get("latitude", "")
                     lon = dados.get("longitude", "")
                     georef = f"{lat}  {lon}".strip() if (lat or lon) else ""
+                    
                     self._repo.salvar(
                         registro     = dados.get("rp", ""),
                         cpf          = cpf_digits or cpf_fmt,
@@ -335,7 +440,7 @@ class BatchCarteiraController:
                         usuario      = self.usuario,
                     )
                     sucesso += 1
-                    log_cb(f"[{idx}/{total}] {cpf_fmt} — ✓ salvo.", "sucesso")
+                    log_cb(f"[{idx}/{total}] {cpf_fmt} — ✓ salvo com PDF scaneado anexado!", "sucesso")
                 except Exception as exc:
                     log_cb(f"[{idx}/{total}] {cpf_fmt} — erro ao salvar: {exc}", "erro")
                     erro += 1

@@ -23,7 +23,7 @@ class HistoricoView(ctk.CTkToplevel):
         self.controller = controller
 
         self.title("Histórico de Carteiras Digitais")
-        self.geometry("1200x720")
+        self.geometry("1440x900")
         self.configure(fg_color=AppTheme.BG_APP)
         self.grab_set()
         self._centralizar()

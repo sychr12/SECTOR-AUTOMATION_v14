@@ -626,7 +626,7 @@ class CarteiraDigitalUI(BaseUI):
                                         "Nenhuma foto selecionada. Continuar mesmo assim?"):
                 return
 
-        ok, msg = self.controller.salvar_carteira(dados, self.fotos)
+        ok, msg = self.controller.salvar_carteira(dados, self.fotos, self._pdf_path)
         if ok:
             messagebox.showinfo("Sucesso", msg)
             self._clear_form()

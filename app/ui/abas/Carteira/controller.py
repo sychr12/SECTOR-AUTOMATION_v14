@@ -13,6 +13,22 @@ import tempfile
 from tkinter import filedialog
 from PIL import Image
 
+# Tenta importar bibliotecas de PDF
+PDF_AVAILABLE = False
+try:
+    from pypdf import PdfReader, PdfWriter
+    PDF_AVAILABLE = True
+    print("[Controller] ✅ pypdf carregado com sucesso.")
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+        PDF_AVAILABLE = True
+        print("[Controller] ✅ PyPDF2 carregado com sucesso.")
+    except ImportError:
+        PdfReader = None
+        PdfWriter = None
+        print("[Controller] ❌ NENHUMA BIBLIOTECA PDF DISPONÍVEL")
+
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
@@ -31,14 +47,12 @@ class CarteiraController:
 
     def __init__(self, usuario, repo):
         self.usuario = usuario or "Desconhecido"
-        self.repo = repo  # Isso agora é uma instância de CarteiraService
+        self.repo = repo
 
         self.IMG_FRENTE = get_img_frente()
         self.IMG_VERSO = get_img_verso()
 
         self._validar_imagens()
-
-   
 
     def _validar_imagens(self):
         """Valida se imagens foram encontradas"""
@@ -89,14 +103,33 @@ class CarteiraController:
                 print(f"Aviso: Erro ao ler foto: {e}")
         return None
 
-    def gerar_pdf(self, dados, fotos):
-        """Gera PDF da carteira"""
+    def gerar_pdf(self, dados, fotos, pdf_original_path=None):
+        """
+        Gera PDF da carteira e anexa o PDF original importado (se houver).
+        """
+        print("=" * 60)
+        print("[gerar_pdf] INICIANDO GERAÇÃO DO PDF")
+        print(f"[gerar_pdf] PDF original path: {pdf_original_path}")
+        print(f"[gerar_pdf] PDF_AVAILABLE: {PDF_AVAILABLE}")
+        
+        # Verifica se o PDF original existe
+        pdf_original_existe = False
+        if pdf_original_path and os.path.exists(pdf_original_path):
+            pdf_original_existe = True
+            tamanho = os.path.getsize(pdf_original_path)
+            print(f"[gerar_pdf] ✅ PDF scaneado encontrado! Tamanho: {tamanho} bytes")
+        elif pdf_original_path:
+            print(f"[gerar_pdf] ❌ PDF scaneado NÃO encontrado: {pdf_original_path}")
+        else:
+            print("[gerar_pdf] ℹ️ Nenhum PDF scaneado fornecido")
+        
         try:
+            # ========== 1. GERAR PDF DA CARTEIRA ==========
             buffer = io.BytesIO()
             c = canvas.Canvas(buffer, pagesize=A4)
             W, H = A4
 
-            # Frente
+            # Página 1: FRENTE
             if self.IMG_FRENTE and os.path.exists(self.IMG_FRENTE):
                 c.drawImage(self.IMG_FRENTE, 2*cm, H-11*cm, 16*cm, 9*cm)
             else:
@@ -109,8 +142,9 @@ class CarteiraController:
             self._draw_paragraph(c, dados.get("unloc"), 3.1*cm, H-10.4*cm, 3*cm, size=14)
             self._draw_paragraph(c, dados.get("inicio"), 9.3*cm, H-10.4*cm, 3*cm, size=14)
             self._draw_paragraph(c, dados.get("validade"), 13.5*cm, H-10.4*cm, 3*cm, size=14)
+            c.showPage()
 
-            # Verso
+            # Página 2: VERSO
             y_off = 12*cm
             if self.IMG_VERSO and os.path.exists(self.IMG_VERSO):
                 c.drawImage(self.IMG_VERSO, 2*cm, H-11*cm-y_off, 16*cm, 9*cm)
@@ -123,13 +157,76 @@ class CarteiraController:
             self._draw_paragraph(c, dados.get("georef"), 3*cm, H-10*cm-y_off, 12*cm, size=14)
             c.showPage()
 
-            for foto_path in fotos.values():
+            # Páginas de FOTOS
+            for i, foto_path in enumerate(fotos.values(), 1):
                 if foto_path and os.path.exists(foto_path):
                     self._pagina_foto(c, W, H, foto_path)
+                    print(f"[gerar_pdf] Foto {i} adicionada: {foto_path}")
 
             c.save()
-            return buffer.getvalue()
+            carteira_bytes = buffer.getvalue()
+            print(f"[gerar_pdf] PDF da carteira gerado: {len(carteira_bytes)} bytes")
+
+            # ========== 2. ANEXAR PDF SCANEADO SE EXISTIR ==========
+            if pdf_original_existe and PDF_AVAILABLE:
+                print("[gerar_pdf] 🔄 INICIANDO MERGE COM PDF SCANEADO...")
+                
+                try:
+                    # Ler o PDF da carteira gerado
+                    carteira_reader = PdfReader(io.BytesIO(carteira_bytes))
+                    paginas_carteira = len(carteira_reader.pages)
+                    print(f"[gerar_pdf] PDF da carteira tem {paginas_carteira} página(s)")
+                    
+                    # Ler o PDF scaneado original
+                    with open(pdf_original_path, "rb") as f:
+                        original_bytes = f.read()
+                    print(f"[gerar_pdf] PDF scaneado lido: {len(original_bytes)} bytes")
+                    
+                    original_reader = PdfReader(io.BytesIO(original_bytes))
+                    paginas_scaneadas = len(original_reader.pages)
+                    print(f"[gerar_pdf] PDF scaneado tem {paginas_scaneadas} página(s)")
+                    
+                    # Criar escritor para o PDF final
+                    writer = PdfWriter()
+                    
+                    # Adicionar todas as páginas da carteira
+                    for i, page in enumerate(carteira_reader.pages, 1):
+                        writer.add_page(page)
+                        print(f"[gerar_pdf]   - Página carteira {i}/{paginas_carteira} adicionada")
+                    
+                    # Adicionar TODAS as páginas do PDF scaneado
+                    for i, page in enumerate(original_reader.pages, 1):
+                        writer.add_page(page)
+                        print(f"[gerar_pdf]   - Página scaneada {i}/{paginas_scaneadas} ANEXADA")
+                    
+                    # Salvar PDF final mesclado
+                    output_buffer = io.BytesIO()
+                    writer.write(output_buffer)
+                    carteira_bytes = output_buffer.getvalue()
+                    
+                    print(f"[gerar_pdf] ✅✅✅ MERGE REALIZADO COM SUCESSO! ✅✅✅")
+                    print(f"[gerar_pdf] Total de páginas: {paginas_carteira + paginas_scaneadas}")
+                    print(f"[gerar_pdf] Tamanho final: {len(carteira_bytes)} bytes")
+                    
+                except Exception as e:
+                    print(f"[gerar_pdf] ❌ ERRO no merge: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print("[gerar_pdf] ⚠️ Mantendo apenas o PDF da carteira")
+                    
+            elif pdf_original_existe and not PDF_AVAILABLE:
+                print("[gerar_pdf] ❌ IMPOSSÍVEL FAZER MERGE: Biblioteca PDF não disponível!")
+                print("[gerar_pdf] Instale: pip install pypdf")
+            else:
+                print("[gerar_pdf] ℹ️ Nenhum PDF scaneado para anexar")
+            
+            print("=" * 60)
+            return carteira_bytes
+            
         except Exception as e:
+            print(f"[gerar_pdf] ERRO FATAL: {e}")
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"Erro ao gerar PDF: {e}")
 
     def _draw_paragraph(self, c, text, x, y, w, size=8, bold=False):
@@ -177,14 +274,21 @@ class CarteiraController:
             c.drawCentredString(W/2, H/2, f"Erro: {str(e)[:50]}")
         c.showPage()
 
-    def salvar_carteira(self, dados, fotos):
+    def salvar_carteira(self, dados, fotos, pdf_original_path=None):
         """Salva carteira no banco"""
+        print(f"[salvar_carteira] ========================")
+        print(f"[salvar_carteira] PDF original path: {pdf_original_path}")
+        print(f"[salvar_carteira] PDF existe? {os.path.exists(pdf_original_path) if pdf_original_path else False}")
+        
         erros = self.validar_dados(dados)
         if erros:
             return False, "Corrija os seguintes erros:\n\n" + "\n".join(erros)
         
         try:
-            pdf = self.gerar_pdf(dados, fotos)
+            pdf = self.gerar_pdf(dados, fotos, pdf_original_path=pdf_original_path)
+            
+            print(f"[salvar_carteira] PDF gerado com {len(pdf)} bytes")
+            
             self.repo.salvar(
                 registro=dados.get("registro"),
                 cpf=dados.get("cpf"),
@@ -205,6 +309,8 @@ class CarteiraController:
             )
             return True, "Carteira digital salva no banco com sucesso!"
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return False, f"Erro ao salvar no banco:\n{str(e)}"
 
     def visualizar_pdf(self, carteira_id):
