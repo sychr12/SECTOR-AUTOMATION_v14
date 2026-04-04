@@ -5,6 +5,7 @@ import inspect
 import sys
 import os
 from datetime import datetime
+from PIL import Image
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app_dir = os.path.dirname(current_dir)
@@ -30,8 +31,6 @@ from services.database   import get_connection
 
 # ── Utilitário: destruição segura de widget com after() pendentes ─────────────
 def _destruir_tela_seguro(widget):
-    """Sinaliza _vivo=False, cancela after() registrados em _after_ids
-    e destrói o widget de forma recursiva e segura."""
     try:
         if hasattr(widget, "_vivo"):
             widget._vivo = False
@@ -56,66 +55,100 @@ def _destruir_tela_seguro(widget):
 
 
 # ── Paleta Corporativa ──────────────────────────────────────────────────────────
-_AZUL_PRIMARY   = "#2c5f8a"      # Azul corporativo principal
-_AZUL_DARK      = "#1e3a5f"      # Azul mais escuro
-_AZUL_LIGHT     = "#e8f0f7"      # Azul muito claro para fundos
-_AZUL_ACCENT    = "#3b82f6"      # Azul de destaque
-_AZUL_HOVER     = "#e0eef9"      # Azul para hover
-_SIDEBAR_BG     = "#1a2c3e"      # Azul escuro/cinza para sidebar
-_SIDEBAR_ITEM   = "#2a3f54"      # Item da sidebar
-_SIDEBAR_ATIV   = "#2c5f8a"      # Item ativo
+_AZUL_PRIMARY   = "#2c5f8a"
+_AZUL_DARK      = "#1e3a5f"
+_AZUL_LIGHT     = "#e8f0f7"
+_AZUL_ACCENT    = "#3b82f6"
+_AZUL_HOVER     = "#e0eef9"
+_SIDEBAR_BG     = "#1a2c3e"
+_SIDEBAR_ITEM   = "#2a3f54"
+_SIDEBAR_ATIV   = "#2c5f8a"
 _BRANCO         = "#ffffff"
-_CINZA_BG       = "#f8fafc"      # Fundo cinza muito claro
-_CINZA_BORDER   = "#e2e8f0"      # Cinza para bordas
-_CINZA_MEDIO    = "#64748b"      # Cinza médio para textos secundários
-_CINZA_TEXTO    = "#1e293b"      # Cinza escuro para textos principais
-_VERDE_STATUS   = "#10b981"      # Verde para status online
-_VERDE_HOVER    = "#d1fae5"      # Verde claro para hover
-_DANGER         = "#ef4444"      # Vermelho para ações destrutivas
-_DANGER_DK      = "#dc2626"      # Vermelho escuro
+_CINZA_BG       = "#f8fafc"
+_CINZA_BORDER   = "#e2e8f0"
+_CINZA_MEDIO    = "#64748b"
+_CINZA_TEXTO    = "#1e293b"
+_VERDE_STATUS   = "#10b981"
+_VERDE_HOVER    = "#d1fae5"
+_DANGER         = "#ef4444"
+_DANGER_DK      = "#dc2626"
+_TEXT_SIDEBAR   = "#cbd5e1"
+_TEXT_SECTION   = "#60a5fa"
+_TEXT_MUTED     = "#64748b"
+_CARD_BORDER    = "#e2e8f0"
+_HEADER_BG      = "#ffffff"
+_GRADIENT_START = "#2c5f8a"
+_GRADIENT_END   = "#1e3a5f"
 
-# Textos e elementos
-_TEXT_SIDEBAR   = "#cbd5e1"      # Texto inativo na sidebar
-_TEXT_SECTION   = "#60a5fa"      # Azul claro para rótulos de seção
-_TEXT_MUTED     = "#64748b"      # Cinza para textos secundários
-_CARD_BORDER    = "#e2e8f0"      # Borda dos cards
-_HEADER_BG      = "#ffffff"      # Fundo do header
-_GRADIENT_START = "#2c5f8a"      # Início do gradiente
-_GRADIENT_END   = "#1e3a5f"      # Fim do gradiente
+# Caminho dos ícones
+ICONS_DIR = os.path.join(current_dir, "assets", "icons", "menu")
 
 
-# ── Grupos de navegação ──────────────────────────────────────────────────────
+ICONS_DIR = r"images\icons\sidebar_adm"
+
+
+def carregar_icone(nome_arquivo, size=(20, 20)):
+    """Carrega ícone PNG da pasta images/icons/sidebar"""
+    try:
+        path = os.path.join(ICONS_DIR, nome_arquivo)
+        if os.path.exists(path):
+            img = Image.open(path)
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=size)
+        else:
+            print(f"[Menu] Ícone não encontrado: {path}")
+    except Exception as e:
+        print(f"[Menu] Erro ao carregar ícone {nome_arquivo}: {e}")
+    return None
+
+
+
+# Ícones para cada menu
+ICONES_MENU = {
+    "Dashboard": carregar_icone("dashboard.png", (20, 20)),
+    "Consultas": carregar_icone("consulta.png", (20, 20)),
+    "Arquivo Antigo": carregar_icone("arquivo.png", (20, 20)),
+    "E-mails": carregar_icone("email.png", (20, 20)),
+    "Análises": carregar_icone("analise.png", (20, 20)),
+    "Lançamentos": carregar_icone("lancamento.png", (20, 20)),
+    "Carteira Digital": carregar_icone("carteira.png", (20, 20)),
+    "Memorandos": carregar_icone("memorando.png", (20, 20)),
+    "Anexos": carregar_icone("anexo.png", (20, 20)),
+    "Relatórios": carregar_icone("relatorio.png", (20, 20)),
+    "Usuários": carregar_icone("usuarios.png", (20, 20)),
+    "Segurança": carregar_icone("seguranca.png", (20, 20)),
+}
+
+# Grupos de navegação com ícones
 _GRUPOS = [
     ("PRINCIPAL", [
-        ("🏠", "Dashboard",       HomeUI,              "Visão geral do sistema"),
-        ("🔍", "Consultas",        ConsultarUI,         "Consultas avançadas"),
-        ("🗄️",  "Arquivo Antigo",  ConsultaBancoUI,     "Dados históricos"),
+        ("dashboard", "Dashboard",       HomeUI,              "Visão geral do sistema"),
+        ("consulta",  "Consultas",        ConsultarUI,         "Consultas avançadas"),
+        ("arquivo",   "Arquivo Antigo",  ConsultaBancoUI,     "Dados históricos"),
     ]),
     ("OPERAÇÕES", [
-        ("📧", "E-mails",          BaixarEmailUI,       "Gerenciar emails"),
-        ("📈", "Análises",         AnaliseUI,           "Análise de dados"),
-        ("📝", "Lançamentos",      LancamentoUI,        "Novos lançamentos"),
-        ("💳", "Carteira Digital", CarteiraDigitalUI,   "Gestão financeira"),
+        ("email",     "E-mails",          BaixarEmailUI,       "Gerenciar emails"),
+        ("analise",   "Análises",         AnaliseUI,           "Análise de dados"),
+        ("lancamento","Lançamentos",      LancamentoUI,        "Novos lançamentos"),
+        ("carteira",  "Carteira Digital", CarteiraDigitalUI,   "Gestão financeira"),
     ]),
     ("DOCUMENTOS", [
-        ("📋", "Memorandos",       MemorandoUI,         "Documentos internos"),
-        ("📎", "Anexos",           AnexarUI,            "Gerenciar anexos"),
-        ("📑", "Relatórios",       RelatoriosUI,        "Gerar relatórios"),
+        ("memorando", "Memorandos",       MemorandoUI,         "Documentos internos"),
+        ("anexo",     "Anexos",           AnexarUI,            "Gerenciar anexos"),
+        ("relatorio", "Relatórios",       RelatoriosUI,        "Gerar relatórios"),
     ]),
     ("SISTEMA", [
-        ("👥", "Usuários",         GerenciarUsuariosUI, "Gerenciar usuários"),
-        ("🔒", "Segurança",        SenhaUI,             "Alterar senha"),
+        ("usuarios",  "Usuários",         GerenciarUsuariosUI, "Gerenciar usuários"),
+        ("seguranca", "Segurança",        SenhaUI,             "Alterar senha"),
     ]),
 ]
 
 SIDEBAR_W = 280
 
 
-# ── Item de navegação ────────────────────────────────────────────────────────
+# ── Item de navegação com ícone PNG ────────────────────────────────────────────
 class NavItem(ctk.CTkFrame):
-    """Item de menu com indicador lateral e estados visuais."""
-
-    def __init__(self, parent, icon: str, label: str, command, is_active=False):
+    def __init__(self, parent, icon_name: str, label: str, command, is_active=False):
         super().__init__(parent, fg_color="transparent", height=44)
         self.pack(fill="x", padx=12, pady=2)
         self.pack_propagate(False)
@@ -123,7 +156,6 @@ class NavItem(ctk.CTkFrame):
         self._cmd    = command
         self._active = is_active
 
-        # Barra indicadora lateral
         self._indicator = ctk.CTkFrame(
             self, width=3,
             fg_color=_AZUL_ACCENT if is_active else "transparent",
@@ -131,7 +163,6 @@ class NavItem(ctk.CTkFrame):
         )
         self._indicator.pack(side="left", fill="y")
 
-        # Fundo do item
         self._bg = ctk.CTkFrame(
             self,
             fg_color=_SIDEBAR_ATIV if is_active else "transparent",
@@ -139,16 +170,30 @@ class NavItem(ctk.CTkFrame):
         )
         self._bg.pack(side="left", fill="both", expand=True, padx=(6, 0))
 
-        # Ícone
-        self._icon = ctk.CTkLabel(
-            self._bg, text=icon,
-            font=("Segoe UI", 15),
-            text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
-            width=32,
-        )
+        # Ícone PNG
+        self._icon_img = ICONES_MENU.get(label)
+        if self._icon_img:
+            self._icon = ctk.CTkLabel(
+                self._bg, text="",
+                image=self._icon_img,
+                width=28,
+            )
+        else:
+            # Fallback para emoji se não encontrar o ícone
+            icon_emoji = {
+                "Dashboard": "🏠", "Consultas": "🔍", "Arquivo Antigo": "🗄️",
+                "E-mails": "📧", "Análises": "📈", "Lançamentos": "📝",
+                "Carteira Digital": "💳", "Memorandos": "📋", "Anexos": "📎",
+                "Relatórios": "📑", "Usuários": "👥", "Segurança": "🔒",
+            }.get(label, "📄")
+            self._icon = ctk.CTkLabel(
+                self._bg, text=icon_emoji,
+                font=("Segoe UI", 15),
+                text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
+                width=32,
+            )
         self._icon.pack(side="left", padx=(12, 8))
 
-        # Texto
         self._text = ctk.CTkLabel(
             self._bg, text=label,
             font=("Segoe UI", 12, "bold" if is_active else "normal"),
@@ -157,7 +202,6 @@ class NavItem(ctk.CTkFrame):
         )
         self._text.pack(side="left", fill="x", expand=True)
 
-        # Ponto de status
         self._dot = ctk.CTkFrame(
             self._bg, width=6, height=6, corner_radius=3,
             fg_color=_AZUL_ACCENT if is_active else "transparent",
@@ -174,13 +218,21 @@ class NavItem(ctk.CTkFrame):
         if val:
             self._indicator.configure(fg_color=_AZUL_ACCENT)
             self._bg.configure(fg_color=_SIDEBAR_ATIV)
-            self._icon.configure(text_color=_BRANCO)
+            if isinstance(self._icon, ctk.CTkLabel):
+                if self._icon_img:
+                    self._icon.configure(text="")
+                else:
+                    self._icon.configure(text_color=_BRANCO)
             self._text.configure(text_color=_BRANCO, font=("Segoe UI", 12, "bold"))
             self._dot.configure(fg_color=_AZUL_ACCENT)
         else:
             self._indicator.configure(fg_color="transparent")
             self._bg.configure(fg_color="transparent")
-            self._icon.configure(text_color=_TEXT_SIDEBAR)
+            if isinstance(self._icon, ctk.CTkLabel):
+                if self._icon_img:
+                    self._icon.configure(text="")
+                else:
+                    self._icon.configure(text_color=_TEXT_SIDEBAR)
             self._text.configure(text_color=_TEXT_SIDEBAR,
                                  font=("Segoe UI", 12, "normal"))
             self._dot.configure(fg_color="transparent")
@@ -188,13 +240,15 @@ class NavItem(ctk.CTkFrame):
     def _enter(self, _=None):
         if not self._active:
             self._bg.configure(fg_color=_SIDEBAR_ITEM)
-            self._icon.configure(text_color=_BRANCO)
+            if not self._icon_img and isinstance(self._icon, ctk.CTkLabel):
+                self._icon.configure(text_color=_BRANCO)
             self._text.configure(text_color=_BRANCO)
 
     def _leave(self, _=None):
         if not self._active:
             self._bg.configure(fg_color="transparent")
-            self._icon.configure(text_color=_TEXT_SIDEBAR)
+            if not self._icon_img and isinstance(self._icon, ctk.CTkLabel):
+                self._icon.configure(text_color=_TEXT_SIDEBAR)
             self._text.configure(text_color=_TEXT_SIDEBAR)
 
     def _click(self, _=None):
@@ -229,7 +283,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         self._build()
         self._abrir(HomeUI, "Dashboard")
 
-    # ── BD ───────────────────────────────────────────────────────────────────
     def conectar_bd(self):
         try:
             return get_connection()
@@ -237,12 +290,10 @@ class MenuAdministrador(ctk.CTkToplevel):
             messagebox.showerror("Erro de Conexão", str(exc))
             return None
 
-    # ── Layout raiz ──────────────────────────────────────────────────────────
     def _build(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar com gradiente
         self.sidebar = ctk.CTkFrame(
             self, width=SIDEBAR_W,
             fg_color=_SIDEBAR_BG, corner_radius=0,
@@ -263,7 +314,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_rowconfigure(0, weight=1)
 
-        # Card principal com sombra suave
         self.main = ctk.CTkFrame(
             wrap,
             fg_color=_BRANCO,
@@ -272,18 +322,13 @@ class MenuAdministrador(ctk.CTkToplevel):
             border_color=_CARD_BORDER,
         )
         self.main.grid(row=0, column=0, sticky="nsew")
-        
-        # Efeito de sombra (simulado com borda)
         self.main.configure(border_width=1)
 
-    # ── Sidebar ──────────────────────────────────────────────────────────────
     def _build_sidebar(self):
-        # Logo com design moderno
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=80)
         logo_frame.pack(fill="x", padx=20, pady=(24, 0))
         logo_frame.pack_propagate(False)
 
-        # Ícone de marca
         icon_pill = ctk.CTkFrame(
             logo_frame, width=44, height=44, corner_radius=12,
             fg_color=_AZUL_PRIMARY,
@@ -329,9 +374,9 @@ class MenuAdministrador(ctk.CTkToplevel):
                 anchor="w",
             ).pack(anchor="w", padx=20, pady=(20, 8))
 
-            for icon, label, tela, _ in itens:
+            for icon_name, label, tela, _ in itens:
                 item = NavItem(
-                    scroll, icon, label,
+                    scroll, icon_name, label,
                     command=lambda t=tela, l=label: self._abrir(t, l),
                 )
                 self.nav_items.append((label, item))
@@ -360,7 +405,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=12, pady=12)
 
-        # Avatar com iniciais
         initials = "".join(w[0].upper() for w in self.usuario.split()[:2])
         av = ctk.CTkFrame(row, width=40, height=40, corner_radius=10,
                           fg_color=_AZUL_PRIMARY)
@@ -395,7 +439,6 @@ class MenuAdministrador(ctk.CTkToplevel):
             command=self.sair,
         ).pack(side="right")
 
-    # ── Topbar ───────────────────────────────────────────────────────────────
     def _build_topbar(self):
         bar = ctk.CTkFrame(
             self.right, height=70,
@@ -404,7 +447,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         bar.grid(row=0, column=0, sticky="ew")
         bar.grid_propagate(False)
 
-        # Linha sombra inferior
         ctk.CTkFrame(bar, height=1, fg_color=_CARD_BORDER, corner_radius=0).place(
             relx=0, rely=1.0, relwidth=1, anchor="sw"
         )
@@ -412,7 +454,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         inner = ctk.CTkFrame(bar, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=32)
 
-        # Esquerda
         left = ctk.CTkFrame(inner, fg_color="transparent")
         left.pack(side="left", fill="y")
 
@@ -430,7 +471,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         )
         self.lbl_bread.pack(anchor="w", pady=(2, 0))
 
-        # Direita
         right = ctk.CTkFrame(inner, fg_color="transparent")
         right.pack(side="right", fill="y")
 
@@ -441,7 +481,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         )
         self.lbl_clock.pack(side="left", padx=(0, 20))
 
-        # Badge Online
         status_pill = ctk.CTkFrame(right, fg_color=_AZUL_LIGHT, corner_radius=20)
         status_pill.pack(side="left")
 
@@ -462,7 +501,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         self.lbl_clock.configure(text=datetime.now().strftime("%d/%m/%Y • %H:%M"))
         self.after(1000, self._tick)
 
-    # ── Navegação ────────────────────────────────────────────────────────────
     def _abrir(self, tela_class, titulo: str):
         if self.carregando:
             return
@@ -489,7 +527,6 @@ class MenuAdministrador(ctk.CTkToplevel):
             else:
                 self.tela_atual = tela_class(self.main, self.usuario)
 
-            # Marca a tela como viva (guard para after() internos)
             self.tela_atual._vivo = True
 
             if hasattr(self.tela_atual, "configure"):
@@ -510,7 +547,6 @@ class MenuAdministrador(ctk.CTkToplevel):
         finally:
             self.carregando = False
 
-    # ── Sair ─────────────────────────────────────────────────────────────────
     def sair(self):
         if messagebox.askyesno(
             "Sair do Sistema",

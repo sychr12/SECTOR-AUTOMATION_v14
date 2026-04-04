@@ -18,47 +18,131 @@ from app.ui.abas.memorando.style import (
     FILTER_DROPDOWN_BG,
 )
 
-# ── Paleta de cores para UNLOC ──────────────────────────────────────────────────
+# Cores vibrantes para cada código de município
 UNLOC_CORES = {
-    # Cores principais
-    "MAO": "#10b981",      # Verde
-    "EIR": "#3b82f6",      # Azul
-    "TFE": "#8b5cf6",      # Roxo
-    "BVB": "#f59e0b",      # Laranja
-    "PVH": "#ec489a",      # Rosa
-    "RBR": "#14b8a6",      # Turquesa
-    "CZS": "#ef4444",      # Vermelho
-    "JPR": "#84cc16",      # Verde limão
-    "LBR": "#06b6d4",      # Ciano
-    "STM": "#a855f7",      # Roxo claro
+    "ALV": "#10b981",
+    "AMT": "#3b82f6",
+    "ANA": "#8b5cf6",
+    "ANO": "#f59e0b",
+    "APU": "#ec489a",
+    "ATN": "#14b8a6",
+    "ATZ": "#ef4444",
+    "BAZ": "#84cc16",
+    "BAR": "#06b6d4",
+    "BJC": "#a855f7",
+    "BER": "#d946ef",
+    "BVR": "#f43f5e",
+    "BOA": "#0ea5e9",
+    "BBA": "#eab308",
+    "CAP": "#22c55e",
+    "CAN": "#6366f1",
+    "CAF": "#e11d48",
+    "CAR": "#ea580c",
+    "CAZ": "#0891b2",
+    "CIZ": "#c026d3",
+    "COD": "#059669",
+    "ERN": "#0284c7",
+    "ENV": "#9333ea",
+    "FBA": "#d97706",
+    "GAJ": "#db2777",
+    "HIA": "#0d9488",
+    "IPX": "#e11d48",
+    "IRB": "#7c3aed",
+    "ITA": "#c2410c",
+    "ITR": "#16a34a",
+    "ITG": "#2563eb",
+    "JPR": "#7e22ce",
+    "JUR": "#ca8a04",
+    "JUT": "#be185d",
+    "LBR": "#0e7490",
+    "MPU": "#4f46e5",
+    "MQR": "#b45309",
+    "MAO": "#10b981",
+    "MAO-ZL": "#34d399",
+    "MNX": "#f97316",
+    "MTS-ATZ": "#fbbf24",
+    "MRA": "#ef4444",
+    "MBZ": "#3b82f6",
+    "NMD": "#8b5cf6",
+    "ITR-NRO": "#06b6d4",
+    "MNX-MTP": "#84cc16",
+    "LBR-VE": "#14b8a6",
+    "VRC": "#a855f7",
+    "PRF-BNA": "#ec489a",
+    "VLD": "#f59e0b",
+    "RLD": "#d946ef",
+    "NON": "#0ea5e9",
+    "NAR": "#eab308",
+    "NAP": "#22c55e",
+    "PAR": "#6366f1",
+    "PUI": "#e11d48",
+    "PRF": "#ea580c",
+    "RPE": "#0891b2",
+    "SIR": "#c026d3",
+    "SAI": "#059669",
+    "SJL": "#0284c7",
+    "SPO": "#9333ea",
+    "SSU": "#d97706",
+    "SUL-CAN": "#db2777",
+    "SLV": "#0d9488",
+    "TBT": "#7c3aed",
+    "TPA": "#c2410c",
+    "TFF": "#16a34a",
+    "TNT": "#2563eb",
+    "UAN": "#7e22ce",
+    "URC": "#ca8a04",
+    "UCB": "#be185d",
+    "FOZ": "#0e7490",
 }
 
-# Cores alternativas para UNLOC não listados
+# Cores alternativas para UNLOC não listados (usar como fallback)
 CORES_ALTERNATIVAS = [
     "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ec489a",
     "#14b8a6", "#ef4444", "#84cc16", "#06b6d4", "#a855f7",
     "#d946ef", "#f43f5e", "#0ea5e9", "#eab308", "#22c55e",
+    "#6366f1", "#e11d48", "#ea580c", "#0891b2", "#c026d3",
+    "#059669", "#0284c7", "#9333ea", "#d97706", "#db2777",
+    "#0d9488", "#7c3aed", "#c2410c", "#16a34a", "#2563eb",
+    "#7e22ce", "#ca8a04", "#be185d", "#0e7490", "#4f46e5",
+    "#b45309", "#34d399", "#f97316", "#fbbf24",
 ]
 
 
 def get_unloc_color(unloc: str) -> str:
     """Retorna uma cor consistente para cada UNLOC"""
     if not unloc or unloc == "—":
-        return "#64748b"  # Cinza para UNLOC vazio
+        return "#64748b"
     
     unloc_upper = unloc.upper()
     
-    # Se já tem cor definida
-    if unloc_upper in UNLOC_CORES:
-        return UNLOC_CORES[unloc_upper]
+    # Extrair apenas o código principal (antes do - ou /)
+    # Exemplos: "MAO-ZL" -> "MAO", "ITR-NRO" -> "ITR", "PR-123" -> "PR"
+    if "-" in unloc_upper:
+        codigo_principal = unloc_upper.split("-")[0]
+    elif "/" in unloc_upper:
+        codigo_principal = unloc_upper.split("/")[0]
+    else:
+        codigo_principal = unloc_upper
     
-    # Gerar cor baseada no hash do UNLOC
-    hash_val = int(hashlib.md5(unloc_upper.encode()).hexdigest()[:8], 16)
+    # Se o código principal tiver mais de 3 letras, tenta pegar só as 3 primeiras
+    if len(codigo_principal) > 3:
+        # Tenta buscar o código completo primeiro
+        if codigo_principal in UNLOC_CORES:
+            return UNLOC_CORES[codigo_principal]
+        # Se não achar, tenta só as 3 primeiras letras
+        codigo_principal = codigo_principal[:3]
+    
+    # Busca a cor pelo código principal
+    if codigo_principal in UNLOC_CORES:
+        return UNLOC_CORES[codigo_principal]
+    
+    # Fallback: gerar cor baseada no hash
+    hash_val = int(hashlib.md5(codigo_principal.encode()).hexdigest()[:8], 16)
     return CORES_ALTERNATIVAS[hash_val % len(CORES_ALTERNATIVAS)]
+
 
 class HistoricoMemorandoView(ctk.CTkToplevel):
     
-
     def __init__(self, parent, controller,
                  on_visualizar=None, on_baixar=None, icons=None):
         super().__init__(parent)
@@ -70,38 +154,27 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         self._create_widgets()
         self._carregar_dados()
 
-    # ── janela ──────────────────────────────────────────────────────
     def _configure_window(self):
         self.title("Histórico de Memorandos")
         self.geometry("1200x750")
         self.configure(fg_color=AppTheme.BG_APP)
         self.grab_set()
 
-        largura = 900
-        altura = 600
-
-        self.update_idletasks()
         w, h = 1200, 750
         x = (self.winfo_screenwidth() // 2) - (w // 2)
         y = (self.winfo_screenheight() // 2) - (h // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-    # ── layout ──────────────────────────────────────────────────────
     def _create_widgets(self):
         root = ctk.CTkFrame(self, fg_color="transparent")
         root.pack(fill="both", expand=True, padx=36, pady=32)
 
-        # cabeçalho
         self._build_header(root)
-        
-        # barra de filtros
         self._build_filters(root)
         
-        # linha divisória
         separator = ctk.CTkFrame(root, height=1, fg_color=AppTheme.BG_CARD)
         separator.pack(fill="x", pady=(0, 20))
 
-        # lista scrollável
         self.lista_scroll = ctk.CTkScrollableFrame(
             root,
             fg_color="transparent",
@@ -110,10 +183,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         )
         self.lista_scroll.pack(fill="both", expand=True)
         
-    # ── Limpar tudo dos filtros ────────────────────────────────────────────       
-
     def _limpar_filtros(self):
-        """Limpa todos os filtros e recarrega os dados."""
         self.pesquisa_var.set("")
         self.municipio_selector.set("Todos")
         self.ano_var.set("Todos")
@@ -121,14 +191,12 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         self._carregar_dados()
 
     def _build_header(self, parent):
-        """Cabeçalho com título e ícone"""
         hdr = ctk.CTkFrame(parent, fg_color="transparent")
         hdr.pack(fill="x", pady=(0, 24))
 
         left = ctk.CTkFrame(hdr, fg_color="transparent")
         left.pack(side="left")
         
-        # Ícone do histórico
         if self.icons.get("history"):
             icon_label = ctk.CTkLabel(
                 left, text="", image=self.icons["history"],
@@ -153,7 +221,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                      font=("Segoe UI", 12),
                      text_color=AppTheme.TXT_MUTED).pack(anchor="w", pady=(4, 0))
 
-        # Status badge
         status_badge = ctk.CTkLabel(
             hdr, text="Lista de memorandos",
             font=("Segoe UI", 14, "bold"), text_color=AppTheme.TXT_MUTED,
@@ -162,7 +229,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         status_badge.pack(side="right")
 
     def _build_filters(self, parent):
-        """Barra de filtros completa"""
         bar = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD, corner_radius=16)
         bar.pack(fill="x", pady=(0, 20))
 
@@ -172,7 +238,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         FONT = ("Segoe UI", 12)
         FONT_BOLD = ("Segoe UI", 11, "bold")
 
-        # ── Buscar ─────────────────────────────
         if self.icons.get("search"):
             ctk.CTkLabel(
                 bar,
@@ -180,13 +245,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 image=self.icons["search"],
                 width=18,
                 height=18
-            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
-        else:
-            ctk.CTkLabel(
-                bar,
-                text="Buscar",
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED
             ).pack(side="left", padx=(16, 4), pady=PAD_Y)
             
         ctk.CTkLabel(bar, text="Buscar",
@@ -209,7 +267,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             text_color=AppTheme.TXT_MAIN,
         ).pack(side="left", fill="x", expand=True, padx=(0, PAD_X), pady=PAD_Y)
         
-        # ── Município ─────────────────────────────
         if self.icons.get("location"):
             ctk.CTkLabel(
                 bar,
@@ -218,13 +275,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 width=18,
                 height=18
             ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-        else:
-            ctk.CTkLabel(
-                bar,
-                text="Buscar",
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(side="left", padx=(16, 4), pady=PAD_Y)   
             
         ctk.CTkLabel(bar, text="Município",
                      font=FONT_BOLD,
@@ -254,7 +304,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         )
         self.municipio_selector.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
 
-        # ── Ano ─────────────────────────────
         if self.icons.get("calendar_search"):
             ctk.CTkLabel(
                 bar,
@@ -263,13 +312,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 width=18,
                 height=18
             ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-        else:
-            ctk.CTkLabel(
-                bar,
-                text="Ano",
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
                     
         ctk.CTkLabel(bar, text="Ano",
                      font=FONT_BOLD,
@@ -277,8 +319,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
 
         self.ano_var = ctk.StringVar(value="Todos")
 
-        # Buscar anos disponíveis
-        # Buscar anos disponíveis
         ok, anos = self.controller.listar_anos() if hasattr(self.controller, 'listar_anos') else (False, [])
         lista_anos = ["Todos"] + anos if ok and anos else ["Todos"]
 
@@ -313,7 +353,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         )
         self.ano_menu.place(relx=0.5, rely=0.5, anchor="center")
         
-        # ── Ordem ─────────────────────────────
         if self.icons.get("filter"):
             ctk.CTkLabel(
                 bar,
@@ -322,13 +361,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 width=18,
                 height=18
             ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-        else:
-            ctk.CTkLabel(
-                bar,
-                text="Buscar",
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
             
         ctk.CTkLabel(bar, text="Ordem",
                      font=FONT_BOLD,
@@ -367,7 +399,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         )
         self.ordem_menu.place(relx=0.5, rely=0.5, anchor="center")
         
-        # ── Botão Limpar ─────────────────────────────
         self.btn_limpar = ctk.CTkButton(
             bar,
             text=" Limpar Filtros",
@@ -387,18 +418,15 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         self.btn_limpar.pack(side="right", padx=14, pady=PAD_Y)
         
     def _carregar_dados(self):
-        """Carrega os dados com todos os filtros aplicados."""
         termo = self.pesquisa_var.get().strip()
         municipio = self.municipio_selector.get()
         ano = self.ano_var.get()
         ordem = self.ordem_var.get()
         
-        # Extrair código do município se não for "Todos"
         codigo_municipio = None
         if municipio != "Todos" and " - " in municipio:
             codigo_municipio = municipio.split(" - ")[0]
         
-        # Mostrar loading
         for w in self.lista_scroll.winfo_children():
             w.destroy()
         
@@ -411,7 +439,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         loading.pack(pady=60)
         
         try:
-            # Buscar histórico com filtros
             ok, msg, registros = self.controller.buscar_historico_com_filtros(
                 termo=termo,
                 codigo_municipio=codigo_municipio,
@@ -430,7 +457,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             self._mostrar_erro(f"Erro ao carregar dados: {str(e)}")
 
     def _mostrar_erro(self, mensagem: str):
-        """Mostra mensagem de erro na lista."""
         ctk.CTkLabel(
             self.lista_scroll,
             text=f"❌ Erro: {mensagem}",
@@ -438,9 +464,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             text_color="#ef4444"
         ).pack(pady=60)
 
-    # ── renderizar lista ────────────────────────────────────────────
     def atualizar_lista(self, registros):
-        """Atualiza a lista com os registros fornecidos."""
         for w in self.lista_scroll.winfo_children():
             w.destroy()
 
@@ -457,8 +481,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             self._card(idx, reg)
 
     def _card(self, idx: int, reg: dict):
-        """Cria um card para cada memorando."""
-        # fundo alternado suave
         bg = AppTheme.BG_CARD if idx % 2 == 0 else AppTheme.BG_INPUT
         hover_baixar = "#f1f5f9" if bg == AppTheme.BG_CARD else "#ffffff"
 
@@ -467,11 +489,9 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         card.pack(fill="x", pady=(0, 10), padx=2)
         card.grid_columnconfigure(0, weight=1)
 
-        # ── lado esquerdo — informações ─────────────────────────────
         info = ctk.CTkFrame(card, fg_color="transparent")
         info.grid(row=0, column=0, sticky="nsew", padx=20, pady=16)
 
-        # linha 1 — número em destaque + badge UNLOC colorido
         linha1 = ctk.CTkFrame(info, fg_color="transparent")
         linha1.pack(fill="x")
 
@@ -495,7 +515,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             anchor="w"
         ).pack(side="left")
 
-        # badge UNLOC com cor personalizada
         unloc = reg.get("unloc", "—")
         if unloc != "—":
             cor_unloc = get_unloc_color(unloc)
@@ -509,7 +528,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                          text_color="#ffffff",
                          padx=12, pady=3).pack()
 
-        # linha 2 — metadados
         linha2 = ctk.CTkFrame(info, fg_color="transparent")
         linha2.pack(fill="x", pady=(10, 0))
 
@@ -549,7 +567,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 text_color=AppTheme.TXT_MUTED
             ).pack(anchor="w")
             
-        # ── lado direito — botões ───────────────────────────────────
         btns = ctk.CTkFrame(card, fg_color="transparent")
         btns.grid(row=0, column=1, sticky="ns", padx=(0, 20), pady=16)
 
@@ -582,7 +599,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 corner_radius=10,
                 fg_color=bg,
                 hover_color=hover_baixar,
-                border_width=0,  # <- garante que não tenha borda
+                border_width=0,
                 font=("Segoe UI", 12),
                 text_color=AppTheme.TXT_MAIN,
                 command=lambda mid=reg.get("id"), num=reg.get("numero", ""): self._baixar_com_tratamento(mid, num)
@@ -592,7 +609,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             btn_baixar.pack()
 
     def _visualizar_com_tratamento(self, memorando_id):
-        """Visualiza o memorando com tratamento de erro."""
         if not memorando_id:
             messagebox.showerror("Erro", "ID do memorando não encontrado.")
             return
@@ -604,7 +620,6 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             messagebox.showerror("Erro", f"Erro ao abrir memorando:\n{str(e)}")
 
     def _baixar_com_tratamento(self, memorando_id, numero):
-        """Baixa o memorando com tratamento de erro."""
         if not memorando_id:
             messagebox.showerror("Erro", "ID do memorando não encontrado.")
             return

@@ -23,23 +23,24 @@ class HistoricoView(ctk.CTkToplevel):
         self.controller = controller
 
         self.title("Histórico de Carteiras Digitais")
-        self.geometry("1440x900")
+        self.geometry("1200x750")
         self.configure(fg_color=AppTheme.BG_APP)
         self.grab_set()
-        self._centralizar()
-        self._build()
-        self._atualizar()
 
-    # ── Centralização ─────────────────────────────────────────────────────────
+        largura = 900
+        altura = 600
+        
+        
 
-    def _centralizar(self):
         self.update_idletasks()
-        w = self.winfo_reqwidth()
-        h = self.winfo_reqheight()
-        x = (self.winfo_screenwidth()  // 2) - (w // 2)
+        w, h = 1200, 750
+        x = (self.winfo_screenwidth() // 2) - (w // 2)
         y = (self.winfo_screenheight() // 2) - (h // 2)
         self.geometry(f"{w}x{h}+{x}+{y}")
-
+        self._build()
+        self._atualizar()
+        
+        
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _build(self):

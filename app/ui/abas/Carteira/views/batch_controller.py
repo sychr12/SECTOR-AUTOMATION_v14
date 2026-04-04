@@ -208,7 +208,7 @@ def _gerar_pdf_bytes(dados: dict, pdf_scaneado_path: str = None) -> bytes:
                     page.mediabox.lower_left = (0, 0)
                     page.mediabox.upper_right = (842, 1190)
 
-                    writer.add_page(page)
+                    
                     print(f"[batch_gerar_pdf] Pagina scaneada {i} anexada - tamanho forçado: 842x1190")
 
             print(f"[batch_gerar_pdf] Merge concluido - {len(writer.pages)} paginas totais")

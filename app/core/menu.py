@@ -6,6 +6,7 @@ import sys
 import os
 import threading
 from datetime import datetime
+from PIL import Image
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 app_dir = os.path.dirname(current_dir)
@@ -28,70 +29,97 @@ from services.database   import get_connection
 
 
 # ── Paleta Corporativa ──────────────────────────────────────────────────────────
-_AZUL_PRIMARY   = "#2c5f8a"      # Azul corporativo principal
-_AZUL_DARK      = "#1e3a5f"      # Azul mais escuro
-_AZUL_LIGHT     = "#e8f0f7"      # Azul muito claro para fundos
-_AZUL_ACCENT    = "#3b82f6"      # Azul de destaque
-_AZUL_HOVER     = "#e0eef9"      # Azul para hover
-_SIDEBAR_BG     = "#1a2c3e"      # Azul escuro/cinza para sidebar
-_SIDEBAR_ITEM   = "#2a3f54"      # Item da sidebar
-_SIDEBAR_ATIV   = "#2c5f8a"      # Item ativo
+_AZUL_PRIMARY   = "#2c5f8a"
+_AZUL_DARK      = "#1e3a5f"
+_AZUL_LIGHT     = "#e8f0f7"
+_AZUL_ACCENT    = "#3b82f6"
+_AZUL_HOVER     = "#e0eef9"
+_SIDEBAR_BG     = "#1a2c3e"
+_SIDEBAR_ITEM   = "#2a3f54"
+_SIDEBAR_ATIV   = "#2c5f8a"
 _BRANCO         = "#ffffff"
-_CINZA_BG       = "#f8fafc"      # Fundo cinza muito claro
-_CINZA_BORDER   = "#e2e8f0"      # Cinza para bordas
-_CINZA_MEDIO    = "#64748b"      # Cinza médio para textos secundários
-_CINZA_TEXTO    = "#1e293b"      # Cinza escuro para textos principais
-_VERDE_STATUS   = "#10b981"      # Verde para status online
-_VERDE_HOVER    = "#d1fae5"      # Verde claro para hover
-_DANGER         = "#ef4444"      # Vermelho para ações destrutivas
-_DANGER_DK      = "#dc2626"      # Vermelho escuro
+_CINZA_BG       = "#f8fafc"
+_CINZA_BORDER   = "#e2e8f0"
+_CINZA_MEDIO    = "#64748b"
+_CINZA_TEXTO    = "#1e293b"
+_VERDE_STATUS   = "#10b981"
+_VERDE_HOVER    = "#d1fae5"
+_DANGER         = "#ef4444"
+_DANGER_DK      = "#dc2626"
+_TEXT_SIDEBAR   = "#cbd5e1"
+_TEXT_SECTION   = "#60a5fa"
+_TEXT_MUTED     = "#64748b"
+_CARD_BORDER    = "#e2e8f0"
+_HEADER_BG      = "#ffffff"
 
-# Textos e elementos
-_TEXT_SIDEBAR   = "#cbd5e1"      # Texto inativo na sidebar
-_TEXT_SECTION   = "#60a5fa"      # Azul claro para rótulos de seção
-_TEXT_MUTED     = "#64748b"      # Cinza para textos secundários
-_CARD_BORDER    = "#e2e8f0"      # Borda dos cards
-_HEADER_BG      = "#ffffff"      # Fundo do header
+# Caminho dos ícones
+ICONS_DIR = r"images\icons\sidebar"
 
 
-# ── Grupos de navegação ──────────────────────────────────────────────────────
+def carregar_icone(nome_arquivo, size=(20, 20)):
+    """Carrega ícone PNG da pasta images/icons/sidebar"""
+    try:
+        path = os.path.join(ICONS_DIR, nome_arquivo)
+        if os.path.exists(path):
+            img = Image.open(path)
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=size)
+        else:
+            print(f"[Menu] Ícone não encontrado: {path}")
+    except Exception as e:
+        print(f"[Menu] Erro ao carregar ícone {nome_arquivo}: {e}")
+    return None
+
+
+# Ícones para cada menu (nomes dos arquivos que você tem na pasta)
+ICONES_MENU = {
+    "Consulta": carregar_icone("consulta.png", (20, 20)),
+    "Banco Antigo": carregar_icone("arquivo.png", (20, 20)),
+    "Análises": carregar_icone("analise.png", (20, 20)),
+    "E-mails": carregar_icone("email.png", (20, 20)),
+    "Lançamento": carregar_icone("lancamento.png", (20, 20)),
+    "Carteira": carregar_icone("carteira.png", (20, 20)),
+    "Memorando": carregar_icone("memorando.png", (20, 20)),
+    "Anexar": carregar_icone("anexo.png", (20, 20)),
+    "Relatórios": carregar_icone("relatorio.png", (20, 20)),
+    "Senha": carregar_icone("senha.png", (20, 20)),
+}
+# Grupos de navegação com nomes de ícones
 _GRUPOS = [
     ("CONSULTAS", [
-        ("🔍", "Consulta",      ConsultarUI,      "Consultas avançadas"),
-        ("🗄️",  "Banco Antigo", ConsultaBancoUI,  "Dados históricos"),
-        ("📈", "Análises",      AnaliseUI,         "Análise de dados"),
+        ("consulta", "Consulta",      ConsultarUI,      "Consultas avançadas"),
+        ("arquivo",  "Banco Antigo", ConsultaBancoUI,  "Dados históricos"),
+        ("analise",  "Análises",      AnaliseUI,        "Análise de dados"),
     ]),
     ("OPERAÇÕES", [
-        ("📥", "E-mails",       BaixarEmailUI,     "Gerenciar emails"),
-        ("📋", "Lançamento",    LancamentoUI,      "Novos lançamentos"),
-        ("💳", "Carteira",      CarteiraDigitalUI, "Gestão financeira"),
+        ("email",     "E-mails",       BaixarEmailUI,    "Gerenciar emails"),
+        ("lancamento","Lançamento",    LancamentoUI,     "Novos lançamentos"),
+        ("carteira",  "Carteira",      CarteiraDigitalUI,"Gestão financeira"),
     ]),
     ("DOCUMENTOS", [
-        ("📄", "Memorando",     MemorandoUI,       "Documentos internos"),
-        ("📎", "Anexar",        AnexarUI,          "Gerenciar anexos"),
-        ("📊", "Relatórios",    RelatoriosUI,      "Gerar relatórios"),
+        ("memorando", "Memorando",     MemorandoUI,      "Documentos internos"),
+        ("anexo",     "Anexar",        AnexarUI,         "Gerenciar anexos"),
+        ("relatorio", "Relatórios",    RelatoriosUI,     "Gerar relatórios"),
     ]),
     ("SISTEMA", [
-        ("🔒", "Senha",         SenhaUI,           "Alterar senha"),
+        ("seguranca", "Senha",         SenhaUI,          "Alterar senha"),
     ]),
 ]
 
 SIDEBAR_W = 280
 
 
-# ── Item de navegação ────────────────────────────────────────────────────────
+# ── Item de navegação com ícone PNG ────────────────────────────────────────────
 class NavItem(ctk.CTkFrame):
-    """Item de menu com indicador lateral e estados visuais."""
-
-    def __init__(self, parent, icon: str, label: str, command, is_active=False):
+    def __init__(self, parent, icon_name: str, label: str, command, is_active=False):
         super().__init__(parent, fg_color="transparent", height=44)
         self.pack(fill="x", padx=12, pady=2)
         self.pack_propagate(False)
 
         self._cmd    = command
         self._active = is_active
+        self._icon_img = ICONES_MENU.get(label)
 
-        # Barra indicadora lateral
         self._indicator = ctk.CTkFrame(
             self, width=3,
             fg_color=_AZUL_ACCENT if is_active else "transparent",
@@ -99,7 +127,6 @@ class NavItem(ctk.CTkFrame):
         )
         self._indicator.pack(side="left", fill="y")
 
-        # Fundo do item
         self._bg = ctk.CTkFrame(
             self,
             fg_color=_SIDEBAR_ATIV if is_active else "transparent",
@@ -107,16 +134,27 @@ class NavItem(ctk.CTkFrame):
         )
         self._bg.pack(side="left", fill="both", expand=True, padx=(6, 0))
 
-        # Ícone
-        self._icon = ctk.CTkLabel(
-            self._bg, text=icon,
-            font=("Segoe UI", 15),
-            text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
-            width=32,
-        )
+        if self._icon_img:
+            self._icon = ctk.CTkLabel(
+                self._bg, text="",
+                image=self._icon_img,
+                width=28,
+            )
+        else:
+            icon_emoji = {
+                "Consulta": "🔍", "Banco Antigo": "🗄️", "Análises": "📈",
+                "E-mails": "📥", "Lançamento": "📋", "Carteira": "💳",
+                "Memorando": "📄", "Anexar": "📎", "Relatórios": "📊",
+                "Senha": "🔒",
+            }.get(label, "📄")
+            self._icon = ctk.CTkLabel(
+                self._bg, text=icon_emoji,
+                font=("Segoe UI", 15),
+                text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
+                width=32,
+            )
         self._icon.pack(side="left", padx=(12, 8))
 
-        # Texto
         self._text = ctk.CTkLabel(
             self._bg, text=label,
             font=("Segoe UI", 12, "bold" if is_active else "normal"),
@@ -125,7 +163,6 @@ class NavItem(ctk.CTkFrame):
         )
         self._text.pack(side="left", fill="x", expand=True)
 
-        # Ponto de status
         self._dot = ctk.CTkFrame(
             self._bg, width=6, height=6, corner_radius=3,
             fg_color=_AZUL_ACCENT if is_active else "transparent",
@@ -142,13 +179,19 @@ class NavItem(ctk.CTkFrame):
         if val:
             self._indicator.configure(fg_color=_AZUL_ACCENT)
             self._bg.configure(fg_color=_SIDEBAR_ATIV)
-            self._icon.configure(text_color=_BRANCO)
+            if self._icon_img:
+                self._icon.configure(text="")
+            else:
+                self._icon.configure(text_color=_BRANCO)
             self._text.configure(text_color=_BRANCO, font=("Segoe UI", 12, "bold"))
             self._dot.configure(fg_color=_AZUL_ACCENT)
         else:
             self._indicator.configure(fg_color="transparent")
             self._bg.configure(fg_color="transparent")
-            self._icon.configure(text_color=_TEXT_SIDEBAR)
+            if self._icon_img:
+                self._icon.configure(text="")
+            else:
+                self._icon.configure(text_color=_TEXT_SIDEBAR)
             self._text.configure(text_color=_TEXT_SIDEBAR,
                                  font=("Segoe UI", 12, "normal"))
             self._dot.configure(fg_color="transparent")
@@ -156,13 +199,15 @@ class NavItem(ctk.CTkFrame):
     def _enter(self, _=None):
         if not self._active:
             self._bg.configure(fg_color=_SIDEBAR_ITEM)
-            self._icon.configure(text_color=_BRANCO)
+            if not self._icon_img:
+                self._icon.configure(text_color=_BRANCO)
             self._text.configure(text_color=_BRANCO)
 
     def _leave(self, _=None):
         if not self._active:
             self._bg.configure(fg_color="transparent")
-            self._icon.configure(text_color=_TEXT_SIDEBAR)
+            if not self._icon_img:
+                self._icon.configure(text_color=_TEXT_SIDEBAR)
             self._text.configure(text_color=_TEXT_SIDEBAR)
 
     def _click(self, _=None):
@@ -192,12 +237,10 @@ class AppPrincipal(ctk.CTkToplevel):
         self.tela_atual = None
         self.nav_items: list[tuple[str, NavItem]] = []
         self.carregando = False
-    
 
         self._build()
         self._abrir(ConsultarUI, "Consulta")
 
-    # ── BD ───────────────────────────────────────────────────────────────────
     def conectar_bd(self):
         try:
             return get_connection()
@@ -205,12 +248,10 @@ class AppPrincipal(ctk.CTkToplevel):
             messagebox.showerror("Conexão", str(exc))
             return None
 
-    # ── Layout raiz ──────────────────────────────────────────────────────────
     def _build(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar com design moderno
         self.sidebar = ctk.CTkFrame(
             self, width=SIDEBAR_W,
             fg_color=_SIDEBAR_BG, corner_radius=0,
@@ -231,7 +272,6 @@ class AppPrincipal(ctk.CTkToplevel):
         wrap.grid_columnconfigure(0, weight=1)
         wrap.grid_rowconfigure(0, weight=1)
 
-        # Card principal com borda sutil
         self.main = ctk.CTkFrame(
             wrap,
             fg_color=_BRANCO,
@@ -241,14 +281,11 @@ class AppPrincipal(ctk.CTkToplevel):
         )
         self.main.grid(row=0, column=0, sticky="nsew")
 
-    # ── Sidebar ──────────────────────────────────────────────────────────────
     def _build_sidebar(self):
-        # Logo com design corporativo
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=80)
         logo_frame.pack(fill="x", padx=20, pady=(24, 0))
         logo_frame.pack_propagate(False)
 
-        # Ícone da marca
         icon_pill = ctk.CTkFrame(
             logo_frame, width=44, height=44, corner_radius=12,
             fg_color=_AZUL_PRIMARY,
@@ -294,9 +331,9 @@ class AppPrincipal(ctk.CTkToplevel):
                 anchor="w",
             ).pack(anchor="w", padx=20, pady=(20, 8))
 
-            for icon, label, tela, _ in itens:
+            for icon_name, label, tela, _ in itens:
                 item = NavItem(
-                    scroll, icon, label,
+                    scroll, icon_name, label,
                     command=lambda t=tela, l=label: self._abrir(t, l),
                 )
                 self.nav_items.append((label, item))
@@ -325,7 +362,6 @@ class AppPrincipal(ctk.CTkToplevel):
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=12, pady=12)
 
-        # Avatar com iniciais
         initials = self.usuario[0].upper()
         av = ctk.CTkFrame(row, width=40, height=40, corner_radius=10,
                           fg_color=_AZUL_PRIMARY)
@@ -360,7 +396,6 @@ class AppPrincipal(ctk.CTkToplevel):
             command=self.sair,
         ).pack(side="right")
 
-    # ── Topbar ───────────────────────────────────────────────────────────────
     def _build_topbar(self):
         bar = ctk.CTkFrame(
             self.right, height=70,
@@ -369,7 +404,6 @@ class AppPrincipal(ctk.CTkToplevel):
         bar.grid(row=0, column=0, sticky="ew")
         bar.grid_propagate(False)
 
-        # Linha separadora sutil
         ctk.CTkFrame(bar, height=1, fg_color=_CARD_BORDER, corner_radius=0).place(
             relx=0, rely=1.0, relwidth=1, anchor="sw"
         )
@@ -377,7 +411,6 @@ class AppPrincipal(ctk.CTkToplevel):
         inner = ctk.CTkFrame(bar, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=32)
 
-        # Esquerda
         left = ctk.CTkFrame(inner, fg_color="transparent")
         left.pack(side="left", fill="y")
 
@@ -395,7 +428,6 @@ class AppPrincipal(ctk.CTkToplevel):
         )
         self.lbl_bread.pack(anchor="w", pady=(2, 0))
 
-        # Direita
         right = ctk.CTkFrame(inner, fg_color="transparent")
         right.pack(side="right", fill="y")
 
@@ -406,7 +438,6 @@ class AppPrincipal(ctk.CTkToplevel):
         )
         self.lbl_clock.pack(side="left", padx=(0, 20))
 
-        # Badge Online com design moderno
         status_pill = ctk.CTkFrame(right, fg_color=_AZUL_LIGHT, corner_radius=20)
         status_pill.pack(side="left")
 
@@ -427,7 +458,6 @@ class AppPrincipal(ctk.CTkToplevel):
         self.lbl_clock.configure(text=datetime.now().strftime("%d/%m/%Y • %H:%M"))
         self.after(1000, self._tick)
 
-    # ── Navegação ────────────────────────────────────────────────────────────
     def _abrir(self, tela_class, titulo: str):
         if self.carregando:
             return
@@ -470,7 +500,6 @@ class AppPrincipal(ctk.CTkToplevel):
         finally:
             self.carregando = False
 
-    # ── Sair ─────────────────────────────────────────────────────────────────
     def sair(self):
         if messagebox.askyesno("Sair", "Deseja encerrar a sessão?"):
             callback = getattr(self, "on_logout", None)
