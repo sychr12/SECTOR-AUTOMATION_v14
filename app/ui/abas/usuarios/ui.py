@@ -65,7 +65,7 @@ class IconManager:
         possible_paths.append(os.path.join(current_dir, "..", "..", "..", "images", "icons", "usuarios"))
         
         # 2. Caminho absoluto
-        possible_paths.append(r"C:\Users\Administrador\Documents\SECTOR AUTOMATION_v14\images\icons\usuarios")
+        possible_paths.append(r"images\icons\usuarios")
         
         # 3. Caminho base do projeto
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))

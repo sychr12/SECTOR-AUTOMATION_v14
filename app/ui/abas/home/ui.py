@@ -46,7 +46,7 @@ class IconManager:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         possible_paths = [
             # Caminho absoluto
-            r"C:\Users\Administrador\Documents\SECTOR AUTOMATION_v14\images\icons\home",
+            r"images\icons\home",
             # Caminhos relativos
             os.path.join(current_dir, "..", "..", "..", "images", "icons", "home"),
             os.path.join(current_dir, "..", "..", "images", "icons", "home"),

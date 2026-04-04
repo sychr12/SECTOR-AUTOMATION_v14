@@ -52,10 +52,8 @@ class IconManager:
     
     def __init__(self):
         self.icons = {}
-        # Caminho base do projeto
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-        # Caminho para a pasta de ícones de email
-        self.icons_dir = os.path.join(self.base_dir, "images", "icons", "email")
+        # Caminho absoluto direto para a pasta de ícones
+        self.icons_dir = r"images\icons\email"
         
     def load_icon(self, filename, size=(32, 32), colorize_to=None):
         """Carrega um ícone da pasta images/icons/email e opcionalmente aplica cor"""
@@ -104,8 +102,8 @@ class IconManager:
     def setup_icons(self):
         """Configura os ícones dos cards com cor preta"""
         icons_config = {
-            "database": ("hard_drive.png", (32, 32), _ICON_COLOR),  # Ícone com cor preta
-            "google": ("api.png", (32, 32), _ICON_COLOR),           # Ícone com cor preta
+            "database": ("hard_drive.png", (32, 32), _ICON_COLOR),
+            "google": ("api.png", (32, 32), _ICON_COLOR),
         }
         
         for name, (filename, size, color) in icons_config.items():
@@ -113,17 +111,16 @@ class IconManager:
             
         # Verificar se os ícones foram carregados
         if self.icons.get("database"):
-            _safe_print("✅ Ícone hard_drive.png carregado com sucesso (cor preta aplicada)")
+            _safe_print("✅ Ícone hard_drive.png carregado com sucesso")
         else:
             _safe_print("⚠️ Ícone hard_drive.png NÃO encontrado em: " + self.icons_dir)
             
         if self.icons.get("google"):
-            _safe_print("✅ Ícone api.png carregado com sucesso (cor preta aplicada)")
+            _safe_print("✅ Ícone api.png carregado com sucesso")
         else:
             _safe_print("⚠️ Ícone api.png NÃO encontrado em: " + self.icons_dir)
         
         return self.icons
-
 
 # ---------------------------------------------------------------------------
 # Tabela de histórico

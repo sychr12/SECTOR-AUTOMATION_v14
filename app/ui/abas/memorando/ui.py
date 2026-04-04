@@ -45,25 +45,8 @@ class IconManager:
 
     def __init__(self):
         self.icons = {}
-        self._find_icons_path()
-
-    def _find_icons_path(self):
-        """Encontra o caminho correto para a pasta de ícones"""
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-
-        possible_paths = [
-            os.path.normpath(os.path.join(current_dir, "..", "..", "..", "assets", "icons", "memorando")),
-            os.path.normpath(os.path.join(current_dir, "..", "..", "assets", "icons", "memorando")),
-        ]
-
-        for path in possible_paths:
-            if os.path.exists(path):
-                self.icons_dir = path
-                print(f"[IconManager] ✅ Ícones encontrados em: {self.icons_dir}")
-                return
-
-        self.icons_dir = possible_paths[0]
-        print(f"[IconManager] ⚠️ Pasta de ícones não encontrada: {self.icons_dir}")
+        # Caminho absoluto direto para a pasta de ícones
+        self.icons_dir = r"images\icons\memorando"
         
     def load_icon(self, filename, size=(24, 24), colorize_to=None):
         """Carrega um ícone da pasta e aplica cor se necessário"""

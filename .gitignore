@@ -93,7 +93,6 @@ jsons files/**
 # PDFs, imagens e arquivos gerados (opcional)
 # =========================
 *.pdf
-*.png
 *.jpg
 *.jpeg
 *.gif

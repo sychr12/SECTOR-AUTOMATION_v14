@@ -61,7 +61,7 @@ class IconManager:
             os.path.join(current_dir, "..", "..", "images", "icons", "anexos"),
             os.path.join(current_dir, "..", "images", "icons", "anexos"),
             os.path.join(os.path.dirname(current_dir), "images", "icons", "anexos"),
-            r"C:\Users\Administrador\Documents\SECTOR AUTOMATION_v14\images\icons\anexos",
+            r"images\icons\anexos",
             r"Q:\ARQUIVOS CPCPR\SECTOR AUTOMATION\images\icons\anexos",
         ]
 

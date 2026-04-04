@@ -19,7 +19,7 @@ class IconManager:
         possible_paths = [
             os.path.join(current_dir, "..", "..", "images", "icons", "relatorios"),
             os.path.join(current_dir, "..", "..", "..", "images", "icons", "relatorios"),
-            r"C:\Users\Administrador\Documents\SECTOR AUTOMATION_v14\images\icons\relatorios",
+            r"images\icons\relatorios",
         ]
         
         for path in possible_paths:
