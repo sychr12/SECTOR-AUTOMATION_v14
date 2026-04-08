@@ -74,7 +74,6 @@ def carregar_icone(nome_arquivo, size=(20, 20)):
 # Ícones para cada menu (nomes dos arquivos que você tem na pasta)
 ICONES_MENU = {
     "Consulta": carregar_icone("consulta.png", (20, 20)),
-    "Banco Antigo": carregar_icone("arquivo.png", (20, 20)),
     "Análises": carregar_icone("analise.png", (20, 20)),
     "E-mails": carregar_icone("email.png", (20, 20)),
     "Lançamento": carregar_icone("lancamento.png", (20, 20)),
@@ -89,7 +88,6 @@ _GRUPOS = [
     ("CONSULTAS", [
         ("consulta", "Consulta",      ConsultarUI,      "Consultas avançadas"),
         ("arquivo",  "Banco Antigo", ConsultaBancoUI,  "Dados históricos"),
-        ("analise",  "Análises",      AnaliseUI,        "Análise de dados"),
     ]),
     ("OPERAÇÕES", [
         ("email",     "E-mails",       BaixarEmailUI,    "Gerenciar emails"),

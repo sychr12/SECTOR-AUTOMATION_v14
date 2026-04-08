@@ -6,6 +6,7 @@ Services para gerenciamento de conexões e utilidades
 import psycopg2
 from datetime import datetime, date
 
+
 class DatabaseService:
     """Service para gerenciamento de conexões com banco"""
     
@@ -29,6 +30,7 @@ class DatabaseService:
             return f"{cpf_str[:3]}.{cpf_str[3:6]}.{cpf_str[6:9]}-{cpf_str[9:]}"
         return cpf_str
 
+
 class FiltroService:
     """Service para gerenciamento de filtros"""
     
@@ -44,22 +46,26 @@ class FiltroService:
         """Valida os filtros de pesquisa"""
         filtros_validos = {}
         
+        # CORREÇÃO: Verificar se filtros existe e é um dicionário
+        if not filtros or not isinstance(filtros, dict):
+            return filtros_validos
+        
         # Remove espaços em branco e valida
-        if 'nome' in filtros and filtros['nome'].strip():
+        if 'nome' in filtros and filtros.get('nome') and filtros['nome'].strip():
             filtros_validos['nome'] = filtros['nome'].strip()
         
-        if 'cpf' in filtros and filtros['cpf'].strip():
+        if 'cpf' in filtros and filtros.get('cpf') and filtros['cpf'].strip():
             cpf_limpo = ''.join(filter(str.isdigit, filtros['cpf']))
             if cpf_limpo:
                 filtros_validos['cpf'] = cpf_limpo
         
-        if 'municipio' in filtros and filtros['municipio'].strip():
+        if 'municipio' in filtros and filtros.get('municipio') and filtros['municipio'].strip():
             filtros_validos['municipio'] = filtros['municipio'].strip()
         
-        if 'memorando' in filtros and filtros['memorando'].strip():
+        if 'memorando' in filtros and filtros.get('memorando') and filtros['memorando'].strip():
             filtros_validos['memorando'] = filtros['memorando'].strip()
         
-        if 'periodo' in filtros:
+        if 'periodo' in filtros and filtros.get('periodo'):
             filtros_validos['periodo'] = filtros['periodo']
         
         return filtros_validos

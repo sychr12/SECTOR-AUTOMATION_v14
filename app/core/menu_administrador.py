@@ -107,7 +107,6 @@ def carregar_icone(nome_arquivo, size=(20, 20)):
 ICONES_MENU = {
     "Dashboard": carregar_icone("dashboard.png", (20, 20)),
     "Consultas": carregar_icone("consulta.png", (20, 20)),
-    "Arquivo Antigo": carregar_icone("arquivo.png", (20, 20)),
     "E-mails": carregar_icone("email.png", (20, 20)),
     "Análises": carregar_icone("analise.png", (20, 20)),
     "Lançamentos": carregar_icone("lancamento.png", (20, 20)),
@@ -124,7 +123,6 @@ _GRUPOS = [
     ("PRINCIPAL", [
         ("dashboard", "Dashboard",       HomeUI,              "Visão geral do sistema"),
         ("consulta",  "Consultas",        ConsultarUI,         "Consultas avançadas"),
-        ("arquivo",   "Arquivo Antigo",  ConsultaBancoUI,     "Dados históricos"),
     ]),
     ("OPERAÇÕES", [
         ("email",     "E-mails",          BaixarEmailUI,       "Gerenciar emails"),

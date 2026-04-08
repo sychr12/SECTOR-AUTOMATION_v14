@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Controller para operações de consulta no banco de dados
+Controller para operações de consulta no banco de dados (SQL Server)
+Tabela: inscrenov
 """
 
 from datetime import datetime, date, timedelta
+from typing import List, Tuple
+
 
 class ConsultaController:
-    """Controller para operações de consulta"""
+    """Controller para operações de consulta na tabela inscrenov"""
     
     def __init__(self, conexoes, usuario):
         self.usuario = usuario
@@ -18,96 +21,112 @@ class ConsultaController:
         if not conexoes:
             raise ValueError("Conexão com banco não fornecida.")
         
-        # Se for uma função única, transforma em lista
         if callable(conexoes):
             return [conexoes]
-        # Se já for uma lista, retorna
         elif isinstance(conexoes, list):
             return conexoes
         else:
             raise ValueError("Formato inválido de conexão com banco.")
     
     def construir_query(self, filtros):
-        """Constrói a query SQL baseada nos filtros"""
+        """
+        Constrói a query SQL baseada nos filtros
+        Tabela: inscrenov
+        Campos: id, nome, cpf, unloc, memorando, datas, descricao, analise, gerado, lancou, datalan, DataCriacao
+        """
         where_clauses = []
         params = []
         
         # Filtro por nome
         if filtros.get('nome'):
-            where_clauses.append("nome ILIKE %s")
+            where_clauses.append("nome LIKE ?")
             params.append(f"%{filtros['nome']}%")
         
         # Filtro por CPF
         if filtros.get('cpf'):
-            where_clauses.append("cpf ILIKE %s")
+            where_clauses.append("cpf LIKE ?")
             params.append(f"%{filtros['cpf']}%")
         
-        # Filtro por município
+        # Filtro por município (UNLOC)
         if filtros.get('municipio'):
-            where_clauses.append("municipio ILIKE %s")
+            where_clauses.append("unloc LIKE ?")
             params.append(f"%{filtros['municipio']}%")
         
         # Filtro por memorando
         if filtros.get('memorando'):
-            where_clauses.append("memorando ILIKE %s")
+            where_clauses.append("memorando LIKE ?")
             params.append(f"%{filtros['memorando']}%")
         
-        # Filtro por período
-        filtro_ano = filtros.get('periodo', 'Últimos 30 dias')
+        # Filtro por período (usando DataCriacao)
+        filtro_periodo = filtros.get('periodo', 'Últimos 30 dias')
         
-        if filtro_ano == "Últimos 30 dias":
-            where_clauses.append("criado_em >= %s")
+        if filtro_periodo == "Últimos 30 dias":
+            where_clauses.append("DataCriacao >= ?")
             params.append(date.today() - timedelta(days=30))
-        elif filtro_ano != "Todos":
-            where_clauses.append("EXTRACT(YEAR FROM criado_em) = %s")
-            params.append(int(filtro_ano))
+        elif filtro_periodo != "Todos" and filtro_periodo.isdigit():
+            where_clauses.append("YEAR(DataCriacao) = ?")
+            params.append(int(filtro_periodo))
         
         # Monta a query
-        where = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        if where_clauses:
+            where = f"WHERE {' AND '.join(where_clauses)}"
+        else:
+            where = ""
+            params = []
         
         sql = f"""
             SELECT
                 id,
                 nome,
                 cpf,
-                municipio,
+                unloc,
                 memorando,
-                tipo,
-                motivo,
-                usuario,
-                criado_em
-            FROM analise_ap
+                datas,
+                descricao,
+                analise,
+                gerado,
+                lancou,
+                datalan,
+                DataCriacao
+            FROM inscrenov
             {where}
-            ORDER BY criado_em DESC
+            ORDER BY DataCriacao DESC
         """
         
         return sql, params
     
     def executar_consulta(self, sql, params):
-        """Executa a consulta no banco de dados"""
+        """Executa a consulta no SQL Server"""
         todos_dados = []
 
         for conectar_func in self.conexoes:
             try:
                 conn = conectar_func()
-                # RealDictCursor permite acessar colunas por nome (row["campo"])
-                from psycopg2.extras import RealDictCursor
-                cur = conn.cursor(cursor_factory=RealDictCursor)
-                cur.execute(sql, params)
-
+                cur = conn.cursor()
+                
+                # Executar query com parâmetros
+                if params:
+                    cur.execute(sql, params)
+                else:
+                    cur.execute(sql)
+                
+                # Obter resultados
                 for row in cur.fetchall():
                     todos_dados.append((
-                        row["id"],
-                        row["nome"],
-                        row["cpf"],
-                        row["municipio"],
-                        row["memorando"],
-                        row["tipo"],
-                        row["motivo"],
-                        row["usuario"],
-                        row["criado_em"],
+                        row[0],  # id
+                        row[1],  # nome
+                        row[2],  # cpf
+                        row[3],  # unloc (município)
+                        row[4],  # memorando
+                        row[5],  # datas
+                        row[6],  # descricao
+                        row[7],  # analise
+                        row[8],  # gerado
+                        row[9],  # lancou
+                        row[10], # datalan
+                        row[11], # DataCriacao
                     ))
-
+                
                 cur.close()
                 conn.close()
 
@@ -123,20 +142,30 @@ class ConsultaController:
         
         for linha in dados:
             linha = list(linha)
-            # Formatar data (última coluna)
-            if isinstance(linha[8], (datetime, date)):
+            
+            # Formatar gerado (índice 8) - tipo date
+            if len(linha) > 8 and linha[8] and isinstance(linha[8], (datetime, date)):
                 linha[8] = linha[8].strftime("%d/%m/%Y")
+            
+            # Formatar datalan (índice 10) - tipo datetime
+            if len(linha) > 10 and linha[10] and isinstance(linha[10], (datetime, date)):
+                linha[10] = linha[10].strftime("%d/%m/%Y %H:%M")
+            
+            # Formatar DataCriacao (índice 11) - tipo datetime
+            if len(linha) > 11 and linha[11] and isinstance(linha[11], (datetime, date)):
+                linha[11] = linha[11].strftime("%d/%m/%Y %H:%M")
+            
             resultados_formatados.append(linha)
         
         return resultados_formatados
     
     def excluir_registro(self, id_registro):
-        """Exclui um registro do banco"""
+        """Exclui um registro da tabela inscrenov"""
         try:
             for conectar_func in self.conexoes:
                 conn = conectar_func()
                 cur = conn.cursor()
-                cur.execute("DELETE FROM analise_ap WHERE id = %s", (id_registro,))
+                cur.execute("DELETE FROM inscrenov WHERE id = ?", (id_registro,))
                 conn.commit()
                 cur.close()
                 conn.close()
@@ -146,23 +175,27 @@ class ConsultaController:
             return False, f"Erro ao excluir registro: {str(e)}"
     
     def editar_registro(self, id_registro, campo, novo_valor):
-        """Edita um registro no banco"""
+        """Edita um registro na tabela inscrenov"""
         try:
             # Validação básica
             if not novo_valor or novo_valor.strip() == "":
                 return False, "O novo valor não pode estar vazio."
             
-            # Campos permitidos para edição
-            campos_permitidos = ['nome', 'cpf', 'municipio', 'memorando', 'tipo', 'motivo']
+            # Campos permitidos para edição (baseado na estrutura da tabela)
+            campos_permitidos = [
+                'nome', 'cpf', 'unloc', 'memorando', 'datas', 
+                'descricao', 'analise', 'gerado', 'lancou'
+            ]
+            
             if campo not in campos_permitidos:
                 return False, f"Campo '{campo}' não é permitido para edição."
             
-            # Executar update em todas as conexões
+            # Executar update
             for conectar_func in self.conexoes:
                 conn = conectar_func()
                 cur = conn.cursor()
                 cur.execute(
-                    f"UPDATE analise_ap SET {campo} = %s WHERE id = %s",
+                    f"UPDATE inscrenov SET {campo} = ? WHERE id = ?",
                     (novo_valor, id_registro)
                 )
                 conn.commit()
