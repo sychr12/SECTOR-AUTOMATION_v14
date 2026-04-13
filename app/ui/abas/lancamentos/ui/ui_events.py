@@ -22,14 +22,11 @@ class LancamentoEvents:
         try:
             idx  = self._nb.index("current")
             text = self._nb.tab(idx, "text").strip()
-            if "Revisar" in text or idx == 0:
-                self._carregar_revisar()
-            elif "Prontos" in text or idx == 1:
-                self._carregar_prontos()
-            elif "Devolu" in text or idx == 2:
-                self._carregar_devolucoes()
-            elif "Hist" in text or idx == 4:
-                self._carregar_historico()
+            if   "Revisar"   in text or idx == 0: self._carregar_revisar()
+            elif "Renova"    in text or idx == 1: self._carregar_renovacao()
+            elif "Inscri"    in text or idx == 2: self._carregar_inscricao()
+            elif "Devolu"    in text or idx == 3: self._carregar_devolucoes()
+            elif "Hist"      in text or idx == 5: self._carregar_historico()
         except Exception:
             pass
 

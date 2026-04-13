@@ -707,15 +707,31 @@ class BaixarEmailUI(ctk.CTkFrame):
                 if not nome_limpo:
                     nome_limpo = f"anexo_{record_id}.pdf"
 
+                # ── Subpasta: email {ano} / {municipio} ──────────────────
+                municipio_raw = registro.get('municipio') or 'Desconhecido'
+                municipio_dir = "".join(
+                    c for c in municipio_raw if c.isalnum() or c in " _-"
+                ).strip() or "Desconhecido"
+
+                data_email = registro.get('data_email')
+                if data_email and hasattr(data_email, 'year'):
+                    ano = data_email.year
+                else:
+                    ano = datetime.now().year
+
+                subpasta = os.path.join(pasta_destino, f"email {ano}", municipio_dir)
+                os.makedirs(subpasta, exist_ok=True)
+                # ────────────────────────────────────────────────────────
+
                 # Caminho completo
-                caminho = os.path.join(pasta_destino, nome_limpo)
+                caminho = os.path.join(subpasta, nome_limpo)
 
                 # Se arquivo já existe, adicionar número
                 contador = 1
                 while os.path.exists(caminho):
                     nome_sem_ext = os.path.splitext(nome_limpo)[0]
                     ext = os.path.splitext(nome_limpo)[1]
-                    caminho = os.path.join(pasta_destino, f"{nome_sem_ext}_{contador}{ext}")
+                    caminho = os.path.join(subpasta, f"{nome_sem_ext}_{contador}{ext}")
                     contador += 1
 
                 # Salvar arquivo

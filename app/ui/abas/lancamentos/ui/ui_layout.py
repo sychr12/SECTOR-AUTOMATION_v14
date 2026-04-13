@@ -35,8 +35,31 @@ _MUTED_L = "#94a3b8"
 _STATUS_COR = {
     "RENOVACAO": _VERDE,
     "INSCRICAO": _AZUL,
+    "DEVOLUCAO": _VERM,
     "LANCADO":   _MUTED,
 }
+
+_STATUS_BG = {
+    "RENOVACAO": _VERDE_BG,
+    "INSCRICAO": _AZUL_BG,
+    "DEVOLUCAO": _VERM_BG,
+    "LANCADO":   _AMBER_BG,
+}
+
+# Rótulos em português exibidos na UI
+_STATUS_LABEL = {
+    "RENOVACAO": "Renovação",
+    "INSCRICAO": "Inscrição",
+    "DEVOLUCAO": "Devolução",
+    "LANCADO":   "Lançado",
+}
+
+_TIPO_OPTS = [
+    ("Todos",     "TODOS",     AppTheme if False else None),  # placeholder
+    ("Renovação", "RENOVACAO", _VERDE),
+    ("Inscrição", "INSCRICAO", _AZUL),
+    ("Devolução", "DEVOLUCAO", _VERM),
+]
 
 _FONT_TITLE  = ("Segoe UI", 11, "bold")
 _FONT_BODY   = ("Segoe UI", 11)
@@ -139,20 +162,24 @@ class LancamentoLayout:
         # ── Stat cards ───────────────────────────────────────────────────────
         stats = ctk.CTkFrame(wrap, fg_color="transparent")
         stats.pack(fill="x", pady=(0, 20))
-        for i in range(5):
+        for i in range(6):
             stats.grid_columnconfigure(i, weight=1)
 
-        f0, self._lbl_pendentes  = stat_card(stats, "Falta Revisar", cor=_VERM,  cor_bg=_VERM_BG)
-        f1, self._lbl_prontos    = stat_card(stats, "Prontos",        cor=_VERDE, cor_bg=_VERDE_BG)
-        f2, self._lbl_lancados   = stat_card(stats, "Lançados",       cor=_AZUL,  cor_bg=_AZUL_BG)
-        f3, self._lbl_urgentes   = stat_card(stats, "Urgentes",       cor=_AMBER, cor_bg=_AMBER_BG)
-        f4, self._lbl_devolucoes = stat_card(stats, "Devoluções",     cor=_VERM,  cor_bg=_VERM_BG)
+        f0, self._lbl_pendentes   = stat_card(stats, "Falta Revisar", cor=_VERM,  cor_bg=_VERM_BG)
+        f1, self._lbl_renovacoes  = stat_card(stats, "Renovações",    cor=_VERDE, cor_bg=_VERDE_BG)
+        f2, self._lbl_inscricoes  = stat_card(stats, "Inscrições",    cor=_AZUL,  cor_bg=_AZUL_BG)
+        f3, self._lbl_lancados    = stat_card(stats, "Lançados",      cor=_MUTED, cor_bg=AppTheme.BG_INPUT if False else "#1a1a2e")
+        f4, self._lbl_urgentes    = stat_card(stats, "Urgentes",      cor=_AMBER, cor_bg=_AMBER_BG)
+        f5, self._lbl_devolucoes  = stat_card(stats, "Devoluções",    cor=_VERM,  cor_bg=_VERM_BG)
+        # mantidos por compatibilidade com ui_logic.py
+        self._lbl_prontos = self._lbl_renovacoes
 
-        f0.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
+        f0.grid(row=0, column=0, sticky="nsew", padx=(0, 3))
         f1.grid(row=0, column=1, sticky="nsew", padx=2)
         f2.grid(row=0, column=2, sticky="nsew", padx=2)
         f3.grid(row=0, column=3, sticky="nsew", padx=2)
-        f4.grid(row=0, column=4, sticky="nsew", padx=(4, 0))
+        f4.grid(row=0, column=4, sticky="nsew", padx=2)
+        f5.grid(row=0, column=5, sticky="nsew", padx=(3, 0))
 
         # ── Notebook ─────────────────────────────────────────────────────────
         style = ttk.Style()
@@ -174,14 +201,15 @@ class LancamentoLayout:
 
         for texto, modo_ou_fn in [
             ("  🔴  Falta Revisar  ", "revisar"),
-            ("  ✅  Prontos  ",        "prontos"),
-            ("  📤  Devoluções  ",     "devolucoes"),
+            ("  🔄  Renovação  ",     "renovacao"),
+            ("  📝  Inscrição  ",     "inscricao"),
+            ("  📤  Devoluções  ",    "devolucoes"),
             ("  🔍  Consulta CPF  ",  "consulta"),
             ("  📋  Histórico  ",     "historico"),
         ]:
             aba = ctk.CTkFrame(nb, fg_color="transparent")
             nb.add(aba, text=texto)
-            if modo_ou_fn in ("revisar", "prontos", "devolucoes"):
+            if modo_ou_fn in ("revisar", "renovacao", "inscricao", "devolucoes"):
                 self._build_aba_lista(aba, modo=modo_ou_fn)
             elif modo_ou_fn == "consulta":
                 self._build_aba_consulta(aba)
@@ -218,6 +246,57 @@ class LancamentoLayout:
             font=_FONT_TITLE, text_color="#fff",
             command=lambda m=modo: self._carregar_modo(m),
         ).pack(side="right", padx=14, pady=12)
+
+        # ── Filtros por tipo (Renovação / Inscrição / Devolução) ─────────────
+        if modo in ("revisar",):
+            filtro_bar = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD,
+                                      corner_radius=14)
+            filtro_bar.pack(fill="x", padx=2, pady=(0, 6))
+
+            ctk.CTkLabel(filtro_bar, text="Tipo:",
+                         font=_FONT_SMALL, text_color=_MUTED,
+                         ).pack(side="left", padx=(18, 10), pady=10)
+
+            # Guarda os botões para poder colorir o selecionado
+            _btns: dict = {}
+
+            def _aplicar_filtro(m: str, tipo: str, btns_ref: dict):
+                self._filtrar_por_tipo(m, tipo)
+                for t, b in btns_ref.items():
+                    cor = {
+                        "TODOS":     (_AZUL,  _AZUL_H,  "#fff"),
+                        "RENOVACAO": (_VERDE, _VERDE_H, "#fff"),
+                        "INSCRICAO": (_AZUL,  _AZUL_H,  "#fff"),
+                        "DEVOLUCAO": (_VERM,  _VERM_H,  "#fff"),
+                    }.get(t, (_AZUL, _AZUL_H, "#fff"))
+                    if t == tipo:
+                        b.configure(fg_color=cor[0], hover_color=cor[1],
+                                    text_color=cor[2])
+                    else:
+                        b.configure(fg_color=AppTheme.BG_INPUT,
+                                    hover_color=AppTheme.BG_APP,
+                                    text_color=_MUTED)
+
+            for label, tipo_val, cor_val in [
+                ("Todos",     "TODOS",     _AZUL),
+                ("Renovação", "RENOVACAO", _VERDE),
+                ("Inscrição", "INSCRICAO", _AZUL),
+            ]:
+                is_active = (tipo_val == "TODOS")
+                btn = ctk.CTkButton(
+                    filtro_bar, text=label,
+                    height=28, corner_radius=8,
+                    fg_color=cor_val if is_active else AppTheme.BG_INPUT,
+                    hover_color=AppTheme.BG_APP,
+                    font=_FONT_SMALL,
+                    text_color="#fff" if is_active else _MUTED,
+                    command=lambda m=modo, t=tipo_val, b=_btns: _aplicar_filtro(m, t, b),
+                )
+                btn.pack(side="left", padx=(0, 6), pady=10)
+                _btns[tipo_val] = btn
+
+            # Guarda referência dos botões de filtro por modo
+            setattr(self, f"_filtro_btns_{modo}", _btns)
 
         # ── CPF rápido (só revisar) ───────────────────────────────────────────
         if modo == "revisar":
@@ -319,7 +398,7 @@ class LancamentoLayout:
             cabecalhos = [
                 (1, "Nome do PDF"),
                 (2, ""),
-                (3, "Status"),
+                (3, "Tipo"),
                 (4, "Responsável"),
                 (5, "Lançado por"),
                 (6, "Data"),
@@ -386,7 +465,13 @@ class LancamentoLayout:
         linha.grid_columnconfigure(6, weight=0, minsize=120)
         linha.grid_columnconfigure(7, weight=0, minsize=90)
 
-        cor_accent = _AMBER if urgente else (_AZUL if modo == "revisar" else _VERDE)
+        cor_accent = (
+            _AMBER if urgente else
+            _VERM  if modo == "devolucoes" else
+            _VERDE if modo == "renovacao" else
+            _AZUL  if modo == "inscricao" else
+            _AZUL  # revisar
+        )
 
         # Accent colorido na lateral esquerda
         accent = ctk.CTkFrame(linha, fg_color=cor_accent, width=4, height=36, corner_radius=2)
@@ -432,15 +517,12 @@ class LancamentoLayout:
                          text_color=_VERM).pack(padx=10, pady=3)
             mot_frame.grid(row=0, column=3, padx=8, pady=6, sticky="w")
         else:
-            cor_st     = _STATUS_COR.get(reg.get("status", ""), _MUTED)
-            status_txt = reg.get("status", "")
-            st_bg = {
-                "RENOVACAO": _VERDE_BG,
-                "INSCRICAO": _AZUL_BG,
-                "LANCADO":   AppTheme.BG_INPUT,
-            }.get(status_txt, AppTheme.BG_INPUT)
-            st_frame = ctk.CTkFrame(linha, fg_color=st_bg, corner_radius=6)
-            ctk.CTkLabel(st_frame, text=status_txt,
+            status_raw = reg.get("status", "")
+            cor_st     = _STATUS_COR.get(status_raw, _MUTED)
+            st_bg      = _STATUS_BG.get(status_raw, AppTheme.BG_INPUT)
+            label_st   = _STATUS_LABEL.get(status_raw, status_raw)
+            st_frame   = ctk.CTkFrame(linha, fg_color=st_bg, corner_radius=6)
+            ctk.CTkLabel(st_frame, text=label_st,
                          font=("Segoe UI", 9, "bold"),
                          text_color=cor_st).pack(padx=10, pady=3)
             st_frame.grid(row=0, column=3, padx=8, pady=6, sticky="w")
@@ -709,15 +791,16 @@ class LancamentoLayout:
 
         # ── Status ────────────────────────────────────────────────────────────
         if r.get("status"):
-            cor_s  = _STATUS_COR.get(r["status"], _MUTED)
+            status_raw = r["status"]
+            cor_s  = _STATUS_COR.get(status_raw, _MUTED)
+            bg_s   = _STATUS_BG.get(status_raw, AppTheme.BG_INPUT)
+            label_s = _STATUS_LABEL.get(status_raw, status_raw)
             st_sec = ctk.CTkFrame(self._consulta_resultado,
                                   fg_color=AppTheme.BG_CARD, corner_radius=14)
             st_sec.pack(fill="x", padx=8, pady=4)
-            _secao_titulo(st_sec, "Status atual", cor_s,
-                          {_VERDE: _VERDE_BG, _AZUL: _AZUL_BG}.get(cor_s, AppTheme.BG_INPUT))
-            st_pill = ctk.CTkFrame(st_sec, fg_color=AppTheme.BG_INPUT,
-                                   corner_radius=8)
-            ctk.CTkLabel(st_pill, text=r["status"],
+            _secao_titulo(st_sec, "Status atual", cor_s, bg_s)
+            st_pill = ctk.CTkFrame(st_sec, fg_color=bg_s, corner_radius=8)
+            ctk.CTkLabel(st_pill, text=label_s,
                          font=("Segoe UI", 13, "bold"),
                          text_color=cor_s).pack(padx=16, pady=6)
             st_pill.pack(anchor="w", padx=24, pady=(0, 16))

@@ -15,7 +15,6 @@ if app_dir not in sys.path:
 
 from theme import apply_theme, AppTheme
 from ui.abas.Consultar   import ConsultarUI
-from ui.abas.bancoantigo import ConsultaBancoUI
 from ui.abas.Email       import BaixarEmailUI
 from ui.abas.Analises    import AnaliseUI
 from ui.abas.lancamentos import LancamentoUI
@@ -87,7 +86,6 @@ ICONES_MENU = {
 _GRUPOS = [
     ("CONSULTAS", [
         ("consulta", "Consulta",      ConsultarUI,      "Consultas avançadas"),
-        ("arquivo",  "Banco Antigo", ConsultaBancoUI,  "Dados históricos"),
     ]),
     ("OPERAÇÕES", [
         ("email",     "E-mails",       BaixarEmailUI,    "Gerenciar emails"),

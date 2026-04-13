@@ -73,6 +73,10 @@ class LancamentoController:
     def carregar_devolucoes(self) -> list:
         return self.repo.listar_devolucoes()
 
+    def carregar_por_tipo(self, tipo: str) -> list:
+        """Retorna processos filtrados pelo tipo/status (RENOVACAO ou INSCRICAO)."""
+        return self.repo.listar_por_tipo(tipo)
+
     def carregar_pendentes(self) -> list:
         return self.repo.listar_para_lancamento()
 

@@ -42,13 +42,15 @@ class LancamentoUI(LancamentoLayout, LancamentoLogic, LancamentoEvents, BaseUI):
         self.pack(fill="both", expand=True)
 
         # Estado da UI
-        self._pasta_origem      = ""
-        self._selecionado       = None
-        self._linha_sel         = None
-        self._linha_sel_reg     = None
-        self._dados_revisar:    list = []
-        self._dados_prontos:    list = []
-        self._dados_devolucoes: list = []
+        self._pasta_origem       = ""
+        self._selecionado        = None
+        self._linha_sel          = None
+        self._linha_sel_reg      = None
+        self._dados_revisar:     list = []
+        self._dados_renovacao:   list = []
+        self._dados_inscricao:   list = []
+        self._dados_prontos:     list = []
+        self._dados_devolucoes:  list = []
 
         # Construção e carga inicial
         self._build()
@@ -69,6 +71,8 @@ class LancamentoUI(LancamentoLayout, LancamentoLogic, LancamentoEvents, BaseUI):
         except Exception:
             pass
         self._carregar_revisar()
+        self._carregar_renovacao()
+        self._carregar_inscricao()
         self._atualizar_stats()
 
     def refresh_devolucao(self):
@@ -78,7 +82,7 @@ class LancamentoUI(LancamentoLayout, LancamentoLogic, LancamentoEvents, BaseUI):
         """
         try:
             if hasattr(self, "_nb") and self._nb.winfo_exists():
-                self._nb.select(2)   # índice 2 = Devoluções
+                self._nb.select(3)   # índice 3 = Devoluções
         except Exception:
             pass
         self._carregar_devolucoes()

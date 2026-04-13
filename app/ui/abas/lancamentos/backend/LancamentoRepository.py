@@ -32,6 +32,61 @@ def _b(v) -> bytes:
 class LancamentoRepository:
 
     # ------------------------------------------------------------------
+    # Listar por tipo específico (RENOVACAO | INSCRICAO)
+    # ------------------------------------------------------------------
+    def listar_por_tipo(self, tipo: str) -> list:
+        """Retorna todos os processos com o status/tipo informado."""
+        sql = """
+        SELECT
+            a.id,
+            a.nome_pdf,
+            a.cpf,
+            a.usuario          AS analisado_por,
+            a.status,
+            a.urgencia,
+            a.caminho_pdf,
+            a.criado_em,
+            a.memorando,
+            COALESCE(a.motivo, '') AS motivo,
+            l.lancado_por
+        FROM  analises a
+        LEFT  JOIN lancamentos l ON l.nome_pdf = a.nome_pdf
+        WHERE UPPER(a.status) = UPPER(?)
+        ORDER BY CASE WHEN a.urgencia = 1 THEN 0 ELSE 1 END,
+                 a.criado_em ASC
+        """
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql, (tipo,))
+            rows = cursor.fetchall()
+            cursor.close()
+            return [
+                {
+                    'id':           row[0],
+                    'nome_pdf':     row[1],
+                    'cpf':          row[2],
+                    'analisado_por':row[3],
+                    'status':       row[4],
+                    'urgencia':     row[5],
+                    'caminho_pdf':  row[6],
+                    'criado_em':    row[7],
+                    'memorando':    row[8],
+                    'motivo':       row[9],
+                    'lancado_por':  row[10],
+                }
+                for row in rows
+            ]
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return []
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
     # Listar devoluções (status DEVOLUCAO)
     # ------------------------------------------------------------------
     def listar_devolucoes(self) -> list:
@@ -409,53 +464,79 @@ class LancamentoRepository:
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            
-            # Pendentes: status RENOVACAO/INSCRICAO mas não lançados
+
+            # Pendentes (sem lançamento): RENOVACAO + INSCRICAO
             cursor.execute("""
                 SELECT COUNT(*) FROM analises a
                 WHERE a.status IN ('RENOVACAO','INSCRICAO')
                   AND NOT EXISTS (
-                      SELECT 1 FROM lancamentos l 
+                      SELECT 1 FROM lancamentos l
                       WHERE l.nome_pdf = a.nome_pdf
                   )
             """)
             pendentes = cursor.fetchone()[0]
-            
-            # Prontos: status RENOVACAO/INSCRICAO E já lançados
+
+            # Renovações pendentes
+            cursor.execute("""
+                SELECT COUNT(*) FROM analises a
+                WHERE a.status = 'RENOVACAO'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM lancamentos l
+                      WHERE l.nome_pdf = a.nome_pdf
+                  )
+            """)
+            renovacoes = cursor.fetchone()[0]
+
+            # Inscrições pendentes
+            cursor.execute("""
+                SELECT COUNT(*) FROM analises a
+                WHERE a.status = 'INSCRICAO'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM lancamentos l
+                      WHERE l.nome_pdf = a.nome_pdf
+                  )
+            """)
+            inscricoes = cursor.fetchone()[0]
+
+            # Prontos (já lançados): RENOVACAO + INSCRICAO
             cursor.execute("""
                 SELECT COUNT(*) FROM analises a
                 WHERE a.status IN ('RENOVACAO','INSCRICAO')
                   AND EXISTS (
-                      SELECT 1 FROM lancamentos l 
+                      SELECT 1 FROM lancamentos l
                       WHERE l.nome_pdf = a.nome_pdf
                   )
             """)
             prontos = cursor.fetchone()[0]
-            
+
             # Lançados
-            cursor.execute("SELECT COUNT(*) FROM analises WHERE status = 'LANCADO'")
+            cursor.execute(
+                "SELECT COUNT(*) FROM analises WHERE status = 'LANCADO'")
             lancados = cursor.fetchone()[0]
-            
+
             # Devoluções
-            cursor.execute("SELECT COUNT(*) FROM analises WHERE status = 'DEVOLUCAO'")
+            cursor.execute(
+                "SELECT COUNT(*) FROM analises WHERE status = 'DEVOLUCAO'")
             devolucoes = cursor.fetchone()[0]
-            
-            # Urgentes
+
+            # Urgentes (pendentes)
             cursor.execute("""
-                SELECT COUNT(*) FROM analises 
-                WHERE urgencia = 1 
+                SELECT COUNT(*) FROM analises
+                WHERE urgencia = 1
                   AND status IN ('RENOVACAO','INSCRICAO')
             """)
             urgentes = cursor.fetchone()[0]
-            
+
             cursor.close()
-            
+
             return {
-                'pendentes': pendentes,
-                'prontos': prontos,
-                'lancados': lancados,
+                'pendentes':  pendentes,
+                'renovacoes': renovacoes,
+                'inscricoes': inscricoes,
+                'prontos':    prontos,
+                'lancados':   lancados,
                 'devolucoes': devolucoes,
-                'urgentes': urgentes,
+                'urgentes':   urgentes,
             }
         finally:
             conn.close()

@@ -37,13 +37,13 @@ class LancamentoLogic:
             except Exception:
                 s = {}
 
-            # Usar contagens do banco diretamente — as listas locais podem
-            # estar vazias no momento da chamada (race condition)
             pendentes  = s.get("pendentes",  0)
             prontos    = s.get("prontos",    0)
             lancados   = s.get("lancados",   0)
             urgentes   = s.get("urgentes",   0)
             devolucoes = s.get("devolucoes", 0)
+            renovacoes = s.get("renovacoes", 0)
+            inscricoes = s.get("inscricoes", 0)
 
             def _safe(lbl, val):
                 try:
@@ -53,12 +53,54 @@ class LancamentoLogic:
                     pass
 
             self.after(0, _safe, self._lbl_pendentes,  pendentes)
-            self.after(0, _safe, self._lbl_prontos,    prontos)
             self.after(0, _safe, self._lbl_lancados,   lancados)
             self.after(0, _safe, self._lbl_urgentes,   urgentes)
-            self.after(0, _safe, getattr(self, "_lbl_devolucoes", None), devolucoes)
+            self.after(0, _safe, getattr(self, "_lbl_devolucoes",  None), devolucoes)
+            self.after(0, _safe, getattr(self, "_lbl_renovacoes",  None), renovacoes)
+            self.after(0, _safe, getattr(self, "_lbl_inscricoes",  None), inscricoes)
+            # _lbl_prontos é alias para _lbl_renovacoes — não precisa atualizar separado
 
         threading.Thread(target=_w, daemon=True).start()
+
+    def _filtrar_por_tipo(self, modo: str, tipo: str):
+        """Filtra a tabela pelo tipo/status selecionado (TODOS, RENOVACAO, INSCRICAO)."""
+        # Persiste o filtro atual para esse modo
+        if not hasattr(self, "_filtro_tipo"):
+            self._filtro_tipo = {}
+        self._filtro_tipo[modo] = tipo
+
+        dados_brutos = getattr(self, f"_dados_{modo}", [])
+
+        tabela = getattr(self, f"_tabela_{modo}", None)
+        if not tabela:
+            return
+        try:
+            if not tabela.winfo_exists():
+                return
+        except Exception:
+            return
+
+        for w in tabela.winfo_children():
+            w.destroy()
+
+        if tipo == "TODOS":
+            filtrados = dados_brutos
+        else:
+            filtrados = [r for r in dados_brutos
+                         if (r.get("status") or "").upper() == tipo
+                         or (r.get("tipo")   or "").upper() == tipo]
+
+        if not filtrados:
+            tipo_label = {"RENOVACAO": "Renovação", "INSCRICAO": "Inscrição",
+                          "DEVOLUCAO": "Devolução"}.get(tipo, tipo)
+            ctk.CTkLabel(tabela,
+                         text=f"Nenhum processo do tipo «{tipo_label}» encontrado.",
+                         text_color=_MUTED,
+                         font=("Segoe UI", 13)).pack(pady=40)
+            return
+
+        for reg in filtrados:
+            self._criar_linha(reg, tabela, modo)
 
     # =========================================================================
     # Aba Lista — Falta Revisar / Prontos
@@ -66,6 +108,10 @@ class LancamentoLogic:
     def _carregar_modo(self, modo: str):
         if modo == "revisar":
             self._carregar_revisar()
+        elif modo == "renovacao":
+            self._carregar_renovacao()
+        elif modo == "inscricao":
+            self._carregar_inscricao()
         elif modo == "prontos":
             self._carregar_prontos()
         else:
@@ -75,6 +121,18 @@ class LancamentoLogic:
         self._limpar_tabela("revisar")
         threading.Thread(
             target=self._worker_carregar, args=("revisar",), daemon=True
+        ).start()
+
+    def _carregar_renovacao(self):
+        self._limpar_tabela("renovacao")
+        threading.Thread(
+            target=self._worker_carregar, args=("renovacao",), daemon=True
+        ).start()
+
+    def _carregar_inscricao(self):
+        self._limpar_tabela("inscricao")
+        threading.Thread(
+            target=self._worker_carregar, args=("inscricao",), daemon=True
         ).start()
 
     def _carregar_prontos(self):
@@ -143,6 +201,10 @@ class LancamentoLogic:
         try:
             if modo == "revisar":
                 dados = self.controller.carregar_para_revisar()
+            elif modo == "renovacao":
+                dados = self.controller.carregar_por_tipo("RENOVACAO")
+            elif modo == "inscricao":
+                dados = self.controller.carregar_por_tipo("INSCRICAO")
             elif modo == "prontos":
                 dados = self.controller.carregar_prontos()
             else:
@@ -178,6 +240,10 @@ class LancamentoLogic:
 
         if modo == "revisar":
             self._dados_revisar = dados
+        elif modo == "renovacao":
+            self._dados_renovacao = dados
+        elif modo == "inscricao":
+            self._dados_inscricao = dados
         elif modo == "prontos":
             self._dados_prontos = dados
         else:
@@ -190,14 +256,25 @@ class LancamentoLogic:
         if not dados:
             msg = ("Nenhum processo aguardando revisão."
                    if modo == "revisar"
-                   else "Nenhum processo pronto para impressão.")
+                   else "Nenhum processo pronto para impressão."
+                   if modo == "prontos"
+                   else "Nenhuma devolução encontrada.")
             ctk.CTkLabel(tabela, text=msg,
                          text_color=_MUTED,
                          font=("Segoe UI", 13)).pack(pady=40)
             self.after(0, self._atualizar_stats)
             return
 
-        for reg in dados:
+        # Reaplicar filtro de tipo, se houver
+        filtro_ativo = getattr(self, "_filtro_tipo", {}).get(modo, "TODOS")
+        if filtro_ativo != "TODOS":
+            dados_render = [r for r in dados
+                            if (r.get("status") or "").upper() == filtro_ativo
+                            or (r.get("tipo")   or "").upper() == filtro_ativo]
+        else:
+            dados_render = dados
+
+        for reg in dados_render:
             self._criar_linha(reg, tabela, modo)
 
         self.after(0, self._atualizar_stats)
