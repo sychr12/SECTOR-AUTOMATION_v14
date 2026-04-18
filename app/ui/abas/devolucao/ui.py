@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Interface para devolução de documentos
+Interface para devolução de documentos (PyQt6)
 """
 
 import threading
-from tkinter import messagebox
-import customtkinter as ctk
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
+    QTextEdit, QMessageBox, QScrollArea
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
-from ui.base_ui import BaseUI
 from app.theme import AppTheme
 from services.pdf_service import PDFService
 from services.email_service import EmailService
@@ -15,11 +18,12 @@ from .controller import DevolucaoController
 from .services import ConfiguracaoService, HistoricoService
 from .views import HeaderCard, ConteudoCard, BotoesAcao, StatusBar, ContadorCaracteres, FormularioDestinatarios
 
-class DevolucaoUI(BaseUI):
+
+class DevolucaoUI(QWidget):
     """Interface para devolução de documentos"""
 
-    def __init__(self, master, usuario):
-        super().__init__(master)
+    def __init__(self, parent=None, usuario=None):
+        super().__init__(parent)
         self.usuario = usuario
         
         # Inicializar services
@@ -35,84 +39,90 @@ class DevolucaoUI(BaseUI):
             email_service=self.email_service
         )
         
+        self.setStyleSheet(f"background-color: {AppTheme.BG_APP};")
+        
         # Criar interface
         self._criar_interface()
     
     def _criar_interface(self):
         """Cria a interface do usuário"""
-        self.configure(fg_color=AppTheme.BG_APP)
-        
-        # Container principal
-        container = ctk.CTkFrame(self, fg_color="transparent")
-        container.pack(expand=True, fill="both", padx=40, pady=40)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(20)
         
         # Cabeçalho
-        self.header = HeaderCard(
-            container,
-            title="Devolução",
-            subtitle="Gerar PDF e enviar email de devolução"
-        )
-        self.header.pack()
-        
-        # Barra de status
-        self.status_bar = StatusBar(container)
+        self.header = HeaderCard(title="Devolução", subtitle="Gerar PDF e enviar email de devolução")
+        layout.addWidget(self.header)
         
         # Card de conteúdo
-        self.conteudo_card = ConteudoCard(
-            container,
-            on_content_change=self._atualizar_status_conteudo
-        )
-        self.conteudo_card.pack(fill="both", expand=True, pady=(0, 20))
+        self.conteudo_card = ConteudoCard(on_content_change=self._atualizar_status_conteudo)
+        layout.addWidget(self.conteudo_card, 1)
         
         # Contador de caracteres
         self.contador = ContadorCaracteres(
-            container,
             text_widget=self.conteudo_card.text_widget,
             max_caracteres=2000
         )
-        self.contador.pack(anchor="e", pady=(0, 10))
+        layout.addWidget(self.contador, alignment=Qt.AlignmentFlag.AlignRight)
         
         # Botões de ação
         self.botoes_acao = BotoesAcao(
-            container,
             on_gerar_pdf=self.gerar_pdf,
             on_enviar_email=self.enviar_email
         )
-        self.botoes_acao.pack(pady=10)
+        layout.addWidget(self.botoes_acao)
         
         # Botões adicionais
-        botoes_adicionais = ctk.CTkFrame(container, fg_color="transparent")
-        botoes_adicionais.pack(pady=(5, 0))
+        botoes_adicionais = QWidget()
+        botoes_adicionais_layout = QHBoxLayout(botoes_adicionais)
+        botoes_adicionais_layout.setContentsMargins(0, 0, 0, 0)
+        botoes_adicionais_layout.setSpacing(10)
         
-        ctk.CTkButton(
-            botoes_adicionais,
-            text="⚙️ Configurar Destinatários",
-            width=200,
-            height=35,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.TXT_MUTED,
-            text_color=AppTheme.TXT_MAIN,
-            command=self._configurar_destinatarios
-        ).pack(side="left", padx=5)
+        btn_config = QPushButton("⚙️ Configurar Destinatários")
+        btn_config.setFixedSize(200, 35)
+        btn_config.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BG_INPUT};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {AppTheme.BORDER};
+                border-radius: 8px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.TXT_MUTED};
+            }}
+        """)
+        btn_config.clicked.connect(self._configurar_destinatarios)
+        botoes_adicionais_layout.addWidget(btn_config)
         
-        ctk.CTkButton(
-            botoes_adicionais,
-            text="📋 Limpar",
-            width=100,
-            height=35,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.TXT_MUTED,
-            text_color=AppTheme.TXT_MAIN,
-            command=self._limpar_conteudo
-        ).pack(side="left", padx=5)
+        btn_limpar = QPushButton("📋 Limpar")
+        btn_limpar.setFixedSize(100, 35)
+        btn_limpar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BG_INPUT};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {AppTheme.BORDER};
+                border-radius: 8px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.TXT_MUTED};
+            }}
+        """)
+        btn_limpar.clicked.connect(self._limpar_conteudo)
+        botoes_adicionais_layout.addWidget(btn_limpar)
+        
+        botoes_adicionais_layout.addStretch()
+        layout.addWidget(botoes_adicionais)
+        
+        # Barra de status
+        self.status_bar = StatusBar()
+        layout.addWidget(self.status_bar)
+        self.status_bar.hide()
     
     def _atualizar_status_conteudo(self):
         """Atualiza o status baseado no conteúdo"""
-        conteudo = self.conteudo_card.obter_conteudo()
-        if conteudo:
-            self.status_bar.hide()
+        pass
     
     def _limpar_conteudo(self):
         """Limpa o conteúdo do textbox"""
@@ -128,15 +138,13 @@ class DevolucaoUI(BaseUI):
             destinatarios_iniciais=destinatarios_atual,
             on_salvar=self._salvar_destinatarios
         )
-        
-        formulario.show()
+        formulario.exec()
     
     def _salvar_destinatarios(self, destinatarios):
         """Salva a lista de destinatários"""
-        for email in destinatarios:
-            self.config_service.adicionar_destinatario(email)
-        
-        messagebox.showinfo("Sucesso", "Destinatários atualizados com sucesso.")
+        self.config_service.config['destinatarios_padrao'] = destinatarios
+        self.config_service.salvar_config()
+        QMessageBox.information(self, "Sucesso", "Destinatários atualizados com sucesso.")
     
     def gerar_pdf(self):
         """Gera PDF com o conteúdo"""
@@ -145,6 +153,7 @@ class DevolucaoUI(BaseUI):
         # Validar limite de caracteres
         if not self.contador.esta_dentro_limite():
             self.status_bar.mostrar_aviso("O conteúdo excede o limite de caracteres.")
+            self.status_bar.show()
             return
         
         # Desabilitar botões durante operação
@@ -172,11 +181,11 @@ class DevolucaoUI(BaseUI):
             )
             
             # Atualizar interface
-            self.after(0, self._finalizar_gerar_pdf, sucesso, resultado)
+            QTimer.singleShot(0, lambda: self._finalizar_gerar_pdf(sucesso, resultado))
             
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Erro", f"Erro inesperado: {str(e)}"))
-            self.after(0, self.botoes_acao.habilitar_botoes)
+            QTimer.singleShot(0, lambda: QMessageBox.critical(self, "Erro", f"Erro inesperado: {str(e)}"))
+            QTimer.singleShot(0, self.botoes_acao.habilitar_botoes)
     
     def _finalizar_gerar_pdf(self, sucesso, resultado):
         """Finaliza a geração de PDF"""
@@ -184,10 +193,12 @@ class DevolucaoUI(BaseUI):
         
         if sucesso:
             self.status_bar.mostrar_sucesso(f"PDF gerado: {resultado}")
-            messagebox.showinfo("Sucesso", f"PDF gerado com sucesso:\n{resultado}")
+            self.status_bar.show()
+            QMessageBox.information(self, "Sucesso", f"PDF gerado com sucesso:\n{resultado}")
         else:
             self.status_bar.mostrar_erro(resultado)
-            messagebox.showerror("Erro", resultado)
+            self.status_bar.show()
+            QMessageBox.critical(self, "Erro", resultado)
     
     def enviar_email(self):
         """Envia email com o conteúdo"""
@@ -196,13 +207,15 @@ class DevolucaoUI(BaseUI):
         # Validar limite de caracteres
         if not self.contador.esta_dentro_limite():
             self.status_bar.mostrar_aviso("O conteúdo excede o limite de caracteres.")
+            self.status_bar.show()
             return
         
         # Obter destinatários
         destinatarios = self.config_service.obter_destinatarios()
         
         if not destinatarios:
-            messagebox.showwarning(
+            QMessageBox.warning(
+                self,
                 "Atenção",
                 "Nenhum destinatário configurado. Configure os destinatários primeiro."
             )
@@ -233,11 +246,11 @@ class DevolucaoUI(BaseUI):
             )
             
             # Atualizar interface
-            self.after(0, self._finalizar_enviar_email, sucesso, resultado)
+            QTimer.singleShot(0, lambda: self._finalizar_enviar_email(sucesso, resultado))
             
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Erro", f"Erro inesperado: {str(e)}"))
-            self.after(0, self.botoes_acao.habilitar_botoes)
+            QTimer.singleShot(0, lambda: QMessageBox.critical(self, "Erro", f"Erro inesperado: {str(e)}"))
+            QTimer.singleShot(0, self.botoes_acao.habilitar_botoes)
     
     def _finalizar_enviar_email(self, sucesso, resultado):
         """Finaliza o envio de email"""
@@ -245,7 +258,9 @@ class DevolucaoUI(BaseUI):
         
         if sucesso:
             self.status_bar.mostrar_sucesso(resultado)
-            messagebox.showinfo("Sucesso", resultado)
+            self.status_bar.show()
+            QMessageBox.information(self, "Sucesso", resultado)
         else:
             self.status_bar.mostrar_erro(resultado)
-            messagebox.showerror("Erro", resultado)
+            self.status_bar.show()
+            QMessageBox.critical(self, "Erro", resultado)

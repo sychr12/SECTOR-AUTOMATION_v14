@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """Histórico de memorandos — design corporativo com filtros e cores"""
 
-import customtkinter as ctk
-from tkinter import messagebox
+from PyQt6.QtWidgets import (
+    QWidget, QDialog, QFrame, QLabel, QPushButton, QLineEdit, QComboBox,
+    QVBoxLayout, QHBoxLayout, QScrollArea, QMessageBox, QSizePolicy
+)
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon
 from app.theme import AppTheme
 import hashlib
-from datetime import datetime
 
 from app.ui.abas.memorando.views.municipio_selector import MunicipioSelector
 from app.ui.abas.memorando.municipios import lista_formatada
@@ -112,175 +115,287 @@ def get_unloc_color(unloc: str) -> str:
     """Retorna uma cor consistente para cada UNLOC"""
     if not unloc or unloc == "—":
         return "#64748b"
-    
+
     unloc_upper = unloc.upper()
-    
-    # Extrair apenas o código principal (antes do - ou /)
-    # Exemplos: "MAO-ZL" -> "MAO", "ITR-NRO" -> "ITR", "PR-123" -> "PR"
+
     if "-" in unloc_upper:
         codigo_principal = unloc_upper.split("-")[0]
     elif "/" in unloc_upper:
         codigo_principal = unloc_upper.split("/")[0]
     else:
         codigo_principal = unloc_upper
-    
-    # Se o código principal tiver mais de 3 letras, tenta pegar só as 3 primeiras
+
     if len(codigo_principal) > 3:
-        # Tenta buscar o código completo primeiro
         if codigo_principal in UNLOC_CORES:
             return UNLOC_CORES[codigo_principal]
-        # Se não achar, tenta só as 3 primeiras letras
         codigo_principal = codigo_principal[:3]
-    
-    # Busca a cor pelo código principal
+
     if codigo_principal in UNLOC_CORES:
         return UNLOC_CORES[codigo_principal]
-    
-    # Fallback: gerar cor baseada no hash
+
     hash_val = int(hashlib.md5(codigo_principal.encode()).hexdigest()[:8], 16)
     return CORES_ALTERNATIVAS[hash_val % len(CORES_ALTERNATIVAS)]
 
 
-class HistoricoMemorandoView(ctk.CTkToplevel):
-    
+class HistoricoMemorandoView(QDialog):
+
     def __init__(self, parent, controller,
                  on_visualizar=None, on_baixar=None, icons=None):
         super().__init__(parent)
-        self.controller    = controller
+        self.controller = controller
         self.on_visualizar = on_visualizar
-        self.on_baixar     = on_baixar
-        self.icons         = icons or {}
+        self.on_baixar = on_baixar
+        self.icons = icons or {}
+
         self._configure_window()
         self._create_widgets()
         self._carregar_dados()
 
     def _configure_window(self):
-        self.title("Histórico de Memorandos")
-        self.geometry("1200x750")
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        self.setWindowTitle("Histórico de Memorandos")
+        self.resize(1200, 750)
+        self.setModal(True)
+        self.setStyleSheet(f"background-color: {AppTheme.BG_APP};")
 
-        w, h = 1200, 750
-        x = (self.winfo_screenwidth() // 2) - (w // 2)
-        y = (self.winfo_screenheight() // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
+    def _frame_transparent(self):
+        frame = QFrame()
+        frame.setStyleSheet("background: transparent; border: none;")
+        return frame
+
+    def _frame_card(self, bg, radius=12, border=0, border_color="transparent"):
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {bg};
+                border-radius: {radius}px;
+                border: {border}px solid {border_color};
+            }}
+        """)
+        return frame
+
+    def _label_icon(self, pixmap, width=None, height=None):
+        lbl = QLabel()
+        if pixmap:
+            lbl.setPixmap(pixmap)
+        if width:
+            lbl.setFixedWidth(width)
+        if height:
+            lbl.setFixedHeight(height)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet("background: transparent; border: none;")
+        return lbl
+
+    def _button_style(self, fg, hover, text_color, radius=10, border=0, border_color="transparent", bold=False):
+        weight = 700 if bold else 400
+        return f"""
+            QPushButton {{
+                background-color: {fg};
+                color: {text_color};
+                border-radius: {radius}px;
+                border: {border}px solid {border_color};
+                font-size: 12px;
+                font-weight: {weight};
+                padding: 0 12px;
+                text-align: center;
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+        """
+
+    def _lineedit_style(self):
+        return f"""
+            QLineEdit {{
+                background-color: {FILTER_INPUT_BG};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {FILTER_BORDER};
+                border-radius: {FILTER_RADIUS}px;
+                padding: 0 12px;
+                min-height: 38px;
+                font-size: 12px;
+            }}
+        """
+
+    def _combobox_style(self):
+        return f"""
+            QComboBox {{
+                background-color: {FILTER_INPUT_BG};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {FILTER_BORDER};
+                border-radius: {FILTER_RADIUS}px;
+                padding: 0 12px;
+                min-height: 38px;
+                font-size: 12px;
+            }}
+            QComboBox:hover {{
+                background-color: {FILTER_HOVER};
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {FILTER_DROPDOWN_BG};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {FILTER_BORDER};
+                selection-background-color: {FILTER_HOVER};
+                outline: none;
+            }}
+        """
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            if widget is not None:
+                widget.deleteLater()
+            elif child_layout is not None:
+                self._clear_layout(child_layout)
 
     def _create_widgets(self):
-        root = ctk.CTkFrame(self, fg_color="transparent")
-        root.pack(fill="both", expand=True, padx=36, pady=32)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(36, 32, 36, 32)
+        root_layout.setSpacing(0)
 
-        self._build_header(root)
-        self._build_filters(root)
-        
-        separator = ctk.CTkFrame(root, height=1, fg_color=AppTheme.BG_CARD)
-        separator.pack(fill="x", pady=(0, 20))
+        self.root = self._frame_transparent()
+        self.root_layout = QVBoxLayout(self.root)
+        self.root_layout.setContentsMargins(0, 0, 0, 0)
+        self.root_layout.setSpacing(0)
 
-        self.lista_scroll = ctk.CTkScrollableFrame(
-            root,
-            fg_color="transparent",
-            scrollbar_button_color=AppTheme.BG_CARD,
-            scrollbar_button_hover_color=AppTheme.TXT_MUTED,
-        )
-        self.lista_scroll.pack(fill="both", expand=True)
-        
+        self._build_header(self.root_layout)
+        self._build_filters(self.root_layout)
+
+        separator = QFrame()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet(f"background-color: {AppTheme.BG_CARD}; border: none;")
+        self.root_layout.addWidget(separator)
+        self.root_layout.addSpacing(20)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet("background: transparent;")
+        self.lista_layout = QVBoxLayout(self.scroll_content)
+        self.lista_layout.setContentsMargins(0, 0, 0, 0)
+        self.lista_layout.setSpacing(10)
+        self.lista_layout.addStretch()
+
+        self.scroll_area.setWidget(self.scroll_content)
+        self.root_layout.addWidget(self.scroll_area, 1)
+
+        root_layout.addWidget(self.root)
+
     def _limpar_filtros(self):
-        self.pesquisa_var.set("")
+        self.pesquisa_input.clear()
         self.municipio_selector.set("Todos")
-        self.ano_var.set("Todos")
-        self.ordem_var.set("Recentes")
+        self.ano_combo.setCurrentText("Todos")
+        self.ordem_combo.setCurrentText("Recentes")
         self._carregar_dados()
 
-    def _build_header(self, parent):
-        hdr = ctk.CTkFrame(parent, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 24))
+    def _build_header(self, parent_layout):
+        hdr = self._frame_transparent()
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(0, 0, 0, 0)
+        hdr_layout.setSpacing(0)
 
-        left = ctk.CTkFrame(hdr, fg_color="transparent")
-        left.pack(side="left")
-        
+        left = self._frame_transparent()
+        left_layout = QHBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
         if self.icons.get("history"):
-            icon_label = ctk.CTkLabel(
-                left, text="", image=self.icons["history"],
-                width=28, height=28
-            )
-            icon_label.pack(side="left", padx=(0, 12))
+            icon_label = self._label_icon(self.icons["history"], width=28, height=28)
+            left_layout.addWidget(icon_label)
+            left_layout.addSpacing(12)
         else:
-            ctk.CTkLabel(
-                left, text="📋", font=("Segoe UI", 28),
-                text_color=AppTheme.TXT_MAIN
-            ).pack(side="left", padx=(0, 12))
-        
-        title_frame = ctk.CTkFrame(left, fg_color="transparent")
-        title_frame.pack(side="left")
-        
-        ctk.CTkLabel(title_frame, text="Histórico de Memorandos",
-                     font=("Segoe UI", 26, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(anchor="w")
-        
-        ctk.CTkLabel(title_frame,
-                     text="Visualize, abra e baixe memorandos gerados",
-                     font=("Segoe UI", 12),
-                     text_color=AppTheme.TXT_MUTED).pack(anchor="w", pady=(4, 0))
+            fallback = QLabel("📋")
+            fallback.setStyleSheet(f"""
+                color: {AppTheme.TXT_MAIN};
+                font-size: 28px;
+                background: transparent;
+                border: none;
+            """)
+            left_layout.addWidget(fallback)
+            left_layout.addSpacing(12)
 
-        status_badge = ctk.CTkLabel(
-            hdr, text="Lista de memorandos",
-            font=("Segoe UI", 14, "bold"), text_color=AppTheme.TXT_MUTED,
-            fg_color=AppTheme.BG_CARD, corner_radius=20, padx=14, pady=6
-        )
-        status_badge.pack(side="right")
+        title_frame = self._frame_transparent()
+        title_layout = QVBoxLayout(title_frame)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(4)
 
-    def _build_filters(self, parent):
-        bar = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD, corner_radius=16)
-        bar.pack(fill="x", pady=(0, 20))
+        titulo = QLabel("Histórico de Memorandos")
+        titulo.setStyleSheet(f"""
+            color: {AppTheme.TXT_MAIN};
+            font-size: 26px;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+        """)
 
-        HEIGHT = 38
-        PAD_X = 8
-        PAD_Y = 10
-        FONT = ("Segoe UI", 12)
-        FONT_BOLD = ("Segoe UI", 11, "bold")
+        subtitulo = QLabel("Visualize, abra e baixe memorandos gerados")
+        subtitulo.setStyleSheet(f"""
+            color: {AppTheme.TXT_MUTED};
+            font-size: 12px;
+            font-weight: 400;
+            background: transparent;
+            border: none;
+        """)
 
-        if self.icons.get("search"):
-            ctk.CTkLabel(
-                bar,
-                text="",
-                image=self.icons["search"],
-                width=18,
-                height=18
-            ).pack(side="left", padx=(16, 4), pady=PAD_Y)
-            
-        ctk.CTkLabel(bar, text="Buscar",
-                     font=FONT_BOLD,
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
+        title_layout.addWidget(titulo)
+        title_layout.addWidget(subtitulo)
 
-        self.pesquisa_var = ctk.StringVar()
-        self.pesquisa_var.trace_add("write", lambda *_: self._carregar_dados())
-        
-        ctk.CTkEntry(
-            bar,
-            textvariable=self.pesquisa_var,
-            placeholder_text="Número do memo ou UNLOC...",
-            height=HEIGHT,
-            corner_radius=FILTER_RADIUS,
-            fg_color=FILTER_INPUT_BG,
-            border_color=FILTER_BORDER,
-            border_width=1,
-            font=FONT,
-            text_color=AppTheme.TXT_MAIN,
-        ).pack(side="left", fill="x", expand=True, padx=(0, PAD_X), pady=PAD_Y)
-        
-        if self.icons.get("location"):
-            ctk.CTkLabel(
-                bar,
-                text="",
-                image=self.icons["location"],
-                width=18,
-                height=18
-            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-            
-        ctk.CTkLabel(bar, text="Município",
-                     font=FONT_BOLD,
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
+        left_layout.addWidget(title_frame)
+        hdr_layout.addWidget(left)
+        hdr_layout.addStretch()
 
-        self.municipio_var = ctk.StringVar(value="Todos")
+        status_badge = QLabel("Lista de memorandos")
+        status_badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: {AppTheme.BG_CARD};
+                color: {AppTheme.TXT_MUTED};
+                border-radius: 20px;
+                padding: 6px 14px;
+                font-size: 14px;
+                font-weight: 700;
+            }}
+        """)
+        hdr_layout.addWidget(status_badge)
+
+        parent_layout.addWidget(hdr)
+        parent_layout.addSpacing(24)
+
+    def _build_filters(self, parent_layout):
+        bar = self._frame_card(AppTheme.BG_CARD, radius=16)
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(16, 10, 14, 10)
+        bar_layout.setSpacing(8)
+
+        def add_icon(name, width=18, height=18):
+            if self.icons.get(name):
+                bar_layout.addWidget(self._label_icon(self.icons[name], width=width, height=height))
+
+        def add_label(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(f"""
+                color: {AppTheme.TXT_MUTED};
+                font-size: 11px;
+                font-weight: 700;
+                background: transparent;
+                border: none;
+            """)
+            bar_layout.addWidget(lbl)
+
+        add_icon("search")
+        add_label("Buscar")
+
+        self.pesquisa_input = QLineEdit()
+        self.pesquisa_input.setPlaceholderText("Número do memo ou UNLOC...")
+        self.pesquisa_input.setStyleSheet(self._lineedit_style())
+        self.pesquisa_input.textChanged.connect(self._carregar_dados)
+        bar_layout.addWidget(self.pesquisa_input, 1)
+
+        add_icon("location")
+        add_label("Município")
 
         lista_municipios = ["Todos"] + lista_formatada()
 
@@ -289,7 +404,7 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             values=lista_municipios,
             default="Todos",
             width=200,
-            height=HEIGHT,
+            height=38,
             corner_radius=FILTER_RADIUS,
             fg_color=FILTER_INPUT_BG,
             text_color=AppTheme.TXT_MAIN,
@@ -298,146 +413,77 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
             dropdown_fg_color=FILTER_DROPDOWN_BG,
             border_color=FILTER_BORDER,
             border_width=1,
-            font=FONT,
+            font=("Segoe UI", 12),
             placeholder="Município",
             command=lambda _: self._carregar_dados(),
         )
-        self.municipio_selector.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
+        bar_layout.addWidget(self.municipio_selector)
 
-        if self.icons.get("calendar_search"):
-            ctk.CTkLabel(
-                bar,
-                text="",
-                image=self.icons["calendar_search"],
-                width=18,
-                height=18
-            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-                    
-        ctk.CTkLabel(bar, text="Ano",
-                     font=FONT_BOLD,
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
+        add_icon("calendar_search")
+        add_label("Ano")
 
-        self.ano_var = ctk.StringVar(value="Todos")
-
-        ok, anos = self.controller.listar_anos() if hasattr(self.controller, 'listar_anos') else (False, [])
+        ok, anos = self.controller.listar_anos() if hasattr(self.controller, "listar_anos") else (False, [])
         lista_anos = ["Todos"] + anos if ok and anos else ["Todos"]
 
-        ano_wrap = ctk.CTkFrame(
-            bar,
-            width=100,
-            height=HEIGHT,
-            fg_color=FILTER_INPUT_BG,
-            border_width=1,
-            border_color=FILTER_BORDER,
-            corner_radius=FILTER_RADIUS
-        )
-        ano_wrap.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
-        ano_wrap.pack_propagate(False)
+        self.ano_combo = QComboBox()
+        self.ano_combo.addItems(lista_anos)
+        self.ano_combo.setCurrentText("Todos")
+        self.ano_combo.setStyleSheet(self._combobox_style())
+        self.ano_combo.currentTextChanged.connect(self._carregar_dados)
+        self.ano_combo.setFixedWidth(100)
+        bar_layout.addWidget(self.ano_combo)
 
-        self.ano_menu = ctk.CTkOptionMenu(
-            ano_wrap,
-            values=lista_anos,
-            variable=self.ano_var,
-            width=96,
-            height=HEIGHT - 4,
-            fg_color=FILTER_INPUT_BG,
-            button_color=FILTER_INPUT_BG,
-            button_hover_color=FILTER_HOVER,
-            dropdown_fg_color=FILTER_DROPDOWN_BG,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-            corner_radius=FILTER_RADIUS - 2,
-            font=FONT,
-            dynamic_resizing=False,
-            command=lambda _: self._carregar_dados()
-        )
-        self.ano_menu.place(relx=0.5, rely=0.5, anchor="center")
-        
-        if self.icons.get("filter"):
-            ctk.CTkLabel(
-                bar,
-                text="",
-                image=self.icons["filter"],
-                width=18,
-                height=18
-            ).pack(side="left", padx=(12, 4), pady=PAD_Y)
-            
-        ctk.CTkLabel(bar, text="Ordem",
-                     font=FONT_BOLD,
-                     text_color=AppTheme.TXT_MUTED).pack(side="left", padx=(0, 6), pady=PAD_Y)
+        add_icon("filter")
+        add_label("Ordem")
 
-        self.ordem_var = ctk.StringVar(value="Recentes")
+        self.ordem_combo = QComboBox()
+        self.ordem_combo.addItems(["Recentes", "Antigos"])
+        self.ordem_combo.setCurrentText("Recentes")
+        self.ordem_combo.setStyleSheet(self._combobox_style())
+        self.ordem_combo.currentTextChanged.connect(self._carregar_dados)
+        self.ordem_combo.setFixedWidth(120)
+        bar_layout.addWidget(self.ordem_combo)
 
-        ordem_wrap = ctk.CTkFrame(
-            bar,
-            width=120,
-            height=HEIGHT,
-            fg_color=FILTER_INPUT_BG,
-            border_width=1,
-            border_color=FILTER_BORDER,
-            corner_radius=FILTER_RADIUS
-        )
-        ordem_wrap.pack(side="left", padx=(0, PAD_X), pady=PAD_Y)
-        ordem_wrap.pack_propagate(False)
+        bar_layout.addStretch()
 
-        self.ordem_menu = ctk.CTkOptionMenu(
-            ordem_wrap,
-            values=["Recentes", "Antigos"],
-            variable=self.ordem_var,
-            width=116,
-            height=HEIGHT - 4,
-            fg_color=FILTER_INPUT_BG,
-            button_color=FILTER_INPUT_BG,
-            button_hover_color=FILTER_HOVER,
-            dropdown_fg_color=FILTER_DROPDOWN_BG,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-            corner_radius=FILTER_RADIUS - 2,
-            font=FONT,
-            dynamic_resizing=False,
-            command=lambda _: self._carregar_dados()
-        )
-        self.ordem_menu.place(relx=0.5, rely=0.5, anchor="center")
-        
-        self.btn_limpar = ctk.CTkButton(
-            bar,
-            text=" Limpar Filtros",
-            image=self.icons.get("delete") if self.icons.get("delete") else None,
-            compound="left",
-            width=130,
-            height=HEIGHT,
-            corner_radius=FILTER_RADIUS,
-            fg_color=FILTER_INPUT_BG,
-            hover_color=FILTER_HOVER,
-            border_width=1,
-            border_color=FILTER_BORDER,
-            text_color=AppTheme.TXT_MUTED,
-            font=("Segoe UI", 11),
-            command=self._limpar_filtros
-        )
-        self.btn_limpar.pack(side="right", padx=14, pady=PAD_Y)
-        
+        self.btn_limpar = QPushButton(" Limpar Filtros")
+        if self.icons.get("delete"):
+            self.btn_limpar.setIcon(QIcon(self.icons["delete"]))
+            self.btn_limpar.setIconSize(QSize(20, 20))
+        self.btn_limpar.setFixedSize(130, 38)
+        self.btn_limpar.setStyleSheet(self._button_style(
+            FILTER_INPUT_BG, FILTER_HOVER, AppTheme.TXT_MUTED,
+            radius=FILTER_RADIUS, border=1, border_color=FILTER_BORDER
+        ))
+        self.btn_limpar.clicked.connect(self._limpar_filtros)
+        bar_layout.addWidget(self.btn_limpar)
+
+        parent_layout.addWidget(bar)
+        parent_layout.addSpacing(20)
+
     def _carregar_dados(self):
-        termo = self.pesquisa_var.get().strip()
+        termo = self.pesquisa_input.text().strip()
         municipio = self.municipio_selector.get()
-        ano = self.ano_var.get()
-        ordem = self.ordem_var.get()
-        
+        ano = self.ano_combo.currentText()
+        ordem = self.ordem_combo.currentText()
+
         codigo_municipio = None
         if municipio != "Todos" and " - " in municipio:
             codigo_municipio = municipio.split(" - ")[0]
-        
-        for w in self.lista_scroll.winfo_children():
-            w.destroy()
-        
-        loading = ctk.CTkLabel(
-            self.lista_scroll,
-            text="⏳ Carregando...",
-            font=("Segoe UI", 13),
-            text_color=AppTheme.TXT_MUTED
-        )
-        loading.pack(pady=60)
-        
+
+        self._clear_layout(self.lista_layout)
+
+        loading = QLabel("⏳ Carregando...")
+        loading.setStyleSheet(f"""
+            color: {AppTheme.TXT_MUTED};
+            font-size: 13px;
+            background: transparent;
+            border: none;
+        """)
+        loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lista_layout.addWidget(loading)
+        self.lista_layout.addStretch()
+
         try:
             ok, msg, registros = self.controller.buscar_historico_com_filtros(
                 termo=termo,
@@ -445,91 +491,114 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
                 ano=ano if ano != "Todos" else None,
                 ordem=ordem
             )
-            
-            loading.destroy()
-            
+
+            self._clear_layout(self.lista_layout)
+
             if ok:
                 self.atualizar_lista(registros)
             else:
                 self._mostrar_erro(msg)
         except Exception as e:
-            loading.destroy()
+            self._clear_layout(self.lista_layout)
             self._mostrar_erro(f"Erro ao carregar dados: {str(e)}")
 
     def _mostrar_erro(self, mensagem: str):
-        ctk.CTkLabel(
-            self.lista_scroll,
-            text=f"❌ Erro: {mensagem}",
-            font=("Segoe UI", 13),
-            text_color="#ef4444"
-        ).pack(pady=60)
+        lbl = QLabel(f"❌ Erro: {mensagem}")
+        lbl.setStyleSheet("""
+            color: #ef4444;
+            font-size: 13px;
+            background: transparent;
+            border: none;
+        """)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lista_layout.addWidget(lbl)
+        self.lista_layout.addStretch()
 
     def atualizar_lista(self, registros):
-        for w in self.lista_scroll.winfo_children():
-            w.destroy()
+        self._clear_layout(self.lista_layout)
 
         if not registros:
-            ctk.CTkLabel(
-                self.lista_scroll,
-                text="📭 Nenhum memorando encontrado.",
-                font=("Segoe UI", 13),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(pady=60)
+            lbl = QLabel("📭 Nenhum memorando encontrado.")
+            lbl.setStyleSheet(f"""
+                color: {AppTheme.TXT_MUTED};
+                font-size: 13px;
+                background: transparent;
+                border: none;
+            """)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.lista_layout.addWidget(lbl)
+            self.lista_layout.addStretch()
             return
 
         for idx, reg in enumerate(registros):
             self._card(idx, reg)
 
+        self.lista_layout.addStretch()
+
     def _card(self, idx: int, reg: dict):
         bg = AppTheme.BG_CARD if idx % 2 == 0 else AppTheme.BG_INPUT
         hover_baixar = "#f1f5f9" if bg == AppTheme.BG_CARD else "#ffffff"
 
-        card = ctk.CTkFrame(self.lista_scroll,
-                            fg_color=bg, corner_radius=12)
-        card.pack(fill="x", pady=(0, 10), padx=2)
-        card.grid_columnconfigure(0, weight=1)
+        card = self._frame_card(bg, radius=12)
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(16)
 
-        info = ctk.CTkFrame(card, fg_color="transparent")
-        info.grid(row=0, column=0, sticky="nsew", padx=20, pady=16)
+        info = self._frame_transparent()
+        info_layout = QVBoxLayout(info)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(10)
 
-        linha1 = ctk.CTkFrame(info, fg_color="transparent")
-        linha1.pack(fill="x")
+        linha1 = self._frame_transparent()
+        linha1_layout = QHBoxLayout(linha1)
+        linha1_layout.setContentsMargins(0, 0, 0, 0)
+        linha1_layout.setSpacing(0)
 
-        memo_info = ctk.CTkFrame(linha1, fg_color="transparent")
-        memo_info.pack(side="left")
+        memo_info = self._frame_transparent()
+        memo_info_layout = QHBoxLayout(memo_info)
+        memo_info_layout.setContentsMargins(0, 0, 0, 0)
+        memo_info_layout.setSpacing(0)
 
         if self.icons.get("file_text"):
-            ctk.CTkLabel(
-                memo_info,
-                text="",
-                image=self.icons["file_text"],
-                width=20,
-                height=20
-            ).pack(side="left", padx=(0, 8))
+            memo_info_layout.addWidget(self._label_icon(self.icons["file_text"], width=20, height=20))
+            memo_info_layout.addSpacing(8)
 
-        ctk.CTkLabel(
-            memo_info,
-            text=f"Memo Nº {reg.get('numero', '—')}",
-            font=("Segoe UI", 15, "bold"),
-            text_color=AppTheme.TXT_MAIN,
-            anchor="w"
-        ).pack(side="left")
+        titulo_memo = QLabel(f"Memo Nº {reg.get('numero', '—')}")
+        titulo_memo.setStyleSheet(f"""
+            color: {AppTheme.TXT_MAIN};
+            font-size: 15px;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+        """)
+        memo_info_layout.addWidget(titulo_memo)
+        linha1_layout.addWidget(memo_info)
 
         unloc = reg.get("unloc", "—")
         if unloc != "—":
             cor_unloc = get_unloc_color(unloc)
-            badge = ctk.CTkFrame(linha1,
-                                 fg_color=cor_unloc,
-                                 corner_radius=6)
-            badge.pack(side="left", padx=(12, 0))
-            ctk.CTkLabel(badge,
-                         text=unloc,
-                         font=("Segoe UI", 11, "bold"),
-                         text_color="#ffffff",
-                         padx=12, pady=3).pack()
+            linha1_layout.addSpacing(12)
 
-        linha2 = ctk.CTkFrame(info, fg_color="transparent")
-        linha2.pack(fill="x", pady=(10, 0))
+            badge = QLabel(unloc)
+            badge.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {cor_unloc};
+                    color: #ffffff;
+                    border-radius: 6px;
+                    padding: 3px 12px;
+                    font-size: 11px;
+                    font-weight: 700;
+                }}
+            """)
+            linha1_layout.addWidget(badge)
+
+        linha1_layout.addStretch()
+        info_layout.addWidget(linha1)
+
+        linha2 = self._frame_transparent()
+        linha2_layout = QHBoxLayout(linha2)
+        linha2_layout.setContentsMargins(0, 0, 0, 0)
+        linha2_layout.setSpacing(32)
 
         meta = [
             ("calendar_days", "Emissão", reg.get("data_emissao", "—")),
@@ -538,94 +607,114 @@ class HistoricoMemorandoView(ctk.CTkToplevel):
         ]
 
         for icon_name, titulo, valor in meta:
-            bloco = ctk.CTkFrame(linha2, fg_color="transparent")
-            bloco.pack(side="left", padx=(0, 32))
+            bloco = self._frame_transparent()
+            bloco_layout = QVBoxLayout(bloco)
+            bloco_layout.setContentsMargins(0, 0, 0, 0)
+            bloco_layout.setSpacing(2)
 
-            titulo_row = ctk.CTkFrame(bloco, fg_color="transparent")
-            titulo_row.pack(anchor="w")
+            titulo_row = self._frame_transparent()
+            titulo_row_layout = QHBoxLayout(titulo_row)
+            titulo_row_layout.setContentsMargins(0, 0, 0, 0)
+            titulo_row_layout.setSpacing(5)
 
             if self.icons.get(icon_name):
-                ctk.CTkLabel(
-                    titulo_row,
-                    text="",
-                    image=self.icons[icon_name],
-                    width=16,
-                    height=16
-                ).pack(side="left", padx=(0, 5))
+                titulo_row_layout.addWidget(self._label_icon(self.icons[icon_name], width=16, height=16))
 
-            ctk.CTkLabel(
-                titulo_row,
-                text=titulo,
-                font=("Segoe UI", 10),
-                text_color="#6b7280"
-            ).pack(side="left")
+            titulo_lbl = QLabel(titulo)
+            titulo_lbl.setStyleSheet("""
+                color: #6b7280;
+                font-size: 10px;
+                font-weight: 400;
+                background: transparent;
+                border: none;
+            """)
+            titulo_row_layout.addWidget(titulo_lbl)
+            titulo_row_layout.addStretch()
 
-            ctk.CTkLabel(
-                bloco,
-                text=valor,
-                font=("Segoe UI", 11),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(anchor="w")
-            
-        btns = ctk.CTkFrame(card, fg_color="transparent")
-        btns.grid(row=0, column=1, sticky="ns", padx=(0, 20), pady=16)
+            valor_lbl = QLabel(str(valor))
+            valor_lbl.setStyleSheet(f"""
+                color: {AppTheme.TXT_MUTED};
+                font-size: 11px;
+                font-weight: 400;
+                background: transparent;
+                border: none;
+            """)
+
+            bloco_layout.addWidget(titulo_row)
+            bloco_layout.addWidget(valor_lbl)
+            linha2_layout.addWidget(bloco)
+
+        linha2_layout.addStretch()
+        info_layout.addWidget(linha2)
+
+        card_layout.addWidget(info, 1)
+
+        btns = self._frame_transparent()
+        btns_layout = QVBoxLayout(btns)
+        btns_layout.setContentsMargins(0, 0, 0, 0)
+        btns_layout.setSpacing(8)
 
         if self.on_visualizar:
-            btn_visualizar = ctk.CTkButton(
-                btns,
-                text=" Visualizar",
-                image=self.icons.get("eye") if self.icons.get("eye") else None,
-                compound="left",
-                width=120, height=38,
-                corner_radius=10,
-                fg_color=AppTheme.BTN_PRIMARY,
-                hover_color=AppTheme.BTN_PRIMARY_HOVER,
-                font=("Segoe UI", 12, "bold"),
-                text_color="#ffffff",
-                command=lambda mid=reg.get("id"): self._visualizar_com_tratamento(mid)
+            texto_visualizar = " Visualizar" if self.icons.get("eye") else "👁️ Visualizar"
+            btn_visualizar = QPushButton(texto_visualizar)
+            if self.icons.get("eye"):
+                btn_visualizar.setIcon(QIcon(self.icons["eye"]))
+                btn_visualizar.setIconSize(QSize(22, 22))
+            btn_visualizar.setFixedSize(120, 38)
+            btn_visualizar.setStyleSheet(self._button_style(
+                AppTheme.BTN_PRIMARY,
+                AppTheme.BTN_PRIMARY_HOVER,
+                "#ffffff",
+                radius=10,
+                bold=True
+            ))
+            btn_visualizar.clicked.connect(
+                lambda _, mid=reg.get("id"): self._visualizar_com_tratamento(mid)
             )
-            if not self.icons.get("eye"):
-                btn_visualizar.configure(text="👁️ Visualizar")
-            btn_visualizar.pack(pady=(0, 8))
+            btns_layout.addWidget(btn_visualizar)
 
         if self.on_baixar:
-            btn_baixar = ctk.CTkButton(
-                btns,
-                text=" Baixar",
-                image=self.icons.get("download") if self.icons.get("download") else None,
-                compound="left",
-                width=120,
-                height=38,
-                corner_radius=10,
-                fg_color=bg,
-                hover_color=hover_baixar,
-                border_width=0,
-                font=("Segoe UI", 12),
-                text_color=AppTheme.TXT_MAIN,
-                command=lambda mid=reg.get("id"), num=reg.get("numero", ""): self._baixar_com_tratamento(mid, num)
+            texto_baixar = " Baixar" if self.icons.get("download") else "⬇️ Baixar"
+            btn_baixar = QPushButton(texto_baixar)
+            if self.icons.get("download"):
+                btn_baixar.setIcon(QIcon(self.icons["download"]))
+                btn_baixar.setIconSize(QSize(22, 22))
+            btn_baixar.setFixedSize(120, 38)
+            btn_baixar.setStyleSheet(self._button_style(
+                bg,
+                hover_baixar,
+                AppTheme.TXT_MAIN,
+                radius=10,
+                border=0
+            ))
+            btn_baixar.clicked.connect(
+                lambda _, mid=reg.get("id"), num=reg.get("numero", ""): self._baixar_com_tratamento(mid, num)
             )
-            if not self.icons.get("download"):
-                btn_baixar.configure(text="⬇️ Baixar")
-            btn_baixar.pack()
+            btns_layout.addWidget(btn_baixar)
+
+        btns_layout.addStretch()
+        card_layout.addWidget(btns, 0)
+
+        self.lista_layout.addWidget(card)
 
     def _visualizar_com_tratamento(self, memorando_id):
         if not memorando_id:
-            messagebox.showerror("Erro", "ID do memorando não encontrado.")
+            QMessageBox.critical(self, "Erro", "ID do memorando não encontrado.")
             return
-        
+
         try:
             if self.on_visualizar:
                 self.on_visualizar(memorando_id)
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao abrir memorando:\n{str(e)}")
+            QMessageBox.critical(self, "Erro", f"Erro ao abrir memorando:\n{str(e)}")
 
     def _baixar_com_tratamento(self, memorando_id, numero):
         if not memorando_id:
-            messagebox.showerror("Erro", "ID do memorando não encontrado.")
+            QMessageBox.critical(self, "Erro", "ID do memorando não encontrado.")
             return
-        
+
         try:
             if self.on_baixar:
                 self.on_baixar(memorando_id, numero)
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao baixar memorando:\n{str(e)}")
+            QMessageBox.critical(self, "Erro", f"Erro ao baixar memorando:\n{str(e)}")

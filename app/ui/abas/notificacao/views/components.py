@@ -3,7 +3,9 @@
 Componentes reutilizáveis para interface de email
 """
 
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 from app.theme import AppTheme
 
 class EmailStatusIndicator(ctk.CTkFrame):

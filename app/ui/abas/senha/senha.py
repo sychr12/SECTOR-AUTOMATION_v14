@@ -3,7 +3,9 @@
 Módulo para trocar senha SEFAZ — Design Corporativo com Ícones
 """
 
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 from tkinter import END, messagebox
 import os
 from PIL import Image

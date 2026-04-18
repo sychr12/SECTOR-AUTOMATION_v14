@@ -10,7 +10,7 @@ class ConfiguracaoUsuariosService:
 
 class HistoricoUsuariosService:
     def registrar_operacao(self, usuario: str, tipo: str, descricao: str):
-        print(
-            f"[HISTORICO] {datetime.utcnow().isoformat()} | "
-            f"{usuario} | {tipo.upper()} | {descricao}"
-        )
+        # print(
+        #     f"[HISTORICO] {datetime.utcnow().isoformat()} | "
+        #     f"{usuario} | {tipo.upper()} | {descricao}"
+        # )

@@ -1,63 +1,38 @@
 # -*- coding: utf-8 -*-
 """
-Tela de Login - Sistema com Redirecionamento por Perfil
+Tela de Login - PyQt6 com HTML/CSS/JS (Design Agropecuário) - Versão Corrigida
 Carteira do Produtor Rural
 """
 
-import customtkinter as ctk
-from tkinter import messagebox
-import webbrowser
+import sys
 import json
 import os
 import base64
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QMessageBox
+from PyQt6.QtCore import QObject, pyqtSlot, QTimer, QUrl
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebChannel import QWebChannel
 
+# Importações do seu sistema
 from services.login_repository import validar_usuario, registrar_acesso
-from app.theme import AppTheme
 
-
-# ── Paleta Corporativa Premium ────────────────────────────────────────────────────
-_PRIMARY_DARK    = "#0a2540"      # Azul marinho profundo
-_PRIMARY         = "#1a4b6e"      # Azul corporativo médio
-_PRIMARY_LIGHT   = "#2c6e9e"      # Azul para destaques
-_ACCENT          = "#2c6e9e"      # Azul principal como acento
-_ACCENT_DARK     = "#1e4a6e"      # Azul escuro para hover
-_ACCENT_LIGHT    = "#e8f0f8"      # Azul muito claro para fundos
-_BRANCO          = "#ffffff"
-_CINZA_BG        = "#f5f7fc"      # Fundo cinza azulado
-_CINZA_CARD      = "#ffffff"      # Branco para cards
-_CINZA_BORDER    = "#e2e8f0"      # Borda suave
-_CINZA_MEDIO     = "#5a6e8a"      # Cinza azulado para textos secundários
-_CINZA_TEXTO     = "#1e2f3e"      # Azul acinzentado escuro
-_VERDE_STATUS    = "#2c6e9e"      # Azul para status
-_DANGER          = "#dc2626"      # Vermelho para erros
-_DANGER_DK       = "#b91c1c"      # Vermelho escuro
-_DANGER_LIGHT    = "#fee2e2"      # Vermelho claro para fundo de erro
-
-# Elementos de texto
-_TEXTO_SUAVE     = "#2c6e9e"
-_MUTED           = "#5a6e8a"
-_BORDER_FOCUS    = "#2c6e9e"
-
-# ── Configurações de "Lembrar-me" ────────────────────────────────────────────────
+# ── Configurações de "Lembrar-me" (com criptografia) ──────────────────────────
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 REMEMBER_FILE = os.path.join(DATA_DIR, "remember_me.json")
 SALT_FILE = os.path.join(DATA_DIR, "salt.key")
 
+
 class RememberMeManager:
-    """Gerenciador de credenciais para 'Lembrar-me'"""
-    
     def __init__(self):
         self.cipher = None
         self._init_crypto()
-    
+
     def _init_crypto(self):
-        """Inicializa a criptografia para armazenamento seguro"""
         try:
-            # Carrega ou cria o salt
             if os.path.exists(SALT_FILE):
                 with open(SALT_FILE, 'rb') as f:
                     salt = f.read()
@@ -65,38 +40,31 @@ class RememberMeManager:
                 salt = os.urandom(16)
                 with open(SALT_FILE, 'wb') as f:
                     f.write(salt)
-            
-            # Deriva a chave usando PBKDF2
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
                 salt=salt,
                 iterations=100000,
             )
-            # Chave fixa derivada de um identificador do sistema
             key = base64.urlsafe_b64encode(kdf.derive(b"SECTOR_AUTOMATION_SECRET_KEY_2026"))
             self.cipher = Fernet(key)
         except Exception:
-            # Fallback: gera chave aleatória se falhar
             self.cipher = Fernet(Fernet.generate_key())
-    
+
     def _encrypt(self, data: str) -> str:
-        """Criptografa dados"""
         if not data:
             return ""
         return self.cipher.encrypt(data.encode()).decode()
-    
+
     def _decrypt(self, encrypted_data: str) -> str:
-        """Descriptografa dados"""
         if not encrypted_data:
             return ""
         try:
             return self.cipher.decrypt(encrypted_data.encode()).decode()
         except Exception:
             return ""
-    
+
     def save_credentials(self, username: str, password: str, remember: bool):
-        """Salva credenciais se 'lembrar' estiver marcado"""
         if remember and username and password:
             data = {
                 "username": self._encrypt(username),
@@ -106,11 +74,9 @@ class RememberMeManager:
             with open(REMEMBER_FILE, 'w') as f:
                 json.dump(data, f)
         elif not remember and os.path.exists(REMEMBER_FILE):
-            # Remove o arquivo se não quiser lembrar
             os.remove(REMEMBER_FILE)
-    
+
     def load_credentials(self):
-        """Carrega credenciais salvas"""
         try:
             if os.path.exists(REMEMBER_FILE):
                 with open(REMEMBER_FILE, 'r') as f:
@@ -124,615 +90,267 @@ class RememberMeManager:
         return "", "", False
 
 
-class Login(ctk.CTkFrame):
-    """Tela de login do sistema - Design Corporativo"""
-
-    def __init__(self, parent, on_success):
-        super().__init__(parent)
-        self.on_success = on_success
-        self.janela     = None
-        self.processando = False
+# ── Bridge JS ↔ Python ────────────────────────────────────────────────────────
+class LoginBridge(QObject):
+    def __init__(self, window):
+        super().__init__()
+        self.window = window
         self.remember_manager = RememberMeManager()
 
-        self.configure(fg_color=_CINZA_BG)
-        self.pack(expand=True, fill="both")
-
-        self._criar_layout()
-        self._carregar_credenciais_salvas()
-        self._configurar_atalhos()
-
-    # ══════════════════════════════════════════════════════════════════
-    # FUNÇÕES DE "LEMBRAR-ME"
-    # ══════════════════════════════════════════════════════════════════
-    def _carregar_credenciais_salvas(self):
-        """Carrega credenciais salvas e preenche os campos"""
-        username, password, remember = self.remember_manager.load_credentials()
-        if username and remember:
-            self.entry_usuario.insert(0, username)
-            self.entry_senha.insert(0, password)
-            self.var_lembrar.set(True)
-            # Opcional: focar no botão de login
-            self.btn_entrar.focus()
-    
-    def _salvar_credenciais(self):
-        """Salva credenciais se o checkbox estiver marcado"""
-        username = self.entry_usuario.get().strip()
-        password = self.entry_senha.get().strip()
-        remember = self.var_lembrar.get()
-        
-        if remember:
-            # Só salva se o login for bem-sucedido
-            self.remember_manager.save_credentials(username, password, remember)
-        else:
-            # Remove credenciais salvas se desmarcou
-            self.remember_manager.save_credentials("", "", False)
-    
-    def _limpar_credenciais_salvas(self):
-        """Limpa credenciais salvas (usado em logout)"""
-        self.remember_manager.save_credentials("", "", False)
-
-    # ══════════════════════════════════════════════════════════════════
-    # LAYOUT
-    # ══════════════════════════════════════════════════════════════════
-    def _criar_layout(self):
-        # ── Painel esquerdo institucional ──────────────────────────────────────
-        self.painel_esq = ctk.CTkFrame(
-            self,
-            width=420,
-            corner_radius=0,
-            fg_color=_PRIMARY_DARK,
-        )
-        self.painel_esq.place(relx=0, rely=0, relheight=1, relwidth=0.4)
-        self.painel_esq.pack_propagate(False)
-
-        # Conteúdo do painel esquerdo
-        painel_inner = ctk.CTkFrame(self.painel_esq, fg_color="transparent")
-        painel_inner.place(relx=0.5, rely=0.5, anchor="center")
-
-        # Brasão/Logo institucional
-        logo_container = ctk.CTkFrame(
-            painel_inner,
-            width=80,
-            height=80,
-            corner_radius=40,
-            fg_color=_ACCENT,
-        )
-        logo_container.pack(pady=(0, 32))
-        logo_container.pack_propagate(False)
-        
-        ctk.CTkLabel(
-            logo_container,
-            text="⚖️",
-            font=("Segoe UI", 40),
-            text_color=_BRANCO,
-        ).place(relx=0.5, rely=0.5, anchor="center")
-
-        ctk.CTkLabel(
-            painel_inner,
-            text="Carteira do\nProdutor Rural",
-            font=("Segoe UI", 28, "bold"),
-            text_color=_BRANCO,
-            justify="center",
-        ).pack(pady=(0, 12))
-
-        # Linha decorativa
-        ctk.CTkFrame(
-            painel_inner,
-            width=60,
-            height=2,
-            fg_color=_ACCENT,
-            corner_radius=1,
-        ).pack(pady=(0, 24))
-
-        ctk.CTkLabel(
-            painel_inner,
-            text="Instituto de Desenvolvimento\nAgropecuário do Amazonas",
-            font=("Segoe UI", 12),
-            text_color="#b8d0e5",
-            justify="center",
-        ).pack(pady=(0, 16))
-
-        ctk.CTkLabel(
-            painel_inner,
-            text="IDAM",
-            font=("Segoe UI", 14, "bold"),
-            text_color=_BRANCO,
-        ).pack()
-
-        # ── Card direito (formulário) ──────────────────────────────────────────
-        self.card = ctk.CTkFrame(
-            self,
-            corner_radius=16,
-            fg_color=_CINZA_CARD,
-        )
-        
-        self.card.place(relx=0.7, rely=0.5, anchor="center", relwidth=0.55, relheight=0.82)
-        
-        # Borda sutil
-        self.card.configure(border_width=1, border_color=_CINZA_BORDER)
-
-        # Container interno ocupando o cardno
-        outer = ctk.CTkFrame(self.card, fg_color="transparent")
-        outer.pack(fill="both", expand=True)
-
-        # Bloco centralizado dentro do card
-        content = ctk.CTkFrame(outer, fg_color="transparent")
-        content.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.88)
-
-        # Título
-        title_frame = ctk.CTkFrame(content, fg_color="transparent")
-        title_frame.pack(fill="x", pady=(0, 36))
-        
-        ctk.CTkLabel(
-            title_frame,
-            text="Acessar Sistema",
-            font=("Segoe UI", 28, "bold"),
-            text_color=_CINZA_TEXTO,
-        ).pack(anchor="w")
-
-        ctk.CTkLabel(
-            title_frame,
-            text="Informe suas credenciais para continuar",
-            font=("Segoe UI", 13),
-            text_color=_MUTED,
-        ).pack(anchor="w", pady=(6, 0))
-
-        # ── Campo Usuário ─────────────────────────────────────────────────────
-        ctk.CTkLabel(
-            content,
-            text="USUÁRIO",
-            font=("Segoe UI", 11, "bold"),
-            text_color=_MUTED,
-        ).pack(anchor="w", pady=(0, 8))
-
-        self.entry_usuario = ctk.CTkEntry(
-            content,
-            placeholder_text="Digite seu nome de usuário",
-            height=48,
-            corner_radius=8,
-            font=("Segoe UI", 13),
-            fg_color=_CINZA_BG,
-            border_width=1,
-            border_color=_CINZA_BORDER,
-            text_color=_CINZA_TEXTO,
-        )
-        self.entry_usuario.pack(fill="x", pady=(0, 24))
-        self.entry_usuario.focus()
-        
-        # ── Campo Senha ───────────────────────────────────────────────────────
-        ctk.CTkLabel(
-            content,
-            text="SENHA",
-            font=("Segoe UI", 11, "bold"),
-            text_color=_MUTED,
-        ).pack(anchor="w", pady=(0, 8))
-
-        frame_senha = ctk.CTkFrame(content, fg_color="transparent")
-        frame_senha.pack(fill="x", pady=(0, 8))
-
-        self.entry_senha = ctk.CTkEntry(
-            frame_senha,
-            placeholder_text="Digite sua senha",
-            height=48,
-            corner_radius=8,
-            show="*",
-            font=("Segoe UI", 13),
-            fg_color=_CINZA_BG,
-            border_width=1,
-            border_color=_CINZA_BORDER,
-            text_color=_CINZA_TEXTO,
-        )
-        self.entry_senha.pack(side="left", fill="x", expand=True, padx=(0, 12))
-
-        self.btn_ver_senha = ctk.CTkButton(
-            frame_senha,
-            text="👁️",
-            width=48,
-            height=48,
-            corner_radius=8,
-            font=("Segoe UI", 14),
-            fg_color=_CINZA_BG,
-            hover_color=_ACCENT_LIGHT,
-            text_color=_MUTED,
-            border_width=1,
-            border_color=_CINZA_BORDER,
-            command=self._toggle_senha,
-        )
-        self.btn_ver_senha.pack(side="left")
-
-        # ── Linha lembrar + esqueci ───────────────────────────────────────────
-        linha_opts = ctk.CTkFrame(content, fg_color="transparent")
-        linha_opts.pack(fill="x", pady=(24, 32))
-
-        self.var_lembrar = ctk.BooleanVar(value=False)
-
-        self.chk_lembrar = ctk.CTkCheckBox(
-            linha_opts,
-            text="Lembrar-me",
-            variable=self.var_lembrar,
-            font=("Segoe UI", 12),
-            text_color=_MUTED,
-            fg_color=_ACCENT,
-            hover_color=_ACCENT_DARK,
-            border_color=_CINZA_BORDER,
-            checkmark_color=_BRANCO,
-            border_width=2,
-            corner_radius=4,
-            command=self._on_lembrar_changed,
-        )
-        self.chk_lembrar.pack(side="left")
-
-        forgot_label = ctk.CTkLabel(
-            linha_opts,
-            text="Esqueci minha senha",
-            font=("Segoe UI", 12),
-            text_color=_ACCENT,
-            cursor="hand2",
-        )
-        forgot_label.pack(side="right")
-
-        forgot_label.bind("<Button-1>", lambda e: self._recuperar_senha())
-        forgot_label.bind("<Enter>", lambda e: forgot_label.configure(text_color=_ACCENT_DARK))
-        forgot_label.bind("<Leave>", lambda e: forgot_label.configure(text_color=_ACCENT))
-                
-        # ── Botão entrar ──────────────────────────────────────────────────────
-        self.btn_entrar = ctk.CTkButton(
-            content,
-            text="Entrar no Sistema",
-            height=52,
-            corner_radius=8,
-            font=("Segoe UI", 13, "bold"),
-            fg_color=_ACCENT,
-            hover_color=_ACCENT_DARK,
-            text_color=_BRANCO,
-            command=self.fazer_login,
-        )
-        self.btn_entrar.pack(pady=(0, 20))
-        self.btn_entrar.configure(width=260)
-
-        # ── Linha divisória ───────────────────────────────────────────────────
-        divider = ctk.CTkFrame(content, fg_color="transparent")
-        divider.pack(fill="x", pady=(0, 20))
-
-        ctk.CTkFrame(
-            divider,
-            height=1,
-            fg_color=_CINZA_BORDER,
-        ).pack(fill="x")
-
-        # ── Rodapé institucional ──────────────────────────────────────────────
-        footer_frame = ctk.CTkFrame(content, fg_color="transparent")
-        footer_frame.pack(fill="x")
-
-        ctk.CTkLabel(
-            footer_frame,
-            text="© 2026 IDAM - Instituto de Desenvolvimento Agropecuário do Amazonas",
-            font=("Segoe UI", 10),
-            text_color=_MUTED,
-            wraplength=380,
-            justify="center",
-        ).pack(pady=(16, 0))
-        
-        # ── Botão tema (canto superior direito) ───────────────────────────────
-        self.btn_tema = ctk.CTkButton(
-            self,
-            text="🌙",
-            width=40,
-            height=40,
-            corner_radius=20,
-            font=("Segoe UI", 16),
-            fg_color=_BRANCO,
-            hover_color=_ACCENT_LIGHT,
-            text_color=_MUTED,
-            border_width=1,
-            border_color=_CINZA_BORDER,
-            command=self._alternar_tema,
-        )
-        self.btn_tema.place(relx=0.96, rely=0.04, anchor="ne")
-
-        # Bind Enter
-        self.entry_usuario.bind("<Return>", lambda _: self.entry_senha.focus())
-        self.entry_senha.bind("<Return>", lambda _: self.fazer_login())
-
-    def _on_lembrar_changed(self):
-        """Callback quando o checkbox de lembrar é alterado"""
-        # Se o usuário desmarcar, limpa as credenciais salvas
-        if not self.var_lembrar.get():
-            self.remember_manager.save_credentials("", "", False)
-
-    # ══════════════════════════════════════════════════════════════════
-    # FUNÇÕES DE UI
-    # ══════════════════════════════════════════════════════════════════
-    def _toggle_senha(self):
-        if self.entry_senha.cget("show") == "*":
-            self.entry_senha.configure(show="")
-            self.btn_ver_senha.configure(text="🙈")
-        else:
-            self.entry_senha.configure(show="*")
-            self.btn_ver_senha.configure(text="👁️")
-
-    def _set_ui_estado_processando(self, processando):
-        self.processando = processando
-        if processando:
-            try:
-                self.btn_entrar.configure(
-                    state="disabled", 
-                    text="⏳ Autenticando...",
-                    fg_color=_CINZA_MEDIO)
-                self.entry_usuario.configure(state="disabled")
-                self.entry_senha.configure(state="disabled")
-                self.chk_lembrar.configure(state="disabled")
-            except Exception:
-                pass
-        else:
-            try:
-                self.btn_entrar.configure(
-                    state="normal", 
-                    text="Entrar no Sistema",
-                    fg_color=_ACCENT)
-                self.entry_usuario.configure(state="normal")
-                self.entry_senha.configure(state="normal")
-                self.chk_lembrar.configure(state="normal")
-            except Exception:
-                pass
-
-    def _animacao_login(self, sucesso):
-        if sucesso:
-            # Efeito de brilho no card
-            original_border = self.card.cget("border_color")
-            self.card.configure(border_color=_ACCENT, border_width=2)
-            self.after(500, lambda: self.card.configure(border_color=original_border, border_width=1))
-        else:
-            # Efeito de erro nos campos
-            self.entry_usuario.configure(border_color=_DANGER, border_width=1)
-            self.entry_senha.configure(border_color=_DANGER, border_width=1)
-            self.after(800, lambda: (
-                self.entry_usuario.configure(border_color=_CINZA_BORDER),
-                self.entry_senha.configure(border_color=_CINZA_BORDER),
-            ))
-
-    def _alternar_tema(self):
-        modo = ctk.get_appearance_mode()
-        novo = "Light" if modo == "Dark" else "Dark"
-        ctk.set_appearance_mode(novo)
-        self.btn_tema.configure(text="☀️" if novo == "Light" else "🌙")
-
-    # ══════════════════════════════════════════════════════════════════
-    # VALIDAÇÃO
-    # ══════════════════════════════════════════════════════════════════
-    def _validar_campos(self):
-        usuario = self.entry_usuario.get().strip()
-        senha   = self.entry_senha.get().strip()
-        erros   = []
-
-        self.entry_usuario.configure(border_color=_CINZA_BORDER)
-        self.entry_senha.configure(border_color=_CINZA_BORDER)
-
-        if not usuario:
-            erros.append("• Informe o usuário")
-            self.entry_usuario.configure(border_color=_DANGER)
-        elif len(usuario) < 3:
-            erros.append("• O usuário deve ter pelo menos 3 caracteres")
-            self.entry_usuario.configure(border_color=_DANGER)
-
-        if not senha:
-            erros.append("• Informe a senha")
-            self.entry_senha.configure(border_color=_DANGER)
-        elif len(senha) < 4:
-            erros.append("• Senha muito curta")
-            self.entry_senha.configure(border_color=_DANGER)
-
-        return erros
-
-    # ══════════════════════════════════════════════════════════════════
-    # LOGIN
-    # ══════════════════════════════════════════════════════════════════
-    def fazer_login(self):
-        if self.processando:
-            return
-
-        erros = self._validar_campos()
-        if erros:
-            messagebox.showerror(
-                "Erro de Validação",
-                "Por favor, corrija:\n\n" + "\n".join(erros))
-            return
-
-        usuario_digitado = self.entry_usuario.get().strip()
-        senha_digitada   = self.entry_senha.get().strip()
-
-        self._set_ui_estado_processando(True)
-
+    @pyqtSlot(str)
+    def doLogin(self, data_json):
         try:
-            usuario_validado = validar_usuario(usuario_digitado, senha_digitada)
+            data = json.loads(data_json)
+            username = data.get("username", "")
+            password = data.get("password", "")
+            remember = data.get("remember", False)
 
-            if not usuario_validado:
-                messagebox.showerror(
-                    "Acesso Negado",
-                    "Usuário ou senha incorretos.\n\nVerifique suas credenciais.")
-                self._animacao_login(False)
-                self.entry_senha.delete(0, "end")
-                self.entry_senha.focus()
+            if not username or not password:
+                self.window.show_message("Preencha todos os campos!", error=True)
                 return
 
-            # Login bem-sucedido - salva credenciais se "Lembrar-me" estiver marcado
-            self._salvar_credenciais()
+            usuario = validar_usuario(username, password)
 
-            registrar_acesso(usuario_validado)
-            self._animacao_login(True)
+            if usuario:
+                if remember:
+                    self.remember_manager.save_credentials(username, password, True)
+                else:
+                    self.remember_manager.save_credentials("", "", False)
 
-            perfil = usuario_validado.get("perfil", "usuario").capitalize()
-            messagebox.showinfo(
-                "Acesso Autorizado",
-                f"Bem-vindo(a), {usuario_validado['username']}!\n\n"
-                f"Perfil: {perfil}")
+                registrar_acesso(usuario)
 
-            self.destroy()
-            self.on_success(usuario_validado)
-
+                nome_exibicao = usuario.get('nome') or usuario.get('username') or 'Usuario'
+                msg = f"Acesso autorizado! Bem-vindo(a), {nome_exibicao}."
+                self.window.show_message(msg, error=False)
+                
+                # Pequeno delay para mostrar a mensagem antes de redirecionar
+                QTimer.singleShot(500, lambda: self.window.redirect_after_login(usuario))
+            else:
+                self.window.show_message("Usuario ou senha invalidos.", error=True)
+                self.window.run_js('document.getElementById("passwordModern").value = "";')
         except Exception as e:
-            messagebox.showerror(
-                "Erro no Sistema",
-                f"Erro inesperado ao fazer login:\n\n{str(e)}")
+            self.window.show_message(f"Erro interno: {str(e)}", error=True)
 
-        finally:
-            self._set_ui_estado_processando(False)
-
-    # ══════════════════════════════════════════════════════════════════
-    # RECUPERAÇÃO DE SENHA
-    # ══════════════════════════════════════════════════════════════════
-    def _recuperar_senha(self):
-        if self.janela:
-            self.janela.destroy()
-
-        self.janela = ctk.CTkToplevel(self)
-        self.janela.title("Recuperar Senha - IDAM")
-        self.janela.geometry("540x500")
-        self.janela.resizable(False, False)
-        self.janela.configure(fg_color=_BRANCO)
-        self.janela.grab_set()
-        self.janela.focus()
-        self.after(50, self._centralizar_janela)
-
-        # Faixa superior institucional
-        top_bar = ctk.CTkFrame(
-            self.janela,
-            height=4,
-            corner_radius=0,
-            fg_color=_ACCENT,
+    @pyqtSlot()
+    def forgotPassword(self):
+        QMessageBox.information(
+            self.window,
+            "Recuperar Senha",
+            "Entre em contato com o suporte:\n\n"
+            "suporte@idam.am.gov.br\n"
+            "(92) 2121-0000\n"
+            "WhatsApp (92) 98400-0000"
         )
-        top_bar.pack(fill="x")
 
-        frame = ctk.CTkFrame(self.janela, fg_color="transparent")
-        frame.pack(fill="both", expand=True, padx=48, pady=40)
+    @pyqtSlot()
+    def register(self):
+        self.window.run_js('''
+            document.getElementById("usernameModern").value = "admin";
+            document.getElementById("passwordModern").value = "admin123";
+            document.getElementById("rememberModern").checked = true;
+            showMessage("Credenciais de demonstracao preenchidas! Clique em Entrar.", false);
+        ''')
 
-        # Ícone e título
-        ctk.CTkLabel(
-            frame,
-            text="🔐",
-            font=("Segoe UI", 56),
-            text_color=_ACCENT,
-        ).pack(pady=(0, 16))
+    @pyqtSlot(result=str)
+    def loadSavedCredentials(self):
+        user, pwd, remember = self.remember_manager.load_credentials()
+        if user and remember:
+            return json.dumps({"username": user, "password": pwd, "remember": True})
+        return json.dumps({"username": "", "password": "", "remember": False})
+
+
+# ── Janela Principal de Login (PyQt6) ─────────────────────────────────────────
+class Login(QMainWindow):
+    def __init__(self, on_success=None, parent=None):
+        super().__init__(parent)
+        self.on_success = on_success
+        self.setWindowTitle("Sector Automation | Sistema Agropecuario")
+        self.resize(1280, 800)
+        self.setMinimumSize(900, 600)
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.web_view = QWebEngineView()
+        layout.addWidget(self.web_view)
+
+        self.bridge = LoginBridge(self)
         
-        ctk.CTkLabel(
-            frame,
-            text="Recuperação de Acesso",
-            font=("Segoe UI", 24, "bold"),
-            text_color=_CINZA_TEXTO,
-        ).pack(pady=(0, 8))
-
-        ctk.CTkLabel(
-            frame,
-            text="Entre em contato com nossa central de suporte",
-            font=("Segoe UI", 13),
-            text_color=_MUTED,
-        ).pack(pady=(0, 32))
-
-        # Cards de contato
-        contatos = [
-            ("📧", "E-mail Institucional", "suporte@idam.am.gov.br", 
-             "mailto:suporte@idam.am.gov.br?subject=Recuperação de Senha - Sistema IDAM"),
-            ("📞", "Central de Atendimento", "(92) 2121-0000", None),
-            ("💬", "WhatsApp Institucional", "(92) 98400-0000", 
-             "https://wa.me/5592984000000?text=Recuperação de Senha - Sistema IDAM"),
-        ]
+        # Configurar QWebChannel
+        self.channel = QWebChannel(self.web_view.page())
+        self.channel.registerObject("bridge", self.bridge)
+        self.web_view.page().setWebChannel(self.channel)
         
-        for icone, titulo, valor, link in contatos:
-            card = ctk.CTkFrame(frame, fg_color=_CINZA_BG, corner_radius=12)
-            card.pack(fill="x", pady=(0, 12))
-            
-            row = ctk.CTkFrame(card, fg_color="transparent")
-            row.pack(fill="x", padx=20, pady=16)
-            
-            # Ícone
-            icon_frame = ctk.CTkFrame(row, width=48, height=48, corner_radius=12, fg_color=_BRANCO)
-            icon_frame.pack(side="left", padx=(0, 16))
-            icon_frame.pack_propagate(False)
-            
-            ctk.CTkLabel(
-                icon_frame,
-                text=icone,
-                font=("Segoe UI", 20),
-                text_color=_ACCENT,
-            ).place(relx=0.5, rely=0.5, anchor="center")
-            
-            # Texto
-            text_frame = ctk.CTkFrame(row, fg_color="transparent")
-            text_frame.pack(side="left")
-            
-            ctk.CTkLabel(
-                text_frame,
-                text=titulo,
-                font=("Segoe UI", 11),
-                text_color=_MUTED,
-            ).pack(anchor="w")
-            
-            valor_label = ctk.CTkLabel(
-                text_frame,
-                text=valor,
-                font=("Segoe UI", 14, "bold"),
-                text_color=_ACCENT if link else _CINZA_TEXTO,
-                cursor="hand2" if link else "",
-            )
-            valor_label.pack(anchor="w", pady=(4, 0))
-            
-            if link:
-                valor_label.bind("<Button-1>", lambda e, l=link: webbrowser.open(l))
-                valor_label.bind("<Enter>", lambda e, lbl=valor_label: lbl.configure(text_color=_ACCENT_DARK))
-                valor_label.bind("<Leave>", lambda e, lbl=valor_label: lbl.configure(text_color=_ACCENT))
-
-        # Informação adicional
-        info_frame = ctk.CTkFrame(frame, fg_color=_ACCENT_LIGHT, corner_radius=8)
-        info_frame.pack(fill="x", pady=(24, 16))
+        # Carregar o HTML
+        self.web_view.setHtml(self._get_html())
         
-        ctk.CTkLabel(
-            info_frame,
-            text="ℹ️ Atendimento: Segunda a Sexta, 8h às 18h",
-            font=("Segoe UI", 11),
-            text_color=_CINZA_TEXTO,
-        ).pack(pady=12)
+        # Aguardar o carregamento da página para carregar as credenciais salvas
+        self.web_view.loadFinished.connect(self._on_page_loaded)
 
-        ctk.CTkButton(
-            frame,
-            text="Fechar",
-            height=48,
-            corner_radius=8,
-            font=("Segoe UI", 13, "bold"),
-            fg_color=_CINZA_BG,
-            hover_color=_ACCENT_LIGHT,
-            text_color=_CINZA_TEXTO,
-            border_width=1,
-            border_color=_CINZA_BORDER,
-            command=self._fechar_janela,
-        ).pack()
+    def _on_page_loaded(self, ok):
+        if ok:
+            # Carregar credenciais salvas
+            self.run_js('''
+                setTimeout(function() {
+                    if (typeof loadSavedCredentials === 'function') {
+                        loadSavedCredentials();
+                    }
+                }, 500);
+            ''')
 
-    def _centralizar_janela(self):
-        if not self.janela:
-            return
-        self.janela.update_idletasks()
-        w, h = self.janela.winfo_width(), self.janela.winfo_height()
-        x = self.janela.winfo_screenwidth() // 2 - w // 2
-        y = self.janela.winfo_screenheight() // 2 - h // 2
-        self.janela.geometry(f"{w}x{h}+{x}+{y}")
+    def _get_html(self):
+        # HTML compactado e otimizado
+        return '''<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes">
+<title>Sector Automation Login</title>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0f2a1f;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem;background-image:radial-gradient(circle at 10% 20%,rgba(70,110,60,0.2)0%,rgba(20,45,30,0.95)90%)}
+.login-wrapper{width:100%;max-width:1280px;background:rgba(255,255,245,0.96);border-radius:48px;overflow:hidden;display:flex;flex-wrap:wrap;box-shadow:0 20px 40px rgba(0,0,0,0.25);position:relative;z-index:2}
+.agro-brand{flex:1.1;background:linear-gradient(125deg,#1d3e2b 0%,#2b5a36 100%);padding:2.8rem 2rem;display:flex;flex-direction:column;justify-content:space-between;color:#fef3da;position:relative;overflow:hidden}
+.agro-brand::after{content:"🌾";font-size:180px;position:absolute;bottom:-30px;right:-30px;opacity:0.08;pointer-events:none}
+.brand-header{margin-bottom:2rem;z-index:2;position:relative}
+.logo-area{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.logo-icon{background:#f5b642;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:28px;font-size:28px;color:#1f442d;box-shadow:0 8px 12px rgba(0,0,0,0.2)}
+.logo-text h2{font-size:1.7rem;font-weight:800;letter-spacing:-0.5px;color:#ffefcf}
+.logo-text p{font-size:0.75rem;opacity:0.8}
+.brand-quote h3{font-size:2rem;font-weight:700;line-height:1.2;margin-bottom:1rem}
+.highlight{color:#ffd966;border-bottom:2px solid #ffb347;display:inline-block}
+.brand-features{margin-top:2rem;display:flex;flex-direction:column;gap:1rem}
+.feature-item{display:flex;align-items:center;gap:14px;background:rgba(255,245,205,0.1);padding:0.8rem 1.2rem;border-radius:60px;width:fit-content;font-weight:500;font-size:0.9rem}
+.sustainable-badge{margin-top:auto;padding-top:2rem;font-size:0.7rem;display:flex;gap:16px;flex-wrap:wrap;opacity:0.7}
+.form-side{flex:1;background:#fff;padding:2.8rem 2.5rem;display:flex;flex-direction:column;justify-content:center}
+.form-header .greeting{font-size:2rem;font-weight:800;color:#1f3d2c;letter-spacing:-0.3px}
+.form-header .sub{color:#6e5c43;margin-top:8px;font-size:0.9rem;border-left:3px solid #e6b05c;padding-left:12px}
+.input-field{margin-bottom:1.5rem}
+.input-field label{display:block;margin-bottom:8px;font-weight:600;font-size:0.8rem;color:#4b5e3a}
+.input-icon{position:relative}
+.input-field input{width:100%;padding:14px 20px 14px 20px;font-size:0.95rem;border:1.5px solid #e9e0cf;border-radius:40px;background:#fefcf8;outline:none;color:#2b4127;transition:0.2s}
+.input-field input:focus{border-color:#c29a4a;box-shadow:0 0 0 3px rgba(194,154,74,0.2);background:#fff}
+.form-extras{display:flex;justify-content:space-between;align-items:center;margin:1rem 0 2rem;flex-wrap:wrap;gap:12px}
+.checkbox-custom{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;color:#5a6e48;font-weight:500}
+.checkbox-custom input{width:18px;height:18px;accent-color:#c29a4a}
+.forgot-link{font-size:0.8rem;color:#b46f2a;text-decoration:none;font-weight:600;cursor:pointer}
+.btn-agro{background:linear-gradient(105deg,#2b623b,#1d452a);border:none;width:100%;padding:14px;border-radius:44px;font-weight:700;font-size:1rem;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 6px 12px rgba(0,0,0,0.1);transition:0.2s}
+.btn-agro:hover{background:linear-gradient(105deg,#235831,#153a22);transform:translateY(-2px);box-shadow:0 10px 18px rgba(0,0,0,0.15)}
+.signup-text{text-align:center;margin-top:2rem;font-size:0.85rem;color:#7d6b4b;border-top:1px solid #efe3cf;padding-top:1.5rem}
+.signup-text a{color:#2b623b;font-weight:700;text-decoration:none;margin-left:6px;cursor:pointer}
+.toast-modern{visibility:hidden;min-width:260px;background:#2f5230;color:#fff5e3;text-align:center;border-radius:60px;padding:12px 20px;position:fixed;bottom:30px;left:50%;transform:translateX(-50%);font-weight:600;font-size:0.85rem;z-index:1000;box-shadow:0 6px 20px rgba(0,0,0,0.2);transition:visibility 0s,opacity 0.25s;opacity:0;pointer-events:none}
+.toast-modern.show{visibility:visible;opacity:1}
+@media(max-width:850px){.login-wrapper{flex-direction:column;max-width:550px}.agro-brand{padding:2rem}.brand-quote h3{font-size:1.6rem}.form-side{padding:2rem 1.8rem}.feature-item{width:100%}}
+@media(max-width:480px){.form-header .greeting{font-size:1.7rem}.logo-text h2{font-size:1.3rem}}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.form-side,.agro-brand{animation:fadeSlide 0.4s ease-out}
+</style>
+</head>
+<body>
+<div class="login-wrapper">
+<div class="agro-brand">
+<div class="brand-header"><div class="logo-area"><div class="logo-icon">🌿</div><div class="logo-text"><h2>Sector<span style="font-weight:400">Automation</span></h2><p>solucoes integradas para o agro</p></div></div><div class="brand-quote"><h3>Conectando o <span class="highlight">campo</span> ao <span class="highlight">futuro</span></h3></div></div>
+<div class="brand-features">
+<div class="feature-item">Gestao de Processos</div>
+<div class="feature-item">Carteira Digital</div>
+<div class="feature-item">Anexacao de Documentos</div>
+<div class="feature-item">Analise de Processos</div>
+</div>
+<div class="sustainable-badge"><span>Seguranca de Dados</span><span>Suporte 24h</span></div>
+</div>
+<div class="form-side">
+<div class="form-header"><div class="greeting">Bem-vindo</div><div class="sub">Acesse sua conta e gerencie suas operacoes</div></div>
+<form id="loginFormModern">
+<div class="input-field"><label>Usuario</label><div class="input-icon"><input type="text" id="usernameModern" placeholder="ex: admin" autocomplete="off"></div></div>
+<div class="input-field"><label>Senha</label><div class="input-icon"><input type="password" id="passwordModern" placeholder="••••••••"></div></div>
+<div class="form-extras"><label class="checkbox-custom"><input type="checkbox" id="rememberModern"> Manter conectado</label><a href="#" id="forgotModernLink" class="forgot-link">Esqueci minha senha</a></div>
+<button type="submit" class="btn-agro">Entrar no sistema</button>
+<div class="signup-text">Nao possui uma conta? <a href="#" id="registerModernLink">Credenciais de demonstracao</a></div>
+</form>
+<div style="display:flex;justify-content:center;gap:16px;margin-top:28px;font-size:0.7rem;color:#b9aa87"><span>Seguranca de dados</span><span>Suporte 24h</span></div>
+</div>
+</div>
+<div id="toastModern" class="toast-modern">Sistema Sector Automation</div>
+<script>
+var bridge = null;
 
-    def _fechar_janela(self):
-        if self.janela:
-            self.janela.grab_release()
-            self.janela.destroy()
-            self.janela = None
+function showMessage(msg, isError) {
+    var toast = document.getElementById('toastModern');
+    toast.textContent = msg;
+    toast.style.backgroundColor = isError ? '#b6512e' : '#2f5230';
+    toast.classList.add('show');
+    setTimeout(function() {
+        toast.classList.remove('show');
+        toast.style.backgroundColor = '#2f5230';
+    }, 2800);
+}
 
-    # ══════════════════════════════════════════════════════════════════
-    # ATALHOS
-    # ══════════════════════════════════════════════════════════════════
-    def _configurar_atalhos(self):
-        self.bind("<Return>", lambda e: self.fazer_login())
-        self.bind("<Control-q>", lambda e: self.winfo_toplevel().destroy())
-        self.bind("<Control-r>", lambda e: self._recuperar_senha())
-        self.bind("<Escape>", lambda e: self._limpar_campos())
+function loadSavedCredentials() {
+    if (bridge && typeof bridge.loadSavedCredentials === 'function') {
+        try {
+            var data = JSON.parse(bridge.loadSavedCredentials());
+            if (data.username && data.remember) {
+                document.getElementById('usernameModern').value = data.username;
+                document.getElementById('passwordModern').value = data.password;
+                document.getElementById('rememberModern').checked = true;
+            }
+        } catch(e) {
+            console.error('Erro ao carregar credenciais:', e);
+        }
+    }
+}
 
-    def _limpar_campos(self):
-        self.entry_usuario.delete(0, "end")
-        self.entry_senha.delete(0, "end")
-        self.entry_usuario.configure(border_color=_CINZA_BORDER)
-        self.entry_senha.configure(border_color=_CINZA_BORDER)
-        self.entry_usuario.focus()
+// Inicializar QWebChannel
+new QWebChannel(qt.webChannelTransport, function(channel) {
+    bridge = channel.objects.bridge;
+    console.log('Bridge conectado com sucesso!');
+    loadSavedCredentials();
+});
+
+document.getElementById('loginFormModern').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var u = document.getElementById('usernameModern').value;
+    var p = document.getElementById('passwordModern').value;
+    var r = document.getElementById('rememberModern').checked;
+    if (!u || !p) {
+        showMessage('Preencha todos os campos!', true);
+        return;
+    }
+    if (bridge && typeof bridge.doLogin === 'function') {
+        bridge.doLogin(JSON.stringify({username: u, password: p, remember: r}));
+    } else {
+        showMessage('Erro de comunicacao. Reinicie o sistema.', true);
+    }
+});
+
+document.getElementById('forgotModernLink').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (bridge && typeof bridge.forgotPassword === 'function') {
+        bridge.forgotPassword();
+    }
+});
+
+document.getElementById('registerModernLink').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (bridge && typeof bridge.register === 'function') {
+        bridge.register();
+    }
+});
+</script>
+</body>
+</html>'''
+
+    def run_js(self, code):
+        self.web_view.page().runJavaScript(code)
+
+    def show_message(self, msg, error=False):
+        safe_msg = json.dumps(msg)
+        self.run_js(f'showMessage({safe_msg}, {str(error).lower()});')
+
+    def redirect_after_login(self, usuario):
+        if self.on_success:
+            self.on_success(usuario)
+        self.close()

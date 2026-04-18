@@ -1,11 +1,18 @@
 import os
 import sys
-import customtkinter as ctk
+
+from PyQt6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QPushButton,
+    QMessageBox,
+)
+from PyQt6.QtCore import Qt
+
 from app.theme import AppTheme
-from tkinter import messagebox
 
 
-class BaseUI(ctk.CTkFrame):
+class BaseUI(QFrame):
     """
     Classe base para TODAS as abas do sistema.
 
@@ -20,31 +27,17 @@ class BaseUI(ctk.CTkFrame):
     - Quem controla layout é o AppPrincipal
     """
 
-    def __init__(self, master):
+    def __init__(self, master=None):
         super().__init__(master)
 
         self.BASE_DIR = self._resolver_base_dir()
 
         # Configuração visual padrão da aba
-        self.configure(fg_color=AppTheme.BG_APP)
-
-        # Padronização de layout interno
-        self._configurar_grid()
+        self.setStyleSheet(f"background-color: {AppTheme.BG_APP}; border: none;")
 
         # Definir estilos padrão locais (fonte e espaçamento)
         self._padx = AppTheme.PADDING_MEDIUM
         self._pady = AppTheme.PADDING_MEDIUM
-
-    # ========================= LAYOUT BASE =========================
-
-    def _configurar_grid(self):
-        """
-        Define um grid padrão para todas as abas.
-        Evita uso misto e desorganizado de pack/grid.
-        """
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0)
-        self.grid_rowconfigure(1, weight=1)
 
     # ========================= BASE DIR =========================
 
@@ -69,26 +62,38 @@ class BaseUI(ctk.CTkFrame):
         """
         Título padrão da aba.
         """
-        label = ctk.CTkLabel(
-            self,
-            text=texto,
-            font=AppTheme.FONT_TITLE,
-            text_color=AppTheme.BTN_SUCCESS
-        )
-        label.grid(row=row, column=0, sticky="w", padx=self._padx, pady=(AppTheme.PADDING_LARGE, AppTheme.PADDING_SMALL))
+        label = QLabel(texto, self)
+        font_family = getattr(AppTheme, "FONT_FAMILY", "Segoe UI")
+
+        label.setStyleSheet(f"""
+            QLabel {{
+                color: {AppTheme.BTN_SUCCESS};
+                font-family: {font_family};
+                font-size: 24px;
+                font-weight: 700;
+                background: transparent;
+                border: none;
+            }}
+        """)
         return label
 
     def subtitulo(self, texto, row=1):
         """
         Subtítulo padrão da aba.
         """
-        label = ctk.CTkLabel(
-            self,
-            text=texto,
-            font=AppTheme.FONT_SUBTITLE,
-            text_color=AppTheme.TXT_DARK
-        )
-        label.grid(row=row, column=0, sticky="w", padx=self._padx, pady=(0, AppTheme.PADDING_LARGE))
+        label = QLabel(texto, self)
+        font_family = getattr(AppTheme, "FONT_FAMILY", "Segoe UI")
+
+        label.setStyleSheet(f"""
+            QLabel {{
+                color: {AppTheme.TXT_DARK};
+                font-family: {font_family};
+                font-size: 16px;
+                font-weight: 500;
+                background: transparent;
+                border: none;
+            }}
+        """)
         return label
 
     def botao(
@@ -104,18 +109,28 @@ class BaseUI(ctk.CTkFrame):
         """
         Botão padrão do sistema.
         """
-        return ctk.CTkButton(
-            self,
-            text=texto,
-            command=comando,
-            width=width,
-            height=height,
-            fg_color=fg_color,
-            hover_color=hover_color,
-            text_color=text_color,
-            font=(AppTheme.FONT_FAMILY, 15, "bold"),
-            corner_radius=AppTheme.RADIUS_MEDIUM
-        )
+        btn = QPushButton(texto, self)
+        font_family = getattr(AppTheme, "FONT_FAMILY", "Segoe UI")
+
+        btn.setMinimumSize(width, height)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_color};
+                color: {text_color};
+                border: none;
+                border-radius: {AppTheme.RADIUS_MEDIUM}px;
+                font-family: {font_family};
+                font-size: 15px;
+                font-weight: 700;
+                padding: 0 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_color};
+            }}
+        """)
+        btn.clicked.connect(comando)
+        return btn
 
     def card(self, parent=None, width=900, height=500):
         """
@@ -124,14 +139,15 @@ class BaseUI(ctk.CTkFrame):
         """
         container = parent if parent else self
 
-        frame = ctk.CTkFrame(
-            container,
-            width=width,
-            height=height,
-            fg_color=AppTheme.BG_CARD,
-            corner_radius=AppTheme.RADIUS_LARGE
-        )
-        frame.grid_propagate(False)
+        frame = QFrame(container)
+        frame.setMinimumSize(width, height)
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {AppTheme.BG_CARD};
+                border: none;
+                border-radius: {AppTheme.RADIUS_LARGE}px;
+            }}
+        """)
         return frame
 
     # ========================= UTIL =========================
@@ -145,14 +161,20 @@ class BaseUI(ctk.CTkFrame):
     # ========================= MENSAGENS =========================
 
     def alerta(self, texto, titulo="Atenção"):
-        messagebox.showwarning(titulo, texto)
+        QMessageBox.warning(self, titulo, texto)
 
     def erro(self, texto, titulo="Erro"):
-        messagebox.showerror(titulo, texto)
+        QMessageBox.critical(self, titulo, texto)
 
     def sucesso(self, texto, titulo="Sucesso"):
-        messagebox.showinfo(titulo, texto)
+        QMessageBox.information(self, titulo, texto)
 
     def confirmar(self, texto, titulo="Confirmação"):
-        return messagebox.askyesno(titulo, texto)
-# --- END OF FILE ---
+        resposta = QMessageBox.question(
+            self,
+            titulo,
+            texto,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        return resposta == QMessageBox.StandardButton.Yes

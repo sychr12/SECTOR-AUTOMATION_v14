@@ -1,86 +1,137 @@
+# -*- coding: utf-8 -*-
+"""
+Main PyQt6 - Sistema Sector Automation
+"""
+
 import os
 import sys
-import ctypes
-import customtkinter as ctk
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt
 
-# eu odeio essa parte sempre da dublicidade
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
-    pass
+# Configurar output para UTF-8 no Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-ctk.set_appearance_mode("Light")
-ctk.set_default_color_theme("green")
-
-ctk.set_widget_scaling(1.0)
-ctk.set_window_scaling(1.0)
-
-
-try:
-    _orig_ctk_scroll_init = ctk.CTkScrollableFrame.__init__
-
-    def _ctk_scrollable_init_hide_scroll(self, *args, **kwargs):
-        _orig_ctk_scroll_init(self, *args, **kwargs)
-        for child in self.winfo_children():
-            if "scrollbar" in str(type(child)).lower():
-                try:
-                    child.pack_forget()
-                except:
-                    try:
-                        child.grid_forget()
-                    except:
-                        pass
-
-    ctk.CTkScrollableFrame.__init__ = _ctk_scrollable_init_hide_scroll
-except Exception:
-    pass
-
-
+# Configurar path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Importar módulos
 from core.login import Login
 from core.menu import AppPrincipal
 from core.menu_administrador import MenuAdministrador
+from services.database import test_connection, get_connection
 
 
-class MainApp(ctk.CTk):
+class MainApp:
     def __init__(self):
-        super().__init__()
+        self.app = QApplication(sys.argv)
+        self.app.setStyle("Fusion")
+        
+        # Configurar fonte padrão
+        from PyQt6.QtGui import QFont
+        font = QFont("Segoe UI", 9)
+        self.app.setFont(font)
+        
+        self.janela = None
+        self.login = None
+        
+        # Configurar para High DPI displays
+        self._setup_high_dpi()
+        
+        # Testar conexão com banco antes de iniciar
+        if not self._testar_conexao_banco():
+            QMessageBox.critical(
+                None,
+                "Erro de Conexao",
+                "Nao foi possivel conectar ao banco de dados.\n\n"
+                "Verifique as configuracoes de rede e tente novamente."
+            )
+            sys.exit(1)
+        
+        self.mostrar_login()
+        sys.exit(self.app.exec())
 
-        self.title("Sector Automation")
-        self.geometry("1600x900")
-        self.minsize(1200, 700)
+    def _setup_high_dpi(self):
+        """Configura para High DPI displays."""
+        if hasattr(Qt, 'AA_EnableHighDpiScaling'):
+            QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
+        if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
+            QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
-        self.login_frame = Login(self, self.login_sucesso)
+    def _testar_conexao_banco(self):
+        """Testa a conexão com o banco de dados antes de iniciar."""
+        try:
+            success, result = test_connection()
+            if success:
+                print(f"[Main] OK - Conectado ao banco: {result['database']}")
+                return True
+            else:
+                print(f"[Main] ERRO - Falha na conexao: {result}")
+                return False
+        except Exception as e:
+            print(f"[Main] ERRO - Erro ao testar conexao: {e}")
+            return False
+
+    def mostrar_login(self):
+        """Mostra a tela de login."""
+        self.login = Login(on_success=self.login_sucesso)
+        self.login.show()
 
     def login_sucesso(self, usuario):
-        self.login_frame.destroy()
-
-        perfil = usuario.get("perfil", "usuario")
-
+        """Callback após login bem-sucedido."""
+        if self.login:
+            self.login.close()
+            self.login = None
         
-        self.withdraw()
-
-        if perfil in ("administrador", "chefe"):
-            win = MenuAdministrador(usuario, master=self)
-        else:
-            win = AppPrincipal(usuario, master=self)
-
+        perfil = usuario.get("perfil", "usuario").lower()
+        usuario_nome = usuario.get("username", "Usuario")
         
-        win.deiconify()
-        win.lift()
-        win.focus_force()
-
-        self.wait_window(win)
-
+        print(f"[Main] Login bem-sucedido: {usuario_nome} (Perfil: {perfil})")
         
-        self.destroy()
+        try:
+            if perfil in ("administrador", "admin", "chefe"):
+                self.janela = MenuAdministrador(
+                    usuario=usuario,
+                    on_logout=self.logout,
+                    conectar_bd=get_connection
+                )
+            else:
+                self.janela = AppPrincipal(
+                    usuario=usuario,
+                    on_logout=self.logout,
+                    conectar_bd=get_connection
+                )
+            
+            self.janela.show()
+            self.janela.raise_()
+            self.janela.activateWindow()
+            
+        except Exception as e:
+            print(f"[Main] Erro ao criar janela principal: {e}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(
+                None,
+                "Erro",
+                f"Erro ao iniciar aplicacao:\n\n{str(e)}"
+            )
+            self.mostrar_login()
+
+    def logout(self):
+        """Callback para logout."""
+        print("[Main] Usuario desconectado")
+        if self.janela:
+            self.janela.close()
+            self.janela = None
+            
+        self.mostrar_login()
 
 
 if __name__ == "__main__":
-    app = MainApp()
-    app.mainloop()
+    MainApp()

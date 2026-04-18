@@ -131,7 +131,7 @@ class ConsultaController:
                 conn.close()
 
             except Exception as e:
-                print(f"Erro ao executar consulta: {str(e)}")
+                # print(f"Erro ao executar consulta: {str(e)}")
                 continue
 
         return todos_dados

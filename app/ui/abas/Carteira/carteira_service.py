@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 services.py — Camada de serviço da Carteira Digital.
-Local: app/ui/abas/Carteira/services.py
+Local: app/ui/abas/Carteira/carteira_service.py
 """
 
 from .services.carteira_repository import CarteirasRepository
