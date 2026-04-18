@@ -6,7 +6,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime
-from tkinter import filedialog, messagebox, END
+from PyQt6.QtWidgets import QFileDialog
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -49,7 +49,12 @@ class AnaliseController:
     def validar_cpf(self, cpf_texto):
         """Valida se CPF tem 11 dígitos"""
         cpf_limpo = self.limpar_cpf(cpf_texto)
-        return len(cpf_limpo) == 11
+        if len(cpf_limpo) != 11:
+            return False
+        # Evita CPF com todos dígitos iguais
+        if cpf_limpo == cpf_limpo[0] * 11:
+            return False
+        return True
 
     def visualizar_pdf(self, analise_id):
         """Abre o PDF temporariamente para visualização"""
@@ -88,19 +93,9 @@ class AnaliseController:
             if not resultado or not resultado.get('pdf_conteudo'):
                 return False, "PDF não encontrado"
             
-            caminho = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                initialfile=nome_sugerido.replace('/', '_').replace('\\', '_'),
-                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
-            )
+            # Usando QFileDialog diretamente (será chamado da UI)
+            return True, resultado['pdf_conteudo'], nome_sugerido
             
-            if caminho:
-                with open(caminho, 'wb') as f:
-                    f.write(resultado['pdf_conteudo'])
-                return True, caminho
-            else:
-                return False, "Operação cancelada"
-                
         except Exception as e:
             return False, f"Erro ao baixar PDF: {str(e)}"
 
@@ -128,7 +123,6 @@ class AnaliseController:
     def processar_registros(self, ids, novo_status):
         """Processa registros selecionados"""
         try:
-            # Busca o status atual de cada registro antes de alterar
             status_anterior = "PENDENTE"
             try:
                 primeiro = self.repo.buscar_por_id(ids[0])
@@ -151,7 +145,6 @@ class AnaliseController:
     def processar_devolucao(self, ids, motivo):
         """Processa devolução de registros"""
         try:
-            # Busca o status atual de cada registro antes de alterar
             status_anterior = "PENDENTE"
             try:
                 primeiro = self.repo.buscar_por_id(ids[0])
@@ -175,13 +168,12 @@ class AnaliseController:
     def abrir_sefaz(self):
         """Abre navegador com SIGED e Google Maps, fazendo login automático."""
         try:
-            # ✅ CORRIGIDO: obter_credencial() — método correto do SefazRepository
             credenciais = self.sefaz_repo.obter_credencial()
             
             if not credenciais:
                 return False, "Credenciais SIGED não encontradas"
 
-            cpf   = credenciais.get('usuario', '')
+            cpf = credenciais.get('usuario', '')
             senha = credenciais.get('senha', '')
 
             with self.driver_lock:
@@ -203,14 +195,12 @@ class AnaliseController:
                 except Exception as e:
                     return False, f"Erro ao iniciar Chrome: {str(e)}"
 
-                # ✅ Abre o SIGED
                 self.driver.get(SIGED_URL)
                 time.sleep(2)
 
                 try:
                     wait = WebDriverWait(self.driver, 15)
 
-                    # ✅ Campo CPF — tenta múltiplos seletores comuns
                     campo_cpf = None
                     for seletor in ["cpf", "username", "login", "usuario", "user"]:
                         try:
@@ -229,14 +219,12 @@ class AnaliseController:
                     campo_cpf.clear()
                     campo_cpf.send_keys(cpf)
 
-                    # ✅ Campo senha
                     campo_senha = self.driver.find_element(
                         By.XPATH, "//input[@type='password']"
                     )
                     campo_senha.clear()
                     campo_senha.send_keys(senha)
 
-                    # ✅ Botão login — tenta múltiplos padrões
                     try:
                         btn = self.driver.find_element(
                             By.XPATH,
@@ -278,23 +266,23 @@ class AnaliseController:
 
             if tipo == "insc":
                 self.repo_ap.salvar_inscricao(
-                    nome      = dados["nome"],
-                    cpf       = dados["cpf"],
-                    municipio = dados["municipio"],
-                    memorando = memorando,
-                    tipo      = dados["tipo"],
-                    usuario   = self.usuario,
+                    nome=dados["nome"],
+                    cpf=dados["cpf"],
+                    municipio=dados["municipio"],
+                    memorando=memorando,
+                    tipo=dados["tipo"],
+                    usuario=self.usuario,
                 )
                 return True, "Inscrição salva com sucesso!"
             else:
                 motivo_completo = f"[{dados['categoria']}] {dados['motivo']}"
                 self.repo_ap.salvar_devolucao(
-                    nome      = dados["nome"],
-                    cpf       = dados["cpf"],
-                    municipio = dados["municipio"],
-                    memorando = memorando,
-                    motivo    = motivo_completo,
-                    usuario   = self.usuario,
+                    nome=dados["nome"],
+                    cpf=dados["cpf"],
+                    municipio=dados["municipio"],
+                    memorando=memorando,
+                    motivo=motivo_completo,
+                    usuario=self.usuario,
                 )
                 return True, "Devolução salva com sucesso!"
         except Exception as e:
@@ -307,8 +295,8 @@ class AnaliseController:
         except Exception as e:
             raise Exception(f"Erro ao carregar dados: {str(e)}")
 
-    def carregar_historico(self, filtro_status="TODOS", pesquisa=""):
-        """Carrega histórico completo do banco; filtragem fica na view."""
+    def carregar_historico(self):
+        """Carrega histórico completo do banco"""
         try:
             return self.repo.listar_historico()
         except Exception as e:

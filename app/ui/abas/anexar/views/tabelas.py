@@ -1,382 +1,479 @@
 # -*- coding: utf-8 -*-
-"""Tabelas/listas do módulo Anexar."""
+"""Tabelas/listas do módulo Anexar - Versão PyQt6."""
+
 from datetime import datetime
-from tkinter import ttk
-
-import customtkinter as ctk
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QScrollArea
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QColor
 
 from .theme import (
-    VERDE, VERDE_H, VERDE_T, AMBER_B, AMBER_T,
-    VERM, AMBER, INFO, MUTED, SLATE,
+    VERDE, VERDE_H, AZUL, AZUL_H, VERM, AMBER, INFO, MUTED, SLATE,
     fmt_data, fmt_data_curta,
 )
 
-from .theme import (
-    VERDE, VERDE_H, VERDE_T, AMBER_B, AMBER_T,
-    VERM, AMBER, INFO, MUTED, SLATE, AZUL,  # Adicione AZUL aqui
-    fmt_data, fmt_data_curta,
-)
-
-# Constantes de layout (equivalentes ao AppTheme global)
-class AppTheme:
-    BG_APP   = "#f8fafc"
-    BG_CARD  = "#f1f5f9"
-    BG_INPUT = "#ffffff"
-    TXT_MAIN = "#0f172a"
+# Constantes de layout
+BG_APP = "#f8fafc"
+BG_CARD = "#f1f5f9"
+BG_INPUT = "#ffffff"
+TXT_MAIN = "#0f172a"
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+def _create_table(parent, columns, style_name=""):
+    """Cria uma tabela QTableWidget estilizada."""
+    table = QTableWidget(parent)
+    table.setColumnCount(len(columns))
+    table.setHorizontalHeaderLabels([c[1] for c in columns])
+    table.setAlternatingRowColors(True)
+    table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
 
-def _thead(parent, colunas: list):
-    thead = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD,
-                         corner_radius=12, height=42)
-    thead.pack(fill="x", pady=(0, 8))
-    for i, (txt, w) in enumerate(colunas):
-        ctk.CTkLabel(thead, text=txt, width=w, anchor="w",
-                     font=("Segoe UI", 11, "bold"),
-                     text_color=MUTED,
-                     ).pack(side="left", padx=(16 if i == 0 else 8, 0), pady=12)
+    header = table.horizontalHeader()
+    for i, (key, title, width, stretch) in enumerate(columns):
+        if stretch:
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+        else:
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+            table.setColumnWidth(i, width)
 
-
-def _scroll(parent):
-    return ctk.CTkScrollableFrame(
-        parent, fg_color="transparent", corner_radius=12,
-        scrollbar_button_color=AppTheme.BG_CARD,
-        scrollbar_button_hover_color=SLATE,
-    )
-
-
-def _style_tree(name):
-    s = ttk.Style()
-    s.configure(f"{name}.Treeview",
-                background=AppTheme.BG_INPUT,
-                fieldbackground=AppTheme.BG_INPUT,
-                foreground=AppTheme.TXT_MAIN,
-                rowheight=36, font=("Segoe UI", 10), borderwidth=0)
-    s.configure(f"{name}.Treeview.Heading",
-                background=AppTheme.BG_CARD, foreground=MUTED,
-                font=("Segoe UI", 10, "bold"), relief="flat")
-    s.map(f"{name}.Treeview",
-          background=[("selected", "#1e3a5f")])
-
-
-def _tree_frame(parent):
-    frame = ctk.CTkFrame(parent, fg_color=AppTheme.BG_INPUT,
-                         corner_radius=12, border_width=1,
-                         border_color=AppTheme.BG_CARD)
-    frame.pack(fill="both", expand=True)
-    return frame
+    table.setStyleSheet(f"""
+        QTableWidget {{
+            background-color: {BG_INPUT};
+            color: {TXT_MAIN};
+            border: none;
+            gridline-color: {BG_CARD};
+        }}
+        QTableWidget::item {{
+            padding: 8px;
+            border-bottom: 1px solid {BG_CARD};
+        }}
+        QTableWidget::item:selected {{
+            background-color: #1e3a5f;
+            color: white;
+        }}
+        QHeaderView::section {{
+            background-color: {BG_CARD};
+            color: {MUTED};
+            padding: 8px;
+            border: none;
+            font-weight: bold;
+        }}
+    """)
+    return table
 
 
 def _section_header(parent, texto: str):
-    ctk.CTkLabel(parent, text=texto,
-                 font=("Segoe UI", 13, "bold"),
-                 text_color=AppTheme.TXT_MAIN).pack(side="left")
+    """Cria um cabeçalho de seção."""
+    label = QLabel(texto)
+    label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+    label.setStyleSheet(f"color: {TXT_MAIN};")
+    return label
 
 
 # ── Tabela Carteiras ──────────────────────────────────────────────────────────
 
 class CarteirasTable:
     _COLS = [
-        ("ID", 50), ("Nome", 210), ("CPF", 130), ("UNLOC", 90),
-        ("Registro", 120), ("Validade", 95), ("Atividade", 170),
-        ("Criado em", 140), ("PDF", 55), ("Status", 125),
+        ("id", "ID", 50, False),
+        ("nome", "Nome", 210, True),
+        ("cpf", "CPF", 130, False),
+        ("unloc", "UNLOC", 90, False),
+        ("registro", "Registro", 120, False),
+        ("validade", "Validade", 95, False),
+        ("atividade", "Atividade", 170, True),
+        ("criado_em", "Criado em", 140, False),
+        ("pdf", "PDF", 55, False),
+        ("status", "Status", 125, False),
     ]
 
     @classmethod
     def criar(cls, parent, on_baixar=None, on_visualizar=None, on_excluir=None):
         """
         Cria a tabela de carteiras.
-        
-        Args:
-            parent: Widget pai
-            on_baixar: Callback para baixar PDF (recebe record_id)
-            on_visualizar: Callback para visualizar PDF (recebe record_id)
-            on_excluir: Callback para excluir PDF (recebe record_id, nome)
+
+        Retorna:
+            (container, scroll_content)
         """
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        _thead(container, cls._COLS)
-        lista = _scroll(container)
-        lista.pack(fill="both", expand=True)
-        
-        # Armazenar callbacks para uso no carregamento
-        lista._on_baixar = on_baixar
-        lista._on_visualizar = on_visualizar
-        lista._on_excluir = on_excluir
-        
-        return lista, container
+        container = QFrame(parent)
+        container.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header da tabela
+        thead = QFrame()
+        thead.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_CARD};
+                border-radius: 12px;
+                min-height: 42px;
+            }}
+        """)
+        thead_layout = QHBoxLayout(thead)
+        thead_layout.setContentsMargins(16, 0, 16, 0)
+
+        for _, title, width, stretch in cls._COLS:
+            label = QLabel(title)
+            label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            label.setStyleSheet(f"color: {MUTED};")
+            if stretch:
+                thead_layout.addWidget(label, 1)
+            else:
+                label.setFixedWidth(width)
+                thead_layout.addWidget(label)
+
+        layout.addWidget(thead)
+
+        # Área de rolagem para a tabela
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: transparent;")
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(2)
+
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+
+        # Armazenar referências no conteúdo interno
+        scroll_content._on_baixar = on_baixar
+        scroll_content._on_visualizar = on_visualizar
+        scroll_content._on_excluir = on_excluir
+        scroll_content._scroll_layout = scroll_layout
+
+        # Espelhar referências no container externo
+        container._on_baixar = on_baixar
+        container._on_visualizar = on_visualizar
+        container._on_excluir = on_excluir
+        container._scroll_layout = scroll_layout
+
+        return container, scroll_content
 
     @staticmethod
     def carregar(lista, registros: list, on_baixar=None, on_visualizar=None, on_excluir=None):
-        """
-        Carrega os registros na tabela.
-        
-        Args:
-            lista: O widget lista (scrollable frame)
-            registros: Lista de dicionários com os dados
-            on_baixar: Callback para baixar PDF (recebe record_id)
-            on_visualizar: Callback para visualizar PDF (recebe record_id)
-            on_excluir: Callback para excluir PDF (recebe record_id, nome)
-        """
-        # Usar callbacks passados ou os armazenados
-        baixar_cb = on_baixar or getattr(lista, '_on_baixar', None)
-        visualizar_cb = on_visualizar or getattr(lista, '_on_visualizar', None)
-        excluir_cb = on_excluir or getattr(lista, '_on_excluir', None)
-        
-        for w in lista.winfo_children():
-            w.destroy()
+        """Carrega os registros na tabela."""
+        while lista._scroll_layout.count():
+            item = lista._scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
         for i, r in enumerate(registros):
             tem_pdf = r.get("pdf_gerado", False)
-            bg = AppTheme.BG_APP if i % 2 == 0 else AppTheme.BG_INPUT
+            bg = BG_APP if i % 2 == 0 else BG_INPUT
 
-            row = ctk.CTkFrame(lista, fg_color=bg, corner_radius=8)
-            row.pack(fill="x", pady=2, padx=4)
+            row = QFrame()
+            row.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg};
+                    border-radius: 8px;
+                    margin: 2px 4px;
+                }}
+                QFrame:hover {{
+                    background-color: {BG_CARD};
+                }}
+            """)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(16, 8, 16, 8)
+            row_layout.setSpacing(0)
 
-            row.bind("<Enter>", lambda e, f=row: f.configure(fg_color=AppTheme.BG_CARD))
-            row.bind("<Leave>", lambda e, f=row, c=bg: f.configure(fg_color=c))
+            def _add_cell(text, width, is_main=False):
+                label = QLabel(str(text) if text else "—")
+                label.setFont(QFont("Segoe UI", 11 if is_main else 10))
+                label.setStyleSheet(f"color: {TXT_MAIN if is_main else MUTED};")
+                if width:
+                    label.setFixedWidth(width)
+                row_layout.addWidget(label)
 
-            def _lbl(text, width, main=False, first=False):
-                ctk.CTkLabel(row, text=str(text) if text else "—",
-                             width=width, anchor="w",
-                             font=("Segoe UI", 11 if main else 10),
-                             text_color=AppTheme.TXT_MAIN if main else MUTED,
-                             ).pack(side="left", padx=(16 if first else 8, 0), pady=8)
+            _add_cell(r.get("id"), 50)
+            _add_cell(r.get("nome"), 210, True)
+            _add_cell(r.get("cpf"), 130)
+            _add_cell(r.get("unloc"), 90)
+            _add_cell(r.get("registro"), 120)
+            _add_cell(fmt_data_curta(r.get("validade")), 95)
+            _add_cell(r.get("atividade1"), 170)
+            _add_cell(fmt_data(r.get("criado_em")), 140)
 
-            _lbl(r.get("id"),                         50, first=True)
-            _lbl(r.get("nome"),                      210, main=True)
-            _lbl(r.get("cpf"),                       130)
-            _lbl(r.get("unloc"),                      90)
-            _lbl(r.get("registro"),                  120)
-            _lbl(fmt_data_curta(r.get("validade")),   95)
-            _lbl(r.get("atividade1"),                170)
-            _lbl(fmt_data(r.get("criado_em")),       140)
+            # PDF status
+            pdf_label = QLabel("✓" if tem_pdf else "✗")
+            pdf_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+            pdf_label.setStyleSheet(f"color: {VERDE if tem_pdf else MUTED};")
+            pdf_label.setFixedWidth(55)
+            pdf_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            row_layout.addWidget(pdf_label)
 
-            ctk.CTkLabel(row, text="✓" if tem_pdf else "✗",
-                         width=55, anchor="center",
-                         font=("Segoe UI", 12, "bold"),
-                         text_color=VERDE if tem_pdf else MUTED,
-                         ).pack(side="left", padx=(8, 0))
-
+            # Botões de ação
             if tem_pdf:
-                # Frame para botões
-                btn_frame = ctk.CTkFrame(row, fg_color="transparent")
-                btn_frame.pack(side="left", padx=(8, 12), pady=5)
-                
-                # Botão Visualizar
-                if visualizar_cb:
-                    ctk.CTkButton(
-                        btn_frame, text="👁️", width=40, height=30,
-                        corner_radius=8, fg_color=AZUL, hover_color="#2563eb",
-                        text_color="white", font=("Segoe UI", 10, "bold"),
-                        command=lambda rid=r.get("id"): visualizar_cb(rid) if visualizar_cb else None,
-                    ).pack(side="left", padx=(0, 4))
-                
-                # Botão Baixar
-                if baixar_cb:
-                    ctk.CTkButton(
-                        btn_frame, text="📄", width=40, height=30,
-                        corner_radius=8, fg_color=VERDE, hover_color=VERDE_H,
-                        text_color=VERDE_T, font=("Segoe UI", 10, "bold"),
-                        command=lambda rid=r.get("id"): baixar_cb(rid) if baixar_cb else None,
-                    ).pack(side="left", padx=(0, 4))
-                
-                # Botão Excluir
-                if excluir_cb:
-                    ctk.CTkButton(
-                        btn_frame, text="🗑️", width=40, height=30,
-                        corner_radius=8, fg_color=VERM, hover_color="#b91c1c",
-                        text_color="white", font=("Segoe UI", 10, "bold"),
-                        command=lambda rid=r.get("id"), nome=r.get("nome", ""): excluir_cb(rid, nome) if excluir_cb else None,
-                    ).pack(side="left")
+                btn_frame = QFrame()
+                btn_frame.setStyleSheet("background-color: transparent;")
+                btn_layout = QHBoxLayout(btn_frame)
+                btn_layout.setContentsMargins(0, 0, 0, 0)
+                btn_layout.setSpacing(4)
+
+                callback_visualizar = on_visualizar or getattr(lista, "_on_visualizar", None)
+                callback_baixar = on_baixar or getattr(lista, "_on_baixar", None)
+                callback_excluir = on_excluir or getattr(lista, "_on_excluir", None)
+
+                if callback_visualizar:
+                    btn_ver = QPushButton("👁️")
+                    btn_ver.setFixedSize(40, 30)
+                    btn_ver.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {AZUL};
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 11px;
+                            font-weight: bold;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {AZUL_H};
+                        }}
+                    """)
+                    btn_ver.clicked.connect(lambda checked=False, rid=r.get("id"): callback_visualizar(rid))
+                    btn_layout.addWidget(btn_ver)
+
+                if callback_baixar:
+                    btn_down = QPushButton("📄")
+                    btn_down.setFixedSize(40, 30)
+                    btn_down.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {VERDE};
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 11px;
+                            font-weight: bold;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {VERDE_H};
+                        }}
+                    """)
+                    btn_down.clicked.connect(lambda checked=False, rid=r.get("id"): callback_baixar(rid))
+                    btn_layout.addWidget(btn_down)
+
+                if callback_excluir:
+                    btn_del = QPushButton("🗑️")
+                    btn_del.setFixedSize(40, 30)
+                    btn_del.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {VERM};
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 11px;
+                            font-weight: bold;
+                        }}
+                        QPushButton:hover {{
+                            background-color: #b91c1c;
+                        }}
+                    """)
+                    btn_del.clicked.connect(
+                        lambda checked=False, rid=r.get("id"), nome=r.get("nome", ""): callback_excluir(rid, nome)
+                    )
+                    btn_layout.addWidget(btn_del)
+
+                row_layout.addWidget(btn_frame)
             else:
-                ctk.CTkLabel(
-                    row, text="⏳ Pendente", width=110, height=30,
-                    corner_radius=8, fg_color=AMBER_B, text_color=AMBER_T,
-                    font=("Segoe UI", 10, "bold"),
-                ).pack(side="left", padx=(8, 12), pady=5)
+                status_label = QLabel("⏳ Pendente")
+                status_label.setFixedSize(110, 30)
+                status_label.setStyleSheet("""
+                    background-color: #854d0e;
+                    color: #fef08a;
+                    border-radius: 8px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    padding: 5px;
+                """)
+                status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                row_layout.addWidget(status_label)
+
+            lista._scroll_layout.addWidget(row)
 
     @staticmethod
     def limpar(lista):
-        for w in lista.winfo_children():
-            w.destroy()
+        while lista._scroll_layout.count():
+            item = lista._scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
 
 # ── Tabela Em Análise ─────────────────────────────────────────────────────────
 
 class EmAnaliseTable:
     _COLS = [
-        ("id",        "ID",         50), ("nome_pdf",  "Processo",  220),
-        ("cpf",       "CPF",       130), ("unloc",     "UNLOC",      85),
-        ("memorando", "Memorando", 120), ("tipo",      "Tipo",       85),
-        ("urgencia",  "Urgente",    80), ("usuario",   "Usuário",   120),
-        ("criado_em", "Entrada",   140),
+        ("id", "ID", 50, False),
+        ("nome_pdf", "Processo", 220, True),
+        ("cpf", "CPF", 130, False),
+        ("unloc", "UNLOC", 85, False),
+        ("memorando", "Memorando", 120, False),
+        ("tipo", "Tipo", 85, False),
+        ("urgencia", "Urgente", 80, False),
+        ("usuario", "Usuário", 120, False),
+        ("criado_em", "Entrada", 140, False),
     ]
 
     @classmethod
     def criar(cls, parent):
-        _style_tree("Anal")
-        container = ctk.CTkFrame(parent, fg_color="transparent")
+        """Cria a tabela de processos em análise."""
+        container = QFrame(parent)
+        container.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        hdr = ctk.CTkFrame(container, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 12))
-        _section_header(hdr, "📋 Processos em Análise")
+        hdr_layout = QHBoxLayout()
+        hdr_layout.setContentsMargins(0, 0, 0, 12)
+        lbl = _section_header(container, "📋 Processos em Análise")
+        hdr_layout.addWidget(lbl)
+        layout.addLayout(hdr_layout)
 
-        frame = _tree_frame(container)
-        cols  = tuple(c[0] for c in cls._COLS)
-        tree  = ttk.Treeview(frame, columns=cols, show="headings",
-                             style="Anal.Treeview", selectmode="browse")
+        table = _create_table(container, cls._COLS)
+        layout.addWidget(table)
 
-        for key, titulo, w in cls._COLS:
-            tree.heading(key, text=titulo)
-            tree.column(key, width=w, minwidth=40, stretch=(key == "nome_pdf"))
-
-        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
-
-        tree.tag_configure("urgente", background="#4a0e0e", foreground="#fecaca")
-        tree.tag_configure("normal",  foreground=AppTheme.TXT_MAIN)
-
-        return tree, container
+        return table, container
 
     @classmethod
-    def carregar(cls, tree, registros: list):
-        cls.limpar(tree)
-        for r in registros:
+    def carregar(cls, table, registros: list):
+        """Carrega registros na tabela."""
+        cls.limpar(table)
+        table.setRowCount(len(registros))
+
+        for row, r in enumerate(registros):
             urgente = r.get("urgencia", False)
-            tree.insert("", "end",
-                        tags=("urgente" if urgente else "normal",),
-                        values=(
-                            r.get("id",        ""),
-                            r.get("nome_pdf",  ""),
-                            r.get("cpf",       ""),
-                            r.get("unloc",     ""),
-                            r.get("memorando", ""),
-                            r.get("tipo",      ""),
-                            "⚡ Sim" if urgente else "—",
-                            r.get("usuario",   "—"),
-                            fmt_data(r.get("criado_em")),
-                        ))
+
+            table.setItem(row, 0, QTableWidgetItem(str(r.get("id", ""))))
+            table.setItem(row, 1, QTableWidgetItem(r.get("nome_pdf", "")))
+            table.setItem(row, 2, QTableWidgetItem(r.get("cpf", "")))
+            table.setItem(row, 3, QTableWidgetItem(r.get("unloc", "")))
+            table.setItem(row, 4, QTableWidgetItem(r.get("memorando", "")))
+            table.setItem(row, 5, QTableWidgetItem(r.get("tipo", "")))
+            table.setItem(row, 6, QTableWidgetItem("⚡ Sim" if urgente else "—"))
+            table.setItem(row, 7, QTableWidgetItem(r.get("usuario", "—")))
+            table.setItem(row, 8, QTableWidgetItem(fmt_data(r.get("criado_em"))))
+
+            if urgente:
+                for col in range(table.columnCount()):
+                    item = table.item(row, col)
+                    if item:
+                        item.setBackground(QColor("#4a0e0e"))
+                        item.setForeground(QColor("#fecaca"))
 
     @staticmethod
-    def limpar(tree):
-        for item in tree.get_children():
-            tree.delete(item)
+    def limpar(table):
+        table.setRowCount(0)
 
 
 # ── Tabela Histórico ──────────────────────────────────────────────────────────
 
 class HistoricoTable:
     _COLS = [
-        ("id",       "ID",           50), ("nome",     "Nome",       220),
-        ("cpf",      "CPF",         130), ("unloc",    "UNLOC",       90),
-        ("registro", "Registro",    120), ("validade", "Validade",    95),
-        ("usuario",  "Anexado por", 130), ("criado_em","Data",       150),
+        ("id", "ID", 50, False),
+        ("nome", "Nome", 220, True),
+        ("cpf", "CPF", 130, False),
+        ("unloc", "UNLOC", 90, False),
+        ("registro", "Registro", 120, False),
+        ("validade", "Validade", 95, False),
+        ("usuario", "Anexado por", 130, False),
+        ("criado_em", "Data", 150, False),
     ]
 
     @classmethod
     def criar(cls, parent):
-        _style_tree("Hist")
-        container = ctk.CTkFrame(parent, fg_color="transparent")
+        """Cria a tabela de histórico."""
+        container = QFrame(parent)
+        container.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        hdr = ctk.CTkFrame(container, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 12))
-        _section_header(hdr, "📜 Histórico de Anexações")
+        hdr_layout = QHBoxLayout()
+        hdr_layout.setContentsMargins(0, 0, 0, 12)
+        lbl = _section_header(container, "📜 Histórico de Anexações")
+        hdr_layout.addWidget(lbl)
+        layout.addLayout(hdr_layout)
 
-        frame = _tree_frame(container)
-        cols  = tuple(c[0] for c in cls._COLS)
-        tree  = ttk.Treeview(frame, columns=cols, show="headings",
-                             style="Hist.Treeview", selectmode="browse")
+        table = _create_table(container, cls._COLS)
+        layout.addWidget(table)
 
-        for key, titulo, w in cls._COLS:
-            tree.heading(key, text=titulo)
-            tree.column(key, width=w, minwidth=40, stretch=(key == "nome"))
-
-        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
-
-        tree.tag_configure("par",   background=AppTheme.BG_INPUT)
-        tree.tag_configure("impar", background=AppTheme.BG_CARD)
-
-        return tree, container
+        return table, container
 
     @classmethod
-    def carregar(cls, tree, registros: list):
-        cls.limpar(tree)
-        for i, r in enumerate(registros):
-            tree.insert("", "end",
-                        tags=("par" if i % 2 == 0 else "impar",),
-                        values=(
-                            r.get("id",       ""),
-                            r.get("nome",     ""),
-                            r.get("cpf",      ""),
-                            r.get("unloc",    ""),
-                            r.get("registro", ""),
-                            fmt_data_curta(r.get("validade")),
-                            r.get("usuario",  "—"),
-                            fmt_data(r.get("criado_em")),
-                        ))
+    def carregar(cls, table, registros: list):
+        """Carrega registros na tabela."""
+        cls.limpar(table)
+        table.setRowCount(len(registros))
+
+        for row, r in enumerate(registros):
+            table.setItem(row, 0, QTableWidgetItem(str(r.get("id", ""))))
+            table.setItem(row, 1, QTableWidgetItem(r.get("nome", "")))
+            table.setItem(row, 2, QTableWidgetItem(r.get("cpf", "")))
+            table.setItem(row, 3, QTableWidgetItem(r.get("unloc", "")))
+            table.setItem(row, 4, QTableWidgetItem(r.get("registro", "")))
+            table.setItem(row, 5, QTableWidgetItem(fmt_data_curta(r.get("validade"))))
+            table.setItem(row, 6, QTableWidgetItem(r.get("usuario", "—")))
+            table.setItem(row, 7, QTableWidgetItem(fmt_data(r.get("criado_em"))))
 
     @staticmethod
-    def limpar(tree):
-        for item in tree.get_children():
-            tree.delete(item)
+    def limpar(table):
+        table.setRowCount(0)
 
 
 # ── Tabela Log ────────────────────────────────────────────────────────────────
 
 class LogTable:
-    _TAGS  = {
-        "sucesso": (VERDE, "#0a2f1a"),
-        "erro":    (VERM,  "#3f0a0a"),
-        "aviso":   (AMBER, "#2d2a0a"),
-        "info":    (INFO,  "#0a2a3f"),
-    }
     _ICONS = {"sucesso": "✓", "erro": "✗", "aviso": "⚠", "info": "ℹ"}
 
     @classmethod
     def criar(cls, parent):
-        _style_tree("Log2")
-        container = ctk.CTkFrame(parent, fg_color="transparent")
+        """Cria a tabela de log."""
+        container = QFrame(parent)
+        container.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        hdr = ctk.CTkFrame(container, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 12))
-        _section_header(hdr, "📋 Log de Processamento")
+        hdr_layout = QHBoxLayout()
+        hdr_layout.setContentsMargins(0, 0, 0, 12)
+        lbl = _section_header(container, "📋 Log de Processamento")
+        hdr_layout.addWidget(lbl)
+        layout.addLayout(hdr_layout)
 
-        frame = _tree_frame(container)
-        tree  = ttk.Treeview(frame, columns=("status", "mensagem"),
-                             show="headings", style="Log2.Treeview")
-        tree.heading("status",   text="Status")
-        tree.heading("mensagem", text="Mensagem")
-        tree.column("status",   width=140, minwidth=100)
-        tree.column("mensagem", width=580, stretch=True)
+        columns = [
+            ("status", "Status", 140, False),
+            ("mensagem", "Mensagem", 580, True),
+        ]
+        table = _create_table(container, columns)
+        layout.addWidget(table)
 
-        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
+        return table, container
 
-        for tag, (bg, fg) in cls._TAGS.items():
-            tree.tag_configure(tag, background=bg, foreground=fg)
+    @classmethod
+    def add(cls, table, status, mensagem, tag="info"):
+        """Adiciona uma mensagem ao log."""
+        ts = datetime.now().strftime("%H:%M:%S")
+        icon = cls._ICONS.get(tag.lower(), "•")
 
-        return tree, container
+        row = table.rowCount()
+        table.insertRow(row)
+
+        table.setItem(row, 0, QTableWidgetItem(status))
+        table.setItem(row, 1, QTableWidgetItem(f"[{ts}] {icon} {mensagem}"))
+
+        colors = {
+            "sucesso": VERDE,
+            "erro": VERM,
+            "aviso": "#f59e0b",
+            "info": INFO,
+        }
+        color = colors.get(tag.lower(), MUTED)
+
+        for col in range(2):
+            item = table.item(row, col)
+            if item:
+                item.setForeground(QColor(color))
+
+        table.scrollToBottom()
 
     @staticmethod
-    def add(tree, status, mensagem, tag="info"):
-        ts   = datetime.now().strftime("%H:%M:%S")
-        icon = LogTable._ICONS.get(tag.lower(), "•")
-        tree.insert("", "end",
-                    values=(status, f"[{ts}] {icon} {mensagem}"),
-                    tags=(tag.lower(),))
-        kids = tree.get_children()
-        if kids:
-            tree.see(kids[-1])
-
-    @staticmethod
-    def limpar(tree):
-        for item in tree.get_children():
-            tree.delete(item)
+    def limpar(table):
+        table.setRowCount(0)

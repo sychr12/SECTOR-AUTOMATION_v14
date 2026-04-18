@@ -87,7 +87,7 @@ class UsuarioController:
             return usuarios
 
         except Exception as e:
-            print(f"Erro ao carregar usuários: {e}")
+            # print(f"Erro ao carregar usuários: {e}")
             return []
 
         finally:

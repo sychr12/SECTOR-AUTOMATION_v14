@@ -3,8 +3,10 @@
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 from ..utils import DateUtils, TableUtils
 
@@ -275,3 +277,4 @@ class HistoricoTab(ctk.CTkFrame):
                            f"Falha ao baixar XLS:\n{exc}")
 
         threading.Thread(target=_worker, daemon=True).start()
+

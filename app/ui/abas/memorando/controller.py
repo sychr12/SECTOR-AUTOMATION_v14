@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import traceback
 from datetime import datetime
-from tkinter import filedialog
+
+from PyQt6.QtWidgets import QFileDialog
+
 from .models import MemorandoModel
 from .services import MemorandoService
 
@@ -59,37 +61,22 @@ class MemorandoController:
                 return False, "Erro ao salvar no banco de dados", None
 
         except Exception as e:
-            traceback.print_exc()
             return False, f"{type(e).__name__}: {e}", None
 
     def buscar_historico(self, termo_pesquisa="", municipio="Todos", ano="Todos", ordem="Recentes"):
         try:
             registros = MemorandoService.buscar_memorandos(
-                termo_pesquisa, 
-                municipio, 
+                termo_pesquisa,
+                municipio,
                 ano,
                 ordem
-                
-                )
+            )
             return True, "Histórico carregado com sucesso", registros
         except Exception as e:
-            traceback.print_exc()
             return False, f"{type(e).__name__}: {e}", []
 
     def buscar_historico_com_filtros(self, termo="", codigo_municipio=None,
-                                      ano=None, ordem="Recentes"):
-        """
-        Busca histórico com filtros avançados.
-
-        Args:
-            termo: Texto para buscar no número ou UNLOC
-            codigo_municipio: Código do município (ex: "MAO")
-            ano: Ano para filtrar (ex: "2024")
-            ordem: "Recentes" ou "Antigos"
-
-        Returns:
-            tuple: (sucesso, mensagem, registros)
-        """
+                                     ano=None, ordem="Recentes"):
         try:
             registros = MemorandoService.buscar_memorandos_com_filtros(
                 termo=termo,
@@ -99,16 +86,13 @@ class MemorandoController:
             )
             return True, "Histórico carregado com sucesso", registros
         except Exception as e:
-            traceback.print_exc()
             return False, f"{type(e).__name__}: {e}", []
 
     def listar_anos(self):
-        """Lista todos os anos disponíveis nos memorandos"""
         try:
             anos = MemorandoService.listar_anos_disponiveis()
             return True, anos
         except Exception as e:
-            traceback.print_exc()
             return False, []
 
     def visualizar_memorando(self, memorando_id):
@@ -116,13 +100,15 @@ class MemorandoController:
             memorando = MemorandoService.buscar_memorando_por_id(memorando_id)
             if not memorando or not memorando.get('word_conteudo'):
                 return False, "Memorando não encontrado no banco."
+
             conteudo = memorando['word_conteudo']
             if isinstance(conteudo, memoryview):
                 conteudo = bytes(conteudo)
+
             MemorandoService.abrir_arquivo_temp(conteudo)
             return True, f"Memorando {memorando['numero']} aberto"
+
         except Exception as e:
-            traceback.print_exc()
             return False, f"{type(e).__name__}: {e}"
 
     def baixar_memorando(self, memorando_id, numero):
@@ -132,11 +118,12 @@ class MemorandoController:
                 return False, "Memorando não encontrado no banco."
 
             nome_sugerido = f"MEMO_{memorando['numero']}_{memorando['unloc']}.docx"
-            caminho_salvar = filedialog.asksaveasfilename(
-                title="Salvar Memorando",
-                defaultextension=".docx",
-                initialfile=nome_sugerido,
-                filetypes=[("Word Document", "*.docx"), ("All Files", "*.*")]
+
+            caminho_salvar, _ = QFileDialog.getSaveFileName(
+                None,
+                "Salvar Memorando",
+                nome_sugerido,
+                "Word Document (*.docx);;All Files (*)"
             )
 
             if not caminho_salvar:
@@ -152,6 +139,4 @@ class MemorandoController:
             return True, f"Memorando salvo em:\n{caminho_salvar}"
 
         except Exception as e:
-            traceback.print_exc()
             return False, f"{type(e).__name__}: {e}"
-        

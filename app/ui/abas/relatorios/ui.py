@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Interface principal de Relatórios SEFAZ."""
+"""Interface de Relatórios SEFAZ (PyQt6)."""
 import threading
-from tkinter import messagebox
-import customtkinter as ctk
+from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import Qt
 
 from .controller   import RelatoriosController
 from .icon_manager import IconManager
-from .widgets      import StatCard               # ← agora existe em widgets/
-from .tabs         import GerarTab, HistoricoTab # ← agora existe em tabs/
+from .widgets      import StatCard
+from .tabs         import GerarTab, HistoricoTab
 
 
 class RelatoriosUI(ctk.CTkFrame):

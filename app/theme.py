@@ -1,48 +1,66 @@
-import customtkinter as ctk
+# -*- coding: utf-8 -*-
+"""
+AppTheme - Definições de cores e estilos do aplicativo para PyQt6
+"""
 
 
 class AppTheme:
     """Definições de cores e estilos do aplicativo"""
     
-    # Cores de Background (tema claro: branco + verde suave)
-    BG_APP = "#ffffff"          # Fundo principal (branco)
+    # Cores de Background (tema claro)
+    BG_APP = "#f5f7fc"          # Fundo principal (cinza azulado claro)
     BG_CARD = "#ffffff"         # Cards e containers (branco)
-    BG_INPUT = "#f3f4f6"        # Inputs e hover states (cinza muito claro)
-    BG_SIDEBAR = "#ffffff"      # Sidebar (branco)
+    BG_INPUT = "#ffffff"        # Inputs (branco)
+    BG_SIDEBAR = "#0a0f0d"      # Sidebar (verde escuro)
     BG_HEADER = "#ffffff"       # Header (branco)
+    BG_CARD_HOVER = "#f1f5f9"   # Hover em cards
     
     # Cores de Texto
-    TXT_MAIN = "#000000"        # Texto principal (preto)
-    TXT_MUTED = "#000000"       # Texto secundário/desabilitado (usar preto conforme solicitado)
-    TXT_DARK = "#000000"        # Texto escuro (para fundos claros)
+    TXT_MAIN = "#1e2f3e"        # Texto principal (azul escuro)
+    TXT_MUTED = "#5a6e8a"       # Texto secundário
+    TXT_DARK = "#1e2f3e"        # Texto escuro
+    TXT_LIGHT = "#ffffff"       # Texto claro
     
     # Cores de Botões
-    BTN_PRIMARY = "#22c55e"     # Botão primário (verde claro)
-    BTN_PRIMARY_HOVER = "#16a34a"
-    BTN_SUCCESS = "#22c55e"     # Botão de sucesso (verde suave)
-    BTN_SUCCESS_HOVER = "#16a34a"
+    BTN_PRIMARY = "#2c6e9e"     # Botão primário (azul corporativo)
+    BTN_PRIMARY_HOVER = "#1e4a6e"
+    BTN_SUCCESS = "#10b981"     # Botão de sucesso (verde)
+    BTN_SUCCESS_HOVER = "#059669"
     BTN_DANGER = "#ef4444"      # Botão de perigo (vermelho)
     BTN_DANGER_HOVER = "#dc2626"
     BTN_WARNING = "#f59e0b"     # Botão de aviso (laranja)
     BTN_WARNING_HOVER = "#d97706"
-    BTN_INFO = "#06b6d4"        # Botão de informação (cyan)
-    BTN_INFO_HOVER = "#0891b2"
+    BTN_INFO = "#3b82f6"        # Botão de informação (azul)
+    BTN_INFO_HOVER = "#2563eb"
     
     # Cores de Borda
-    BORDER = "#e5e7eb"          # Borda padrão (clara)
-    BORDER_LIGHT = "#f0fdf4"    # Borda clara com leve tom verde
+    BORDER = "#e2e8f0"          # Borda padrão
+    BORDER_COLOR = "#e2e8f0"    # Alias para compatibilidade
+    BORDER_LIGHT = "#f1f5f9"    # Borda clara
     
     # Cores de Status
-    STATUS_SUCCESS = "#22c55e"  # Verde (suave)
+    STATUS_SUCCESS = "#10b981"  # Verde
     STATUS_ERROR = "#ef4444"    # Vermelho
     STATUS_WARNING = "#f59e0b"  # Laranja
     STATUS_INFO = "#3b82f6"     # Azul
+    
+    # Cores de Fundo para Status
+    BG_SUCCESS = "#d1fae5"
+    BG_ERROR = "#fee2e2"
+    BG_WARNING = "#fef3c7"
+    BG_INFO = "#dbeafe"
+    
+    # Cores da Sidebar
+    SIDEBAR_BG = "#0a0f0d"
+    SIDEBAR_BG_DARK = "#060a08"
+    SIDEBAR_TEXT = "#9ab89e"
+    SIDEBAR_TEXT_ACTIVE = "#00b96b"
     
     # Fontes
     FONT_FAMILY = "Segoe UI"
     FONT_TITLE = (FONT_FAMILY, 22, "bold")
     FONT_SUBTITLE = (FONT_FAMILY, 18, "bold")
-    FONT_TEXT = (FONT_FAMILY, 13)
+    FONT_TEXT = (FONT_FAMILY, 12)
     FONT_SMALL = (FONT_FAMILY, 11)
     FONT_TINY = (FONT_FAMILY, 10)
     
@@ -59,101 +77,282 @@ class AppTheme:
     RADIUS_XLARGE = 20
 
 
-def apply_theme():
-    """Aplica o tema claro ao CustomTkinter"""
-
-    # Definir aparência e tema de cor (modo claro)
-    ctk.set_appearance_mode("light")
-    # Mantemos o modo claro e usamos as cores definidas abaixo
-    try:
-        ctk.set_default_color_theme("green")
-    except Exception:
-        # fallback se tema 'green' não existir no CustomTkinter
-        ctk.set_default_color_theme("blue")
+def get_stylesheet():
+    """Retorna um stylesheet CSS para PyQt6 baseado no tema"""
+    return f"""
+    /* Estilos globais */
+    QWidget {{
+        background-color: {AppTheme.BG_APP};
+        color: {AppTheme.TXT_MAIN};
+        font-family: '{AppTheme.FONT_FAMILY}';
+        font-size: 12px;
+    }}
     
-    # Configurações adicionais de tema
-    ctk.ThemeManager.theme["CTk"]["fg_color"] = [AppTheme.BG_APP, AppTheme.BG_APP]
+    /* Cards */
+    QFrame[frameShape="4"] {{  /* QFrame.StyledPanel */
+        background-color: {AppTheme.BG_CARD};
+        border: 1px solid {AppTheme.BORDER};
+        border-radius: {AppTheme.RADIUS_LARGE}px;
+    }}
     
-    # Configurações de botões
-    ctk.ThemeManager.theme["CTkButton"]["fg_color"] = [AppTheme.BTN_PRIMARY, AppTheme.BTN_PRIMARY]
-    ctk.ThemeManager.theme["CTkButton"]["hover_color"] = [AppTheme.BTN_PRIMARY_HOVER, AppTheme.BTN_PRIMARY_HOVER]
-    ctk.ThemeManager.theme["CTkButton"]["text_color"] = [AppTheme.TXT_MAIN, AppTheme.TXT_MAIN]
-    ctk.ThemeManager.theme["CTkButton"]["corner_radius"] = AppTheme.RADIUS_MEDIUM
+    /* Botões primários */
+    QPushButton[primary="true"] {{
+        background-color: {AppTheme.BTN_PRIMARY};
+        color: white;
+        border: none;
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+        padding: 8px 16px;
+        font-weight: bold;
+    }}
+    QPushButton[primary="true"]:hover {{
+        background-color: {AppTheme.BTN_PRIMARY_HOVER};
+    }}
     
-    # Configurações de entrada de texto
-    ctk.ThemeManager.theme["CTkEntry"]["fg_color"] = [AppTheme.BG_INPUT, AppTheme.BG_INPUT]
-    ctk.ThemeManager.theme["CTkEntry"]["border_color"] = [AppTheme.BORDER, AppTheme.BORDER]
-    ctk.ThemeManager.theme["CTkEntry"]["text_color"] = [AppTheme.TXT_MAIN, AppTheme.TXT_MAIN]
+    /* Botões de sucesso */
+    QPushButton[success="true"] {{
+        background-color: {AppTheme.BTN_SUCCESS};
+        color: white;
+        border: none;
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+        padding: 8px 16px;
+        font-weight: bold;
+    }}
+    QPushButton[success="true"]:hover {{
+        background-color: {AppTheme.BTN_SUCCESS_HOVER};
+    }}
     
-    # Configurações de frame
-    ctk.ThemeManager.theme["CTkFrame"]["fg_color"] = [AppTheme.BG_CARD, AppTheme.BG_CARD]
-    ctk.ThemeManager.theme["CTkFrame"]["border_color"] = [AppTheme.BORDER, AppTheme.BORDER]
+    /* Botões de perigo */
+    QPushButton[danger="true"] {{
+        background-color: {AppTheme.BTN_DANGER};
+        color: white;
+        border: none;
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+        padding: 8px 16px;
+        font-weight: bold;
+    }}
+    QPushButton[danger="true"]:hover {{
+        background-color: {AppTheme.BTN_DANGER_HOVER};
+    }}
     
-    # Configurações de label
-    ctk.ThemeManager.theme["CTkLabel"]["text_color"] = [AppTheme.TXT_MAIN, AppTheme.TXT_MAIN]
-    ctk.ThemeManager.theme["CTkLabel"]["font"] = [AppTheme.FONT_TEXT, AppTheme.FONT_TEXT]
+    /* Campos de entrada */
+    QLineEdit, QTextEdit, QComboBox {{
+        background-color: {AppTheme.BG_INPUT};
+        border: 1px solid {AppTheme.BORDER};
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+        padding: 6px 10px;
+        selection-background-color: {AppTheme.BTN_PRIMARY};
+    }}
+    
+    QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
+        border: 2px solid {AppTheme.BTN_PRIMARY};
+    }}
+    
+    /* Tabelas */
+    QTableWidget {{
+        background-color: {AppTheme.BG_CARD};
+        border: 1px solid {AppTheme.BORDER};
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+        gridline-color: {AppTheme.BORDER};
+    }}
+    
+    QTableWidget::item {{
+        padding: 8px;
+    }}
+    
+    QTableWidget::item:selected {{
+        background-color: {AppTheme.BTN_PRIMARY};
+        color: white;
+    }}
+    
+    QHeaderView::section {{
+        background-color: {AppTheme.BG_INPUT};
+        padding: 8px;
+        border: none;
+        font-weight: bold;
+    }}
+    
+    /* Abas (QTabWidget) */
+    QTabWidget::pane {{
+        background-color: {AppTheme.BG_CARD};
+        border: 1px solid {AppTheme.BORDER};
+        border-radius: {AppTheme.RADIUS_MEDIUM}px;
+    }}
+    
+    QTabBar::tab {{
+        background-color: {AppTheme.BG_INPUT};
+        padding: 8px 20px;
+        margin-right: 2px;
+        border-top-left-radius: {AppTheme.RADIUS_SMALL}px;
+        border-top-right-radius: {AppTheme.RADIUS_SMALL}px;
+    }}
+    
+    QTabBar::tab:selected {{
+        background-color: {AppTheme.BG_CARD};
+        border-bottom: 2px solid {AppTheme.BTN_SUCCESS};
+    }}
+    
+    QTabBar::tab:hover {{
+        background-color: {AppTheme.BORDER};
+    }}
+    
+    /* Scrollbars */
+    QScrollBar:vertical {{
+        background-color: {AppTheme.BG_INPUT};
+        width: 10px;
+        border-radius: 5px;
+    }}
+    
+    QScrollBar::handle:vertical {{
+        background-color: {AppTheme.BORDER};
+        border-radius: 5px;
+        min-height: 20px;
+    }}
+    
+    QScrollBar::handle:vertical:hover {{
+        background-color: {AppTheme.BTN_PRIMARY};
+    }}
+    
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0px;
+    }}
+    
+    /* Progress Bar */
+    QProgressBar {{
+        border: none;
+        border-radius: {AppTheme.RADIUS_SMALL}px;
+        background-color: {AppTheme.BORDER};
+        text-align: center;
+    }}
+    
+    QProgressBar::chunk {{
+        background-color: {AppTheme.BTN_SUCCESS};
+        border-radius: {AppTheme.RADIUS_SMALL}px;
+    }}
+    
+    /* Labels */
+    QLabel[heading="true"] {{
+        font-size: 18px;
+        font-weight: bold;
+        color: {AppTheme.TXT_MAIN};
+    }}
+    
+    QLabel[subheading="true"] {{
+        font-size: 14px;
+        color: {AppTheme.TXT_MUTED};
+    }}
+    
+    QLabel[error="true"] {{
+        color: {AppTheme.BTN_DANGER};
+    }}
+    
+    QLabel[success="true"] {{
+        color: {AppTheme.BTN_SUCCESS};
+    }}
+    """
 
-    # Ajustes gerais de bordas e cantos
-    ctk.ThemeManager.theme["CTk"]["corner_radius"] = AppTheme.RADIUS_SMALL
-    ctk.ThemeManager.theme["CTkEntry"]["corner_radius"] = AppTheme.RADIUS_MEDIUM
-    ctk.ThemeManager.theme["CTkButton"]["corner_radius"] = AppTheme.RADIUS_MEDIUM
 
-    # Forçar tamanho/rótulos padrão para melhor legibilidade
-    ctk.ThemeManager.theme["CTkLabel"]["text_font"] = AppTheme.FONT_TEXT
-    ctk.ThemeManager.theme["CTkButton"]["text_font"] = (AppTheme.FONT_FAMILY, 14, "bold")
+def apply_theme(app):
+    """Aplica o tema à aplicação PyQt6"""
+    app.setStyleSheet(get_stylesheet())
 
 
-# Função auxiliar para criar estilos de botão
+# Funções auxiliares para criar estilos (compatibilidade)
 def button_style(color_type="primary"):
     """Retorna um dicionário com estilos para botões"""
     styles = {
         "primary": {
-            "fg_color": AppTheme.BTN_PRIMARY,
-            "hover_color": AppTheme.BTN_PRIMARY_HOVER,
-            "text_color": AppTheme.TXT_MAIN
+            "bg": AppTheme.BTN_PRIMARY,
+            "hover": AppTheme.BTN_PRIMARY_HOVER,
+            "color": "white"
         },
         "success": {
-            "fg_color": AppTheme.BTN_SUCCESS,
-            "hover_color": AppTheme.BTN_SUCCESS_HOVER,
-            "text_color": AppTheme.TXT_MAIN
+            "bg": AppTheme.BTN_SUCCESS,
+            "hover": AppTheme.BTN_SUCCESS_HOVER,
+            "color": "white"
         },
         "danger": {
-            "fg_color": AppTheme.BTN_DANGER,
-            "hover_color": AppTheme.BTN_DANGER_HOVER,
-            "text_color": AppTheme.TXT_MAIN
+            "bg": AppTheme.BTN_DANGER,
+            "hover": AppTheme.BTN_DANGER_HOVER,
+            "color": "white"
         },
         "warning": {
-            "fg_color": AppTheme.BTN_WARNING,
-            "hover_color": AppTheme.BTN_WARNING_HOVER,
-            "text_color": AppTheme.TXT_MAIN
+            "bg": AppTheme.BTN_WARNING,
+            "hover": AppTheme.BTN_WARNING_HOVER,
+            "color": "white"
         },
         "info": {
-            "fg_color": AppTheme.BTN_INFO,
-            "hover_color": AppTheme.BTN_INFO_HOVER,
-            "text_color": AppTheme.TXT_MAIN
+            "bg": AppTheme.BTN_INFO,
+            "hover": AppTheme.BTN_INFO_HOVER,
+            "color": "white"
         }
     }
     
     return styles.get(color_type, styles["primary"])
 
 
-# Função auxiliar para criar estilos de entrada
 def input_style():
     """Retorna um dicionário com estilos para campos de entrada"""
     return {
-        "fg_color": AppTheme.BG_INPUT,
-        "border_color": AppTheme.BORDER,
-        "text_color": AppTheme.TXT_MAIN,
-        "corner_radius": AppTheme.RADIUS_MEDIUM
+        "bg": AppTheme.BG_INPUT,
+        "border": AppTheme.BORDER,
+        "color": AppTheme.TXT_MAIN,
+        "radius": AppTheme.RADIUS_MEDIUM
     }
 
 
-# Função auxiliar para criar estilos de card
 def card_style():
     """Retorna um dicionário com estilos para cards"""
     return {
-        "fg_color": AppTheme.BG_CARD,
-        "border_color": AppTheme.BORDER,
-        "corner_radius": AppTheme.RADIUS_LARGE,
+        "bg": AppTheme.BG_CARD,
+        "border": AppTheme.BORDER,
+        "radius": AppTheme.RADIUS_LARGE,
         "border_width": 1
     }
+
+
+def get_css_button(style="primary"):
+    """Retorna CSS para botão com o estilo especificado"""
+    btn_style = button_style(style)
+    return f"""
+        QPushButton {{
+            background-color: {btn_style['bg']};
+            color: {btn_style['color']};
+            border: none;
+            border-radius: {AppTheme.RADIUS_MEDIUM}px;
+            padding: 8px 16px;
+            font-weight: bold;
+        }}
+        QPushButton:hover {{
+            background-color: {btn_style['hover']};
+        }}
+        QPushButton:disabled {{
+            background-color: {AppTheme.BORDER};
+            color: {AppTheme.TXT_MUTED};
+        }}
+    """
+
+
+def get_css_input():
+    """Retorna CSS para campos de entrada"""
+    return f"""
+        QLineEdit, QTextEdit, QComboBox {{
+            background-color: {AppTheme.BG_INPUT};
+            border: 1px solid {AppTheme.BORDER};
+            border-radius: {AppTheme.RADIUS_MEDIUM}px;
+            padding: 6px 10px;
+        }}
+        QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
+            border: 2px solid {AppTheme.BTN_PRIMARY};
+        }}
+    """
+
+
+def get_css_card():
+    """Retorna CSS para cards"""
+    return f"""
+        QFrame {{
+            background-color: {AppTheme.BG_CARD};
+            border: 1px solid {AppTheme.BORDER};
+            border-radius: {AppTheme.RADIUS_LARGE}px;
+        }}
+    """

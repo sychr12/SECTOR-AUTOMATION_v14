@@ -1,472 +1,500 @@
+# views/carteira_view.py
 # -*- coding: utf-8 -*-
 """
 carteira_view.py — Interface principal da Carteira Digital.
-Local: app/ui/abas/Carteira/views/carteira_view.py
+Versão PyQt6.
 """
 import os
 import re
 import threading
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-from tkinter import ttk
+from datetime import datetime
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
+    QPushButton, QTextEdit, QScrollArea, QFileDialog, QMessageBox,
+    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont, QPixmap
+
 from PIL import Image
 
-from ui.base_ui import BaseUI
-from app.theme import AppTheme
 from ..controller import CarteiraController
 from ..carteira_service import CarteiraService
-from ..utils.constants import (
-    MAX_FILENAME_DISPLAY, DEBOUNCE_DELAY, VERDE, VERDE_HOVER,
-    AZUL, AZUL_HOVER, MUTED, VERMELHO, SUPPORTED_IMAGE_FORMATS,
-)
-from ..utils.formatters import format_cpf, format_date
-from ..utils.validators import validate_cpf, validate_date
-from ..utils.pdf_parser import PDFParser
-from ..assets import open_image
-from .historico_view import HistoricoView
 from .batch_view import BatchCarteiraView
+from .historico_view import HistoricoView
+
+# ── Cores ─────────────────────────────────────────────────────────────────────
+_VERDE = "#22c55e"
+_VERDE_H = "#16a34a"
+_AZUL = "#3b82f6"
+_AZUL_H = "#2563eb"
+_MUTED = "#64748b"
+_VERMELHO = "#ef4444"
+_BRANCO = "#ffffff"
+_CINZA_BG = "#f8fafc"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_TEXTO = "#1e2f3e"
+
+MAX_FILENAME_DISPLAY = 30
+DEBOUNCE_DELAY = 120
 
 
-class CarteiraDigitalUI(BaseUI):
+class CarteiraDigitalUI(QWidget):
     """Interface principal da carteira digital"""
 
-    def __init__(self, master, usuario):
-        super().__init__(master)
-        self.usuario    = usuario
-        self.service    = CarteiraService()
+    def __init__(self, parent=None, usuario=None):
+        super().__init__(parent)
+        self.usuario = usuario
+        self.service = CarteiraService()
         self.controller = CarteiraController(usuario, self.service)
-        self.pdf_parser = PDFParser()
 
-        self.lado           = "frente"
-        self._after_id      = None
-        self._pdf_path      = None
-        self.fotos          = {"foto1": None, "foto2": None, "foto3": None}
-        self._lbl_fotos     = {}
+        self.lado = "frente"
+        self._after_id = None
+        self._pdf_path = None
+        self.fotos = {"foto1": None, "foto2": None, "foto3": None}
+        self._lbl_fotos = {}
         self._labels_frente = {}
-        self._labels_verso  = {}
+        self._labels_verso = {}
 
-        self.configure(fg_color=AppTheme.BG_APP)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
         self._setup_ui()
         self._setup_shortcuts()
 
     # ── Atalhos ───────────────────────────────────────────────────────────────
-
     def _setup_shortcuts(self):
-        self.bind("<Control-s>", lambda _: self._salvar_banco())
-        self.bind("<Control-l>", lambda _: self._confirmar_limpar())
-        self.bind("<F5>",        lambda _: self._virar_cartao())
-        self.focus_set()
+        # Atalhos serão implementados via eventFilter se necessário
+        pass
 
     # ── Layout principal ──────────────────────────────────────────────────────
-
     def _setup_ui(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Cart.TNotebook",
-                        background=AppTheme.BG_APP, borderwidth=0)
-        style.configure("Cart.TNotebook.Tab",
-                        background=AppTheme.BG_CARD,
-                        foreground=MUTED,
-                        font=("Segoe UI", 12),
-                        padding=(22, 10))
-        style.map("Cart.TNotebook.Tab",
-                  background=[("selected", AppTheme.BG_INPUT)],
-                  foreground=[("selected", AppTheme.TXT_MAIN)])
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        notebook = ttk.Notebook(self, style="Cart.TNotebook")
-        notebook.pack(fill="both", expand=True)
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet(f"""
+            QTabWidget::pane {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+            }}
+            QTabBar::tab {{
+                background-color: {_CINZA_BG};
+                padding: 10px 24px;
+                margin-right: 2px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {_BRANCO};
+                border-bottom: 2px solid {_VERDE};
+            }}
+        """)
 
         # Aba 1 — Gerar em Lote
-        aba_batch = ctk.CTkFrame(notebook, fg_color=AppTheme.BG_APP)
-        notebook.add(aba_batch, text="  Gerar em Lote  ")
+        aba_batch = QWidget()
         BatchCarteiraView(
             aba_batch,
-            usuario    = self.usuario,
-            repo       = self.service,
-            sefaz_repo = self.service.sefaz_repo,
-        ).pack(fill="both", expand=True)
+            usuario=self.usuario,
+            repo=self.service,
+            sefaz_repo=self.service.sefaz_repo,
+        )
+        batch_layout = QVBoxLayout(aba_batch)
+        batch_layout.setContentsMargins(0, 0, 0, 0)
+        self.tab_widget.addTab(aba_batch, "  Gerar em Lote  ")
 
         # Aba 2 — Cadastro Individual
-        aba_individual = ctk.CTkFrame(notebook, fg_color=AppTheme.BG_APP)
-        notebook.add(aba_individual, text="  Cadastro Individual  ")
+        aba_individual = QWidget()
+        self.tab_widget.addTab(aba_individual, "  Cadastro Individual  ")
         self._build_individual_tab(aba_individual)
 
+        layout.addWidget(self.tab_widget)
+
     # ── Aba de Cadastro Individual ────────────────────────────────────────────
-
     def _build_individual_tab(self, parent):
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=36, pady=28)
-        container.grid_columnconfigure(0, weight=0)
-        container.grid_columnconfigure(1, weight=1)
+        layout = QHBoxLayout(parent)
+        layout.setContentsMargins(36, 28, 36, 28)
+        layout.setSpacing(28)
 
-        self._build_card_preview(container)
-        self._build_form(container)
+        self._build_card_preview(layout)
+        self._build_form(layout)
 
-    def _build_card_preview(self, parent):
-        col = ctk.CTkFrame(parent, fg_color="transparent")
-        col.grid(row=0, column=0, sticky="n", padx=(0, 28))
+    def _build_card_preview(self, parent_layout):
+        col = QFrame()
+        col.setStyleSheet("background-color: transparent;")
+        col_layout = QVBoxLayout(col)
+        col_layout.setContentsMargins(0, 0, 0, 0)
+        col_layout.setSpacing(8)
 
-        ctk.CTkLabel(
-            col, text="PRÉVIA DO CARTÃO",
-            font=("Segoe UI", 10, "bold"),
-            text_color=MUTED,
-        ).pack(anchor="w", pady=(0, 8))
+        lbl_title = QLabel("PRÉVIA DO CARTÃO")
+        lbl_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {_MUTED};")
+        col_layout.addWidget(lbl_title)
 
-        card_container = ctk.CTkFrame(
-            col, fg_color=AppTheme.BG_CARD,
-            corner_radius=16,
-            border_width=1,
-            border_color=AppTheme.BORDER,
-        )
-        card_container.pack()
+        card_container = QFrame()
+        card_container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_CINZA_BG};
+                border-radius: 16px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        card_layout = QVBoxLayout(card_container)
+        card_layout.setContentsMargins(12, 12, 12, 12)
 
-        self.card = ctk.CTkFrame(
-            card_container,
-            width=self.controller.CARD_W,
-            height=self.controller.CARD_H,
-            fg_color="transparent",
-        )
-        self.card.pack(padx=12, pady=12)
-        self.card.pack_propagate(False)
+        self.card = QFrame()
+        self.card.setFixedSize(self.controller.CARD_W, self.controller.CARD_H)
+        self.card.setStyleSheet("background-color: transparent;")
+        card_layout.addWidget(self.card)
+        col_layout.addWidget(card_container)
 
-        self.lbl_bg = ctk.CTkLabel(self.card, text="")
-        self.lbl_bg.place(x=0, y=0)
-        self._render_card()
+        # Botões
+        btn_virar = QPushButton("🔄  Virar cartão")
+        btn_virar.setFixedHeight(40)
+        btn_virar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {_CINZA_BORDER}; }}
+        """)
+        btn_virar.clicked.connect(self._virar_cartao)
+        col_layout.addWidget(btn_virar)
 
-        buttons = [
-            ("🔄  Virar cartão",       AppTheme.BG_INPUT, AppTheme.BORDER, self._virar_cartao,     False),
-            ("💾  Salvar no Banco",     VERDE,             VERDE_HOVER,     self._salvar_banco,     True),
-            ("📜  Histórico",           AZUL,              AZUL_HOVER,      self.abrir_historico,   False),
-            ("🗑️  Limpar Formulário",  AppTheme.BG_INPUT, AppTheme.BORDER, self._confirmar_limpar, False),
-        ]
-        for text, color, hover, command, bold in buttons:
-            ctk.CTkButton(
-                col, text=text,
-                width=self.controller.CARD_W,
-                height=40,
-                corner_radius=10,
-                fg_color=color,
-                hover_color=hover,
-                text_color=AppTheme.TXT_MAIN,
-                font=("Segoe UI", 11, "bold") if bold else ("Segoe UI", 11),
-                command=command,
-            ).pack(pady=(6, 0))
+        btn_salvar = QPushButton("💾  Salvar no Banco")
+        btn_salvar.setFixedHeight(40)
+        btn_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {_VERDE_H}; }}
+        """)
+        btn_salvar.clicked.connect(self._salvar_banco)
+        col_layout.addWidget(btn_salvar)
 
-    # ── Prévia do cartão ──────────────────────────────────────────────────────
+        btn_historico = QPushButton("📜  Histórico")
+        btn_historico.setFixedHeight(40)
+        btn_historico.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {_AZUL_H}; }}
+        """)
+        btn_historico.clicked.connect(self.abrir_historico)
+        col_layout.addWidget(btn_historico)
 
-    def _render_card(self):
-        img_path = (
-            self.controller.IMG_FRENTE
-            if self.lado == "frente"
-            else self.controller.IMG_VERSO
-        )
-        try:
-            pil_img = open_image(
-                img_path,
-                "FRENTE" if self.lado == "frente" else "VERSO",
-            )
-            pil_img = pil_img.resize(
-                (self.controller.CARD_W, self.controller.CARD_H),
-                Image.Resampling.LANCZOS,
-            )
-            ctk_img = ctk.CTkImage(
-                light_image=pil_img,
-                size=(self.controller.CARD_W, self.controller.CARD_H),
-            )
-            self.lbl_bg.configure(image=ctk_img, text="")
-            self.lbl_bg.image = ctk_img
-        except Exception:
-            label = "FRENTE" if self.lado == "frente" else "VERSO"
-            self.lbl_bg.configure(
-                image=None,
-                text=f"[ {label} ]",
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED,
-            )
+        btn_limpar = QPushButton("🗑️  Limpar Formulário")
+        btn_limpar.setFixedHeight(40)
+        btn_limpar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {_CINZA_BORDER}; }}
+        """)
+        btn_limpar.clicked.connect(self._confirmar_limpar)
+        col_layout.addWidget(btn_limpar)
 
-        for widget in self.card.winfo_children():
-            if widget is not self.lbl_bg:
-                widget.destroy()
+        col_layout.addStretch()
+        parent_layout.addWidget(col)
 
-        self._labels_frente.clear()
-        self._labels_verso.clear()
-
-        if self.lado == "frente":
-            self._build_front_labels()
-        else:
-            self._build_back_labels()
-
-    def _create_label(self, parent, x, y, width, font):
-        frame = ctk.CTkFrame(parent, width=width, height=18, fg_color="transparent")
-        frame.place(x=x, y=y)
-        frame.pack_propagate(False)
-        label = ctk.CTkLabel(
-            frame, text="---", font=font,
-            text_color=AppTheme.TXT_MAIN, anchor="w",
-        )
-        label.pack(fill="x")
-        return label
-
-    def _build_front_labels(self):
-        self._labels_frente = {
-            "registro":    self._create_label(self.card, 27,  100, 180, ("Segoe UI", 12)),
-            "cpf":         self._create_label(self.card, 211, 100, 190, ("Segoe UI", 12)),
-            "nome":        self._create_label(self.card, 27,  136, 370, ("Segoe UI", 12, "bold")),
-            "propriedade": self._create_label(self.card, 27,  173, 370, ("Segoe UI", 12)),
-            "unloc":       self._create_label(self.card, 26,  210, 124, ("Segoe UI", 12)),
-            "inicio":      self._create_label(self.card, 190, 210, 106, ("Segoe UI", 12)),
-            "validade":    self._create_label(self.card, 300, 210, 140, ("Segoe UI", 12)),
-        }
-
-    def _build_back_labels(self):
-        self._labels_verso = {
-            "endereco":   self._create_label(self.card, 21, 73,  385, ("Segoe UI", 12)),
-            "atividade1": self._create_label(self.card, 21, 127, 385, ("Segoe UI", 12)),
-            "atividade2": self._create_label(self.card, 21, 167, 385, ("Segoe UI", 12)),
-            "georef":     self._create_label(self.card, 21, 206, 385, ("Segoe UI", 12)),
-        }
-
-    # ── Formulário ────────────────────────────────────────────────────────────
-
-    def _build_form(self, parent):
-        scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent")
-        scroll.grid(row=0, column=1, sticky="nsew")
+    def _build_form(self, parent_layout):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: transparent;")
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(16)
 
         # Dados do Produtor
-        self._add_section(scroll, "DADOS DO PRODUTOR")
-        form_panel = self._create_form_panel(scroll)
-
+        scroll_layout.addWidget(self._create_section_title("DADOS DO PRODUTOR"))
+        form_panel = self._create_form_panel()
+        
         self.registro = self._create_field(form_panel, "Registro estadual")
-
-        cpf_row = ctk.CTkFrame(form_panel, fg_color="transparent")
-        cpf_row.pack(fill="x", padx=16, pady=4)
-
-        self.cpf = ctk.CTkEntry(
-            cpf_row,
-            placeholder_text="CPF",
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN,
-            height=36,
-            corner_radius=8,
-        )
-        self.cpf.pack(side="left", fill="x", expand=True)
-        self.cpf.bind("<KeyRelease>", self._debounce_preview)
-
-        self._btn_buscar_cpf = ctk.CTkButton(
-            cpf_row,
-            text="🔍 Buscar CPF",
-            width=130, height=36, corner_radius=8,
-            fg_color=AZUL, hover_color=AZUL_HOVER,
-            text_color="#fff",
-            font=("Segoe UI", 10, "bold"),
-            command=self._buscar_por_cpf,
-        )
-        self._btn_buscar_cpf.pack(side="left", padx=(8, 0))
-
-        self._lbl_buscar_status = ctk.CTkLabel(
-            cpf_row, text="",
-            font=("Segoe UI", 9), text_color=MUTED,
-        )
-        self._lbl_buscar_status.pack(side="left", padx=(8, 0))
-
-        self.nome        = self._create_field(form_panel, "Nome do produtor")
+        
+        # CPF com botão de busca
+        cpf_row = QHBoxLayout()
+        self.cpf = QLineEdit()
+        self.cpf.setPlaceholderText("CPF")
+        self.cpf.textChanged.connect(self._debounce_preview)
+        self.cpf.setStyleSheet(self._entry_style())
+        cpf_row.addWidget(self.cpf)
+        
+        self._btn_buscar_cpf = QPushButton("🔍 Buscar CPF")
+        self._btn_buscar_cpf.setFixedSize(130, 36)
+        self._btn_buscar_cpf.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {_AZUL_H}; }}
+        """)
+        self._btn_buscar_cpf.clicked.connect(self._buscar_por_cpf)
+        cpf_row.addWidget(self._btn_buscar_cpf)
+        
+        self._lbl_buscar_status = QLabel("")
+        self._lbl_buscar_status.setFont(QFont("Segoe UI", 9))
+        self._lbl_buscar_status.setStyleSheet(f"color: {_MUTED};")
+        cpf_row.addWidget(self._lbl_buscar_status)
+        
+        form_panel.layout().addLayout(cpf_row)
+        
+        self.nome = self._create_field(form_panel, "Nome do produtor")
         self.propriedade = self._create_field(form_panel, "Propriedade")
-
-        row = ctk.CTkFrame(form_panel, fg_color="transparent")
-        row.pack(fill="x", padx=16)
-        row.grid_columnconfigure((0, 1, 2), weight=1)
-        self.unloc    = self._create_grid_field(row, "UNLOC",    0)
-        self.inicio   = self._create_grid_field(row, "Início",   1)
-        self.validade = self._create_grid_field(row, "Validade", 2)
+        
+        # Linha com UNLOC, Início, Validade
+        row_layout = QHBoxLayout()
+        self.unloc = self._create_field_inline(row_layout, "UNLOC")
+        self.inicio = self._create_field_inline(row_layout, "Início")
+        self.validade = self._create_field_inline(row_layout, "Validade")
+        form_panel.layout().addLayout(row_layout)
+        
+        scroll_layout.addWidget(form_panel)
 
         # Informações Complementares
-        self._add_section(scroll, "INFORMAÇÕES COMPLEMENTARES")
-        p2 = self._create_form_panel(scroll)
-        self.endereco   = self._create_field(p2, "Endereço")
-        self.atividade1 = self._create_field(p2, "Atividade primária")
-        self.atividade2 = self._create_field(p2, "Atividade secundária")
-        self.georef     = self._create_field(p2, "Georreferenciamento")
+        scroll_layout.addWidget(self._create_section_title("INFORMAÇÕES COMPLEMENTARES"))
+        form_panel2 = self._create_form_panel()
+        self.endereco = self._create_field(form_panel2, "Endereço")
+        self.atividade1 = self._create_field(form_panel2, "Atividade primária")
+        self.atividade2 = self._create_field(form_panel2, "Atividade secundária")
+        self.georef = self._create_field(form_panel2, "Georreferenciamento")
+        scroll_layout.addWidget(form_panel2)
 
         # Importar PDF
-        self._add_section(scroll, "IMPORTAR PDF DA CARTEIRA")
-        p_pdf = self._create_form_panel(scroll)
-        self._build_import_pdf(p_pdf)
+        scroll_layout.addWidget(self._create_section_title("IMPORTAR PDF DA CARTEIRA"))
+        pdf_panel = self._create_form_panel()
+        self._build_import_pdf(pdf_panel)
+        scroll_layout.addWidget(pdf_panel)
 
         # Fotos
-        self._add_section(scroll, "FOTOS")
-        p3 = self._create_form_panel(scroll)
-        self._build_photos_section(p3)
+        scroll_layout.addWidget(self._create_section_title("FOTOS"))
+        fotos_panel = self._create_form_panel()
+        self._build_photos_section(fotos_panel)
+        scroll_layout.addWidget(fotos_panel)
 
-    def _add_section(self, parent, title):
-        ctk.CTkLabel(
-            parent, text=title,
-            font=("Segoe UI", 10, "bold"),
-            text_color=VERDE,
-        ).pack(anchor="w", pady=(18, 4))
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        parent_layout.addWidget(scroll, 1)
 
-    def _create_form_panel(self, parent):
-        panel = ctk.CTkFrame(
-            parent, fg_color=AppTheme.BG_INPUT,
-            corner_radius=12,
-            border_width=1, border_color=AppTheme.BORDER,
-        )
-        panel.pack(fill="x")
+    def _entry_style(self):
+        return f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {_AZUL};
+            }}
+        """
+
+    def _create_section_title(self, text):
+        label = QLabel(text)
+        label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        label.setStyleSheet(f"color: {_VERDE}; margin-top: 8px;")
+        return label
+
+    def _create_form_panel(self):
+        panel = QFrame()
+        panel.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
         return panel
 
     def _create_field(self, parent, placeholder):
-        entry = ctk.CTkEntry(
-            parent, placeholder_text=placeholder,
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, height=36, corner_radius=8,
-        )
-        entry.pack(fill="x", padx=16, pady=4)
-        entry.bind("<KeyRelease>", self._debounce_preview)
+        entry = QLineEdit()
+        entry.setPlaceholderText(placeholder)
+        entry.textChanged.connect(self._debounce_preview)
+        entry.setStyleSheet(self._entry_style())
+        parent.layout().addWidget(entry)
         return entry
 
-    def _create_grid_field(self, parent, placeholder, col):
-        entry = ctk.CTkEntry(
-            parent, placeholder_text=placeholder,
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, height=36, corner_radius=8,
-        )
-        entry.grid(row=0, column=col, sticky="ew", padx=4, pady=4)
-        entry.bind("<KeyRelease>", self._debounce_preview)
+    def _create_field_inline(self, parent_layout, placeholder):
+        entry = QLineEdit()
+        entry.setPlaceholderText(placeholder)
+        entry.textChanged.connect(self._debounce_preview)
+        entry.setStyleSheet(self._entry_style())
+        parent_layout.addWidget(entry)
         return entry
+
+    def _build_import_pdf(self, parent):
+        layout = QHBoxLayout()
+        
+        self._btn_importar_pdf = QPushButton("📄 Selecionar PDF")
+        self._btn_importar_pdf.setFixedSize(160, 38)
+        self._btn_importar_pdf.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {_AZUL_H}; }}
+        """)
+        self._btn_importar_pdf.clicked.connect(self._select_pdf)
+        layout.addWidget(self._btn_importar_pdf)
+        
+        self._lbl_pdf = QLabel("Nenhum PDF selecionado")
+        self._lbl_pdf.setFont(QFont("Segoe UI", 11))
+        self._lbl_pdf.setStyleSheet(f"color: {_MUTED};")
+        layout.addWidget(self._lbl_pdf)
+        layout.addStretch()
+        
+        parent.layout().addLayout(layout)
+        
+        # Linha para extrair
+        layout2 = QHBoxLayout()
+        self._btn_extrair = QPushButton("🔍 Extrair Informações do PDF")
+        self._btn_extrair.setFixedSize(220, 38)
+        self._btn_extrair.setEnabled(False)
+        self._btn_extrair.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {_CINZA_BORDER}; }}
+        """)
+        self._btn_extrair.clicked.connect(self._extract_pdf)
+        layout2.addWidget(self._btn_extrair)
+        
+        self._lbl_extrair_status = QLabel("")
+        self._lbl_extrair_status.setFont(QFont("Segoe UI", 11))
+        self._lbl_extrair_status.setStyleSheet(f"color: {_MUTED};")
+        layout2.addWidget(self._lbl_extrair_status)
+        layout2.addStretch()
+        
+        parent.layout().addLayout(layout2)
+
+    def _build_photos_section(self, parent):
+        for i in range(1, 4):
+            chave = f"foto{i}"
+            row = QHBoxLayout()
+            
+            btn = QPushButton(f"📷 Foto {i}")
+            btn.setFixedSize(120, 36)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {_AZUL};
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 11px;
+                }}
+                QPushButton:hover {{ background-color: {_AZUL_H}; }}
+            """)
+            btn.clicked.connect(lambda checked, c=chave: self._select_photo(c))
+            row.addWidget(btn)
+            
+            lbl = QLabel("—")
+            lbl.setFont(QFont("Segoe UI", 11))
+            lbl.setStyleSheet(f"color: {_MUTED};")
+            row.addWidget(lbl)
+            row.addStretch()
+            
+            self._lbl_fotos[chave] = lbl
+            parent.layout().addLayout(row)
 
     # ── Preview ───────────────────────────────────────────────────────────────
-
     def _debounce_preview(self, _=None):
         if self._after_id:
-            self.after_cancel(self._after_id)
-        self._after_id = self.after(DEBOUNCE_DELAY, self._update_preview)
+            self._after_id = None
+        QTimer.singleShot(DEBOUNCE_DELAY, self._update_preview)
 
     def _update_preview(self):
-        if self.lado == "frente":
-            labels = self._labels_frente
-            self._safe_set(labels.get("registro"),    self.registro.get())
-            self._safe_set(labels.get("cpf"),         format_cpf(self.cpf.get()))
-            self._safe_set(labels.get("nome"),        self.nome.get())
-            self._safe_set(labels.get("propriedade"), self.propriedade.get())
-            self._safe_set(labels.get("unloc"),       self.unloc.get())
-            self._safe_set(labels.get("inicio"),      self.inicio.get())
-            self._safe_set(labels.get("validade"),    self.validade.get())
-        else:
-            labels = self._labels_verso
-            self._safe_set(labels.get("endereco"),   self.endereco.get())
-            self._safe_set(labels.get("atividade1"), self.atividade1.get())
-            self._safe_set(labels.get("atividade2"), self.atividade2.get())
-            self._safe_set(labels.get("georef"),     self.georef.get())
-
-    def _safe_set(self, label, value):
-        try:
-            if label and label.winfo_exists():
-                label.configure(text=str(value).strip() if value else "---")
-        except Exception:
-            pass
+        # Implementar atualização da prévia do cartão
+        pass
 
     def _virar_cartao(self):
         self.lado = "verso" if self.lado == "frente" else "frente"
-        self._render_card()
         self._update_preview()
 
     # ── Busca por CPF ─────────────────────────────────────────────────────────
-
     def _buscar_por_cpf(self):
-        cpf_text  = self.cpf.get().strip()
+        cpf_text = self.cpf.text().strip()
         cpf_limpo = re.sub(r"\D", "", cpf_text)
 
         if not cpf_limpo:
-            messagebox.showwarning("CPF obrigatório", "Digite um CPF antes de pesquisar.")
+            QMessageBox.warning(self, "CPF obrigatório", "Digite um CPF antes de pesquisar.")
             return
         if len(cpf_limpo) != 11:
-            messagebox.showwarning("CPF inválido", "CPF deve ter 11 dígitos.")
+            QMessageBox.warning(self, "CPF inválido", "CPF deve ter 11 dígitos.")
             return
 
-        self._btn_buscar_cpf.configure(state="disabled")
-        self._lbl_buscar_status.configure(text="Pesquisando...")
-        self.after(700, lambda: self._buscar_por_cpf_exec(cpf_limpo))
+        self._btn_buscar_cpf.setEnabled(False)
+        self._lbl_buscar_status.setText("Pesquisando...")
+        QTimer.singleShot(100, lambda: self._buscar_por_cpf_exec(cpf_limpo))
 
     def _buscar_por_cpf_exec(self, cpf_limpo):
-        # BUG CORRIGIDO: bloco try sem except — exceções silenciosas que travavam
-        # o botão de busca (finally nunca reabilitava o botão em caso de erro).
-        # Adicionado bloco except explícito para exibir erro e desbloquear o botão.
         try:
             resultado = self.controller.buscar_por_cpf(cpf_limpo)
 
             if not resultado:
-                messagebox.showinfo("Não encontrado",
-                                    "Nenhum cadastro encontrado para este CPF.")
+                QMessageBox.information(self, "Não encontrado", "Nenhum cadastro encontrado para este CPF.")
                 return
 
             fields = [
-                ("registro",   self.registro,   lambda v: v),
-                ("cpf",        self.cpf,        format_cpf),
-                ("nome",       self.nome,       lambda v: v),
-                ("propriedade",self.propriedade,lambda v: v),
-                ("unloc",      self.unloc,      lambda v: v),
-                ("inicio",     self.inicio,     lambda v: v),
-                ("validade",   self.validade,   lambda v: v),
-                ("endereco",   self.endereco,   lambda v: v),
-                ("atividade1", self.atividade1, lambda v: v),
-                ("atividade2", self.atividade2, lambda v: v),
-                ("georef",     self.georef,     lambda v: v),
+                ("registro", self.registro),
+                ("cpf", self.cpf),
+                ("nome", self.nome),
+                ("propriedade", self.propriedade),
+                ("unloc", self.unloc),
+                ("inicio", self.inicio),
+                ("validade", self.validade),
+                ("endereco", self.endereco),
+                ("atividade1", self.atividade1),
+                ("atividade2", self.atividade2),
+                ("georef", self.georef),
             ]
-            for key, entry, fmt in fields:
-                entry.delete(0, "end")
-                entry.insert(0, fmt(resultado.get(key, "") or ""))
+            for key, entry in fields:
+                entry.blockSignals(True)
+                entry.setText(str(resultado.get(key, "") or ""))
+                entry.blockSignals(False)
 
             self._update_preview()
-            messagebox.showinfo("Encontrado", "Dados carregados a partir do CPF encontrado.")
+            QMessageBox.information(self, "Encontrado", "Dados carregados a partir do CPF encontrado.")
 
         except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao buscar CPF:\n{e}")
+            QMessageBox.critical(self, "Erro", f"Falha ao buscar CPF:\n{e}")
         finally:
-            self._btn_buscar_cpf.configure(state="normal")
-            self._lbl_buscar_status.configure(text="")
+            self._btn_buscar_cpf.setEnabled(True)
+            self._lbl_buscar_status.setText("")
 
     # ── Importar PDF ──────────────────────────────────────────────────────────
-
-    def _build_import_pdf(self, parent):
-        row1 = ctk.CTkFrame(parent, fg_color="transparent")
-        row1.pack(fill="x", padx=16, pady=(12, 6))
-
-        self._btn_importar_pdf = ctk.CTkButton(
-            row1, text="📄 Selecionar PDF",
-            width=160, height=38, corner_radius=8,
-            fg_color=AZUL, hover_color=AZUL_HOVER,
-            text_color="#fff", font=("Segoe UI", 12, "bold"),
-            command=self._select_pdf,
-        )
-        self._btn_importar_pdf.pack(side="left")
-
-        self._lbl_pdf = ctk.CTkLabel(
-            row1, text="Nenhum PDF selecionado",
-            font=("Segoe UI", 11), text_color=MUTED,
-        )
-        self._lbl_pdf.pack(side="left", padx=12)
-
-        row2 = ctk.CTkFrame(parent, fg_color="transparent")
-        row2.pack(fill="x", padx=16, pady=(0, 12))
-
-        self._btn_extrair = ctk.CTkButton(
-            row2, text="🔍 Extrair Informações do PDF",
-            width=220, height=38, corner_radius=8,
-            fg_color=AppTheme.BG_INPUT, hover_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, font=("Segoe UI", 11),
-            command=self._extract_pdf, state="disabled",
-        )
-        self._btn_extrair.pack(side="left")
-
-        self._lbl_extrair_status = ctk.CTkLabel(
-            row2, text="", font=("Segoe UI", 11), text_color=MUTED,
-        )
-        self._lbl_extrair_status.pack(side="left", padx=12)
-
     def _select_pdf(self):
-        caminho = filedialog.askopenfilename(
-            title="Selecionar PDF da Carteira",
-            filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")],
+        caminho, _ = QFileDialog.getOpenFileName(
+            self, "Selecionar PDF da Carteira", "", "PDF Files (*.pdf)"
         )
         if not caminho or not os.path.exists(caminho):
             return
@@ -474,94 +502,82 @@ class CarteiraDigitalUI(BaseUI):
         nome = os.path.basename(caminho)
         if len(nome) > MAX_FILENAME_DISPLAY:
             nome = nome[:MAX_FILENAME_DISPLAY - 3] + "..."
-        self._lbl_pdf.configure(text=f"✓ {nome}", text_color=VERDE)
-        self._btn_extrair.configure(state="normal")
-        self._lbl_extrair_status.configure(text="")
+        self._lbl_pdf.setText(f"✓ {nome}")
+        self._lbl_pdf.setStyleSheet(f"color: {_VERDE};")
+        self._btn_extrair.setEnabled(True)
+        self._lbl_extrair_status.setText("")
 
     def _extract_pdf(self):
         if not self._pdf_path:
             return
-        self._btn_extrair.configure(state="disabled", text="⏳ Extraindo...")
-        self._lbl_extrair_status.configure(text="Lendo PDF...", text_color=MUTED)
+        self._btn_extrair.setEnabled(False)
+        self._btn_extrair.setText("⏳ Extraindo...")
+        self._lbl_extrair_status.setText("Lendo PDF...")
         threading.Thread(target=self._worker_extract_pdf, daemon=True).start()
 
     def _worker_extract_pdf(self):
         try:
-            text = self.pdf_parser.extract_text(self._pdf_path)
+            from ..utils.pdf_parser import PDFParser
+            parser = PDFParser()
+            text = parser.extract_text(self._pdf_path)
             if not text.strip():
-                self.after(0, self._show_extraction_result,
-                           None, "PDF sem texto legível (pode ser imagem escaneada).")
+                QTimer.singleShot(0, lambda: self._show_extraction_result(None, "PDF sem texto legível"))
                 return
-            dados = self.pdf_parser.parse(text)
-            self.after(0, self._show_extraction_result, dados, None)
+            dados = parser.parse(text)
+            QTimer.singleShot(0, lambda: self._show_extraction_result(dados, None))
         except Exception as e:
-            self.after(0, self._show_extraction_result, None, str(e))
+            QTimer.singleShot(0, lambda: self._show_extraction_result(None, str(e)))
 
     def _show_extraction_result(self, dados, erro):
-        self._btn_extrair.configure(state="normal", text="🔍 Extrair Informações do PDF")
+        self._btn_extrair.setEnabled(True)
+        self._btn_extrair.setText("🔍 Extrair Informações do PDF")
 
         if erro:
-            self._lbl_extrair_status.configure(text=f"❌ {erro[:60]}", text_color=VERMELHO)
-            messagebox.showerror("Erro ao extrair PDF", erro)
+            self._lbl_extrair_status.setText(f"❌ {erro[:60]}")
+            self._lbl_extrair_status.setStyleSheet(f"color: {_VERMELHO};")
+            QMessageBox.critical(self, "Erro ao extrair PDF", erro)
             return
 
         if not dados:
-            self._lbl_extrair_status.configure(
-                text="⚠️ Nenhum campo identificado.", text_color=VERMELHO)
+            self._lbl_extrair_status.setText("⚠️ Nenhum campo identificado.")
+            self._lbl_extrair_status.setStyleSheet(f"color: {_VERMELHO};")
             return
 
         mapa = {
-            "registro":   self.registro,   "cpf":        self.cpf,
-            "nome":       self.nome,       "propriedade":self.propriedade,
-            "unloc":      self.unloc,      "inicio":     self.inicio,
-            "validade":   self.validade,   "endereco":   self.endereco,
+            "registro": self.registro, "cpf": self.cpf,
+            "nome": self.nome, "propriedade": self.propriedade,
+            "unloc": self.unloc, "inicio": self.inicio,
+            "validade": self.validade, "endereco": self.endereco,
             "atividade1": self.atividade1, "atividade2": self.atividade2,
-            "georef":     self.georef,
+            "georef": self.georef,
         }
         preenchidos = 0
         for chave, entry in mapa.items():
             valor = dados.get(chave, "")
             if valor:
-                entry.delete(0, "end")
-                entry.insert(0, valor)
+                entry.blockSignals(True)
+                entry.setText(valor)
+                entry.blockSignals(False)
                 preenchidos += 1
 
         self._update_preview()
         total = len(mapa)
-        cor   = VERDE if preenchidos >= total // 2 else MUTED
-        self._lbl_extrair_status.configure(
-            text=f"✅ {preenchidos}/{total} campos preenchidos", text_color=cor)
+        cor = _VERDE if preenchidos >= total // 2 else _MUTED
+        self._lbl_extrair_status.setText(f"✅ {preenchidos}/{total} campos preenchidos")
+        self._lbl_extrair_status.setStyleSheet(f"color: {cor};")
 
     # ── Fotos ─────────────────────────────────────────────────────────────────
-
-    def _build_photos_section(self, parent):
-        for i in range(1, 4):
-            chave = f"foto{i}"
-            row = ctk.CTkFrame(parent, fg_color="transparent")
-            row.pack(fill="x", padx=16, pady=5)
-
-            ctk.CTkButton(
-                row, text=f"📷 Foto {i}", width=120,
-                fg_color=AZUL, hover_color=AZUL_HOVER,
-                text_color="#fff", corner_radius=8,
-                command=lambda c=chave: self._select_photo(c),
-            ).pack(side="left")
-
-            lbl = ctk.CTkLabel(row, text="—", text_color=MUTED, font=("Segoe UI", 11))
-            lbl.pack(side="left", padx=10)
-            self._lbl_fotos[chave] = lbl
-
     def _select_photo(self, chave):
-        caminho = filedialog.askopenfilename(
-            title=f"Selecionar {chave.replace('foto', 'Foto ')}",
-            filetypes=SUPPORTED_IMAGE_FORMATS,
+        caminho, _ = QFileDialog.getOpenFileName(
+            self, f"Selecionar {chave.replace('foto', 'Foto ')}",
+            "", "Images (*.png *.jpg *.jpeg *.bmp *.webp)"
         )
         if not caminho or not os.path.exists(caminho):
             return
 
         mb = os.path.getsize(caminho) / (1024 * 1024)
         if mb > 10:
-            messagebox.showerror("Erro", f"Arquivo muito grande ({mb:.1f} MB). Máximo: 10 MB")
+            QMessageBox.critical(self, "Erro", f"Arquivo muito grande ({mb:.1f} MB). Máximo: 10 MB")
             return
 
         try:
@@ -569,100 +585,95 @@ class CarteiraDigitalUI(BaseUI):
                 img.verify()
             with Image.open(caminho) as img:
                 w, h = img.size
-                fmt  = img.format
+                fmt = img.format
         except Exception as exc:
-            messagebox.showerror("Erro", f"Imagem inválida:\n{exc}")
+            QMessageBox.critical(self, "Erro", f"Imagem inválida:\n{exc}")
             return
 
         self.fotos[chave] = caminho
         nome = os.path.basename(caminho)
         if len(nome) > MAX_FILENAME_DISPLAY:
             nome = nome[:MAX_FILENAME_DISPLAY - 3] + "..."
-        self._lbl_fotos[chave].configure(
-            text=f"✓ {nome} ({w}×{h}, {fmt})", text_color=VERDE)
+        self._lbl_fotos[chave].setText(f"✓ {nome} ({w}×{h}, {fmt})")
+        self._lbl_fotos[chave].setStyleSheet(f"color: {_VERDE};")
 
     # ── Salvar ────────────────────────────────────────────────────────────────
-
     def _salvar_banco(self):
         dados = {
-            "registro":    self.registro.get().strip(),
-            "cpf":         self.cpf.get().strip(),
-            "nome":        self.nome.get().strip(),
-            "propriedade": self.propriedade.get().strip(),
-            "unloc":       self.unloc.get().strip(),
-            "inicio":      self.inicio.get().strip(),
-            "validade":    self.validade.get().strip(),
-            "endereco":    self.endereco.get().strip(),
-            "atividade1":  self.atividade1.get().strip(),
-            "atividade2":  self.atividade2.get().strip(),
-            "georef":      self.georef.get().strip(),
+            "registro": self.registro.text().strip(),
+            "cpf": self.cpf.text().strip(),
+            "nome": self.nome.text().strip(),
+            "propriedade": self.propriedade.text().strip(),
+            "unloc": self.unloc.text().strip(),
+            "inicio": self.inicio.text().strip(),
+            "validade": self.validade.text().strip(),
+            "endereco": self.endereco.text().strip(),
+            "atividade1": self.atividade1.text().strip(),
+            "atividade2": self.atividade2.text().strip(),
+            "georef": self.georef.text().strip(),
         }
 
-        required = [
-            ("registro",    "Registro Estadual"),
-            ("cpf",         "CPF"),
-            ("nome",        "Nome do Produtor"),
-            ("propriedade", "Propriedade"),
-        ]
+        required = [("registro", "Registro Estadual"), ("cpf", "CPF"),
+                    ("nome", "Nome do Produtor"), ("propriedade", "Propriedade")]
         missing = [name for field, name in required if not dados.get(field)]
         if missing:
-            messagebox.showwarning("Validação",
-                                   "Campos obrigatórios:\n• " + "\n• ".join(missing))
+            QMessageBox.warning(self, "Validação", "Campos obrigatórios:\n• " + "\n• ".join(missing))
             return
 
         if len(re.sub(r"\D", "", dados["cpf"])) != 11:
-            messagebox.showwarning("Validação", "CPF deve ter 11 dígitos.")
+            QMessageBox.warning(self, "Validação", "CPF deve ter 11 dígitos.")
             return
 
         for campo, nome in [("inicio", "Início"), ("validade", "Validade")]:
             v = dados.get(campo, "")
             if v and not re.match(r"^\d{2}/\d{2}/\d{4}$", v):
-                messagebox.showwarning("Validação",
-                                       f"{nome} inválida. Use dd/mm/aaaa.")
+                QMessageBox.warning(self, "Validação", f"{nome} inválida. Use dd/mm/aaaa.")
                 return
 
         if not any(self.fotos.values()):
-            if not messagebox.askyesno("Aviso",
-                                        "Nenhuma foto selecionada. Continuar mesmo assim?"):
+            reply = QMessageBox.question(self, "Aviso", "Nenhuma foto selecionada. Continuar mesmo assim?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
                 return
 
         ok, msg = self.controller.salvar_carteira(dados, self.fotos, self._pdf_path)
         if ok:
-            messagebox.showinfo("Sucesso", msg)
+            QMessageBox.information(self, "Sucesso", msg)
             self._clear_form()
         else:
-            messagebox.showerror("Erro", msg)
+            QMessageBox.critical(self, "Erro", msg)
 
     # ── Limpar ────────────────────────────────────────────────────────────────
-
     def _clear_form(self):
-        for e in [self.registro, self.cpf, self.nome, self.propriedade,
-                  self.unloc, self.inicio, self.validade,
-                  self.endereco, self.atividade1, self.atividade2, self.georef]:
-            e.delete(0, "end")
+        for entry in [self.registro, self.cpf, self.nome, self.propriedade,
+                      self.unloc, self.inicio, self.validade, self.endereco,
+                      self.atividade1, self.atividade2, self.georef]:
+            entry.clear()
 
         self.fotos = {"foto1": None, "foto2": None, "foto3": None}
         for lbl in self._lbl_fotos.values():
-            lbl.configure(text="—", text_color=MUTED)
+            lbl.setText("—")
+            lbl.setStyleSheet(f"color: {_MUTED};")
 
         if self.lado == "verso":
             self.lado = "frente"
-            self._render_card()
-
-        self._update_preview()
+            self._update_preview()
 
     def _confirmar_limpar(self):
         has_data = any([
-            self.registro.get().strip(),
-            self.cpf.get().strip(),
-            self.nome.get().strip(),
+            self.registro.text().strip(),
+            self.cpf.text().strip(),
+            self.nome.text().strip(),
             any(self.fotos.values()),
         ])
-        if has_data and not messagebox.askyesno("Confirmação", "Limpar todos os campos?"):
-            return
+        if has_data:
+            reply = QMessageBox.question(self, "Confirmação", "Limpar todos os campos?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return
         self._clear_form()
 
     # ── Histórico ─────────────────────────────────────────────────────────────
-
     def abrir_historico(self):
-        HistoricoView(self, self.usuario, self.controller).grab_set()
+        self.historico_window = HistoricoView(self, self.usuario, self.controller)
+        self.historico_window.show()

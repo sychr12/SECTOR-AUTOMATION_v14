@@ -3,8 +3,10 @@
 Formulários para operações de edição e diálogos
 """
 
-import customtkinter as ctk
-from tkinter import messagebox
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import messagebox
 from app.theme import AppTheme
 
 class FormularioEdicao(ctk.CTkToplevel):

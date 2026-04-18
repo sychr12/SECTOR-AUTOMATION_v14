@@ -2,8 +2,10 @@
 """Aba de geração de relatórios SEFAZ."""
 import os
 import calendar
-from tkinter import filedialog
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 from ..widgets   import ProgressCard, PastaRow, LogBox
 from ..utils     import DateUtils
@@ -264,3 +266,4 @@ class GerarTab(ctk.CTkFrame):
 
     def progresso_erro(self):
         self.progresso.erro()
+

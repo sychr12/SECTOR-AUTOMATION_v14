@@ -2,7 +2,9 @@
 """Gerenciador de ícones para relatórios"""
 import os
 from PIL import Image
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 
 class IconManager:

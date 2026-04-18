@@ -3,7 +3,9 @@
 Formulários para configuração de download de emails
 """
 
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 
 class AppTheme:
@@ -98,7 +100,7 @@ class ConfiguracaoDownloadForm(ctk.CTkFrame):
     
     def _selecionar_diretorio(self):
         """Abre diálogo para selecionar diretório"""
-        from tkinter import filedialog
+        from PyQt6.QtWidgets import filedialog
         diretorio = filedialog.askdirectory()
         if diretorio:
             self.entry_diretorio.delete(0, "end")

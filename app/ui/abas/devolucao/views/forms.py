@@ -1,196 +1,235 @@
 # -*- coding: utf-8 -*-
 """
 Formulários para configuração de devolução
+Versão PyQt6.
 """
 
-import customtkinter as ctk
-from tkinter import messagebox
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
+    QPushButton, QScrollArea, QWidget, QMessageBox
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+
 from app.theme import AppTheme
 
-class FormularioDestinatarios(ctk.CTkToplevel):
+
+class FormularioDestinatarios(QDialog):
     """Formulário para gerenciar destinatários de email"""
     
-    def __init__(self, parent, destinatarios_iniciais=None, on_salvar=None):
+    def __init__(self, parent=None, destinatarios_iniciais=None, on_salvar=None):
         super().__init__(parent)
         
         self.destinatarios = destinatarios_iniciais or []
         self.on_salvar = on_salvar
         
-        self._configurar_janela()
+        self.setWindowTitle("Destinatários de Email")
+        self.setModal(True)
+        self.setFixedSize(500, 400)
+        self.setStyleSheet(f"background-color: {AppTheme.BG_APP};")
+        
         self._criar_widgets()
+        self._centralizar()
     
-    def _configurar_janela(self):
-        """Configura as propriedades da janela"""
-        self.title("Destinatários de Email")
-        self.geometry("500x400")
-        self.resizable(False, False)
-        
-        # Centralizar
-        self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
-        x = (self.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry(f"{width}x{height}+{x}+{y}")
-        
-        self.grab_set()
-        self.focus_set()
+    def _centralizar(self):
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
     
     def _criar_widgets(self):
-        """Cria os widgets do formulário"""
-        container = ctk.CTkFrame(self, fg_color=AppTheme.BG_APP)
-        container.pack(fill="both", expand=True, padx=20, pady=20)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         
         # Título
-        ctk.CTkLabel(
-            container,
-            text="✉️ Destinatários de Email",
-            font=("Segoe UI", 18, "bold"),
-            text_color=AppTheme.TXT_MAIN
-        ).pack(pady=(0, 20))
+        lbl_title = QLabel("✉️ Destinatários de Email")
+        lbl_title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+        layout.addWidget(lbl_title)
         
         # Frame para adicionar novo email
-        add_frame = ctk.CTkFrame(container, fg_color=AppTheme.BG_CARD, corner_radius=12)
-        add_frame.pack(fill="x", pady=(0, 15))
+        add_frame = QFrame()
+        add_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {AppTheme.BG_CARD};
+                border-radius: 12px;
+            }}
+        """)
+        add_layout = QVBoxLayout(add_frame)
+        add_layout.setContentsMargins(15, 15, 15, 15)
         
-        ctk.CTkLabel(
-            add_frame,
-            text="Adicionar novo email:",
-            font=("Segoe UI", 12),
-            text_color=AppTheme.TXT_MAIN
-        ).pack(anchor="w", padx=15, pady=(15, 5))
+        lbl_add = QLabel("Adicionar novo email:")
+        lbl_add.setFont(QFont("Segoe UI", 12))
+        lbl_add.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+        add_layout.addWidget(lbl_add)
         
-        input_frame = ctk.CTkFrame(add_frame, fg_color="transparent")
-        input_frame.pack(fill="x", padx=15, pady=(0, 15))
+        input_layout = QHBoxLayout()
+        self.entry_email = QLineEdit()
+        self.entry_email.setPlaceholderText("email@exemplo.com")
+        self.entry_email.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {AppTheme.BG_INPUT};
+                border: 1px solid {AppTheme.BTN_PRIMARY};
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }}
+        """)
+        input_layout.addWidget(self.entry_email, 1)
         
-        self.entry_email = ctk.CTkEntry(
-            input_frame,
-            placeholder_text="email@exemplo.com",
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BTN_PRIMARY,
-            text_color=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12),
-            height=35
-        )
-        self.entry_email.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        btn_add = QPushButton("+")
+        btn_add.setFixedSize(40, 35)
+        btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BTN_SUCCESS};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.BTN_SUCCESS_HOVER};
+            }}
+        """)
+        btn_add.clicked.connect(self._adicionar_email)
+        input_layout.addWidget(btn_add)
         
-        ctk.CTkButton(
-            input_frame,
-            text="+",
-            width=40,
-            height=35,
-            fg_color=AppTheme.BTN_SUCCESS,
-            hover_color=AppTheme.BTN_SUCCESS_HOVER,
-            command=self._adicionar_email
-        ).pack(side="right")
+        add_layout.addLayout(input_layout)
+        layout.addWidget(add_frame)
         
         # Lista de destinatários
-        lista_frame = ctk.CTkFrame(container, fg_color=AppTheme.BG_CARD, corner_radius=12)
-        lista_frame.pack(fill="both", expand=True, pady=(0, 20))
+        lista_frame = QFrame()
+        lista_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {AppTheme.BG_CARD};
+                border-radius: 12px;
+            }}
+        """)
+        lista_layout = QVBoxLayout(lista_frame)
+        lista_layout.setContentsMargins(15, 15, 15, 15)
         
-        ctk.CTkLabel(
-            lista_frame,
-            text="Destinatários atuais:",
-            font=("Segoe UI", 12, "bold"),
-            text_color=AppTheme.TXT_MAIN
-        ).pack(anchor="w", padx=15, pady=(15, 10))
+        lbl_lista = QLabel("Destinatários atuais:")
+        lbl_lista.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        lbl_lista.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+        lista_layout.addWidget(lbl_lista)
         
-        # Frame para scroll
-        scroll_frame = ctk.CTkFrame(lista_frame, fg_color="transparent")
-        scroll_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+        # Scroll area para a lista
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: transparent;")
         
-        # Canvas para scroll
-        self.canvas = ctk.CTkCanvas(scroll_frame, bg=AppTheme.BG_CARD, highlightthickness=0)
-        scrollbar = ctk.CTkScrollbar(scroll_frame, orientation="vertical", command=self.canvas.yview)
-        self.scrollable_frame = ctk.CTkFrame(self.canvas, fg_color=AppTheme.BG_CARD)
+        self.scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setSpacing(5)
+        self.scroll_layout.addStretch()
         
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
+        scroll.setWidget(self.scroll_content)
+        lista_layout.addWidget(scroll)
         
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
-        
-        self.canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Carregar destinatários
-        self._carregar_destinatarios()
+        layout.addWidget(lista_frame, 1)
         
         # Botões
-        botoes_frame = ctk.CTkFrame(container, fg_color="transparent")
-        botoes_frame.pack(fill="x", pady=(10, 0))
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
         
-        ctk.CTkButton(
-            botoes_frame,
-            text="Cancelar",
-            width=100,
-            height=35,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.TXT_MUTED,
-            text_color=AppTheme.TXT_MAIN,
-            command=self.destroy
-        ).pack(side="left", padx=(0, 10))
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setFixedSize(100, 35)
+        btn_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BG_INPUT};
+                color: {AppTheme.TXT_MAIN};
+                border: 1px solid {AppTheme.BORDER};
+                border-radius: 8px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.TXT_MUTED};
+            }}
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancelar)
         
-        ctk.CTkButton(
-            botoes_frame,
-            text="Salvar",
-            width=100,
-            height=35,
-            fg_color=AppTheme.BTN_SUCCESS,
-            hover_color=AppTheme.BTN_SUCCESS_HOVER,
-            command=self._salvar
-        ).pack(side="right")
+        btn_salvar = QPushButton("Salvar")
+        btn_salvar.setFixedSize(100, 35)
+        btn_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BTN_SUCCESS};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.BTN_SUCCESS_HOVER};
+            }}
+        """)
+        btn_salvar.clicked.connect(self._salvar)
+        btn_layout.addWidget(btn_salvar, alignment=Qt.AlignmentFlag.AlignRight)
+        
+        layout.addLayout(btn_layout)
+        
+        self._carregar_destinatarios()
     
     def _carregar_destinatarios(self):
         """Carrega os destinatários na lista"""
-        # Limpar frame
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
+        # Limpar frame (manter apenas o stretch)
+        while self.scroll_layout.count() > 1:
+            item = self.scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
         
         # Adicionar cada destinatário
-        for i, email in enumerate(self.destinatarios):
-            item_frame = ctk.CTkFrame(self.scrollable_frame, fg_color="transparent")
-            item_frame.pack(fill="x", pady=2)
+        for email in self.destinatarios:
+            item_frame = QFrame()
+            item_layout = QHBoxLayout(item_frame)
+            item_layout.setContentsMargins(5, 5, 5, 5)
             
-            ctk.CTkLabel(
-                item_frame,
-                text=email,
-                font=("Segoe UI", 11),
-                text_color=AppTheme.TXT_MAIN
-            ).pack(side="left", padx=(10, 0))
+            lbl_email = QLabel(email)
+            lbl_email.setFont(QFont("Segoe UI", 11))
+            lbl_email.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+            item_layout.addWidget(lbl_email, 1)
             
-            ctk.CTkButton(
-                item_frame,
-                text="🗑️",
-                width=30,
-                height=25,
-                fg_color="transparent",
-                hover_color=AppTheme.BG_ERROR,
-                text_color=AppTheme.TXT_MAIN,
-                command=lambda e=email: self._remover_email(e)
-            ).pack(side="right", padx=5)
+            btn_remover = QPushButton("🗑️")
+            btn_remover.setFixedSize(30, 25)
+            btn_remover.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: {AppTheme.TXT_MAIN};
+                    border: none;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {AppTheme.BG_ERROR};
+                    border-radius: 4px;
+                }}
+            """)
+            btn_remover.clicked.connect(lambda checked, e=email: self._remover_email(e))
+            item_layout.addWidget(btn_remover)
+            
+            self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, item_frame)
     
     def _adicionar_email(self):
         """Adiciona um novo email à lista"""
-        email = self.entry_email.get().strip()
+        email = self.entry_email.text().strip()
         
         if not email:
-            messagebox.showwarning("Aviso", "Digite um email válido.")
+            QMessageBox.warning(self, "Aviso", "Digite um email válido.")
             return
         
-        # Validação simples de email
         if "@" not in email or "." not in email:
-            messagebox.showwarning("Aviso", "Email inválido.")
+            QMessageBox.warning(self, "Aviso", "Email inválido.")
             return
         
         if email in self.destinatarios:
-            messagebox.showinfo("Info", "Este email já está na lista.")
+            QMessageBox.information(self, "Info", "Este email já está na lista.")
             return
         
         self.destinatarios.append(email)
-        self.entry_email.delete(0, "end")
+        self.entry_email.clear()
         self._carregar_destinatarios()
     
     def _remover_email(self, email):
@@ -203,10 +242,4 @@ class FormularioDestinatarios(ctk.CTkToplevel):
         """Salva a lista de destinatários"""
         if self.on_salvar:
             self.on_salvar(self.destinatarios)
-        
-        self.destroy()
-    
-    def show(self):
-        """Mostra o formulário e retorna os destinatários"""
-        self.wait_window()
-        return self.destinatarios
+        self.accept()

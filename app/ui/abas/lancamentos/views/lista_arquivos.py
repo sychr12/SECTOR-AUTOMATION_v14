@@ -1,40 +1,65 @@
 # -*- coding: utf-8 -*-
-import customtkinter as ctk
-from app.theme import AppTheme   # ← CORRIGIDO (era: from theme import AppTheme)
+"""Lista de Arquivos — PyQt6."""
+
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QLabel, QFrame
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+
+from app.theme import AppTheme
 
 
-class ListaArquivosView(ctk.CTkToplevel):
+class ListaArquivosView(QDialog):
 
-    def __init__(self, master, usuario, controller):
-        super().__init__(master)
-        self.usuario    = usuario
+    def __init__(self, parent=None, usuario=None, controller=None):
+        super().__init__(parent)
+        self.usuario = usuario
         self.controller = controller
 
-        self.title("Lista de Arquivos")
-        self.geometry("800x600")
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        self.setWindowTitle("Lista de Arquivos")
+        self.setFixedSize(800, 600)
+        self.setModal(True)
+        self.setStyleSheet(f"background-color: {AppTheme.BG_APP};")
 
-        self._centralizar()
         self._build()
+        self._centralizar()
 
     def _centralizar(self):
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = (self.winfo_screenwidth()  // 2) - (w // 2)
-        y = (self.winfo_screenheight() // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        if self.parent():
+            geo = self.parent().frameGeometry()
+            center = geo.center()
+            frame = self.frameGeometry()
+            frame.moveCenter(center)
+            self.move(frame.topLeft())
+        else:
+            screen = self.screen().availableGeometry()
+            frame = self.frameGeometry()
+            frame.moveCenter(screen.center())
+            self.move(frame.topLeft())
 
     def _build(self):
-        wrap = ctk.CTkFrame(self, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=24, pady=24)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
 
-        ctk.CTkLabel(wrap, text="Lista de Arquivos",
-                     font=("Segoe UI", 22, "bold"),
-                     text_color=AppTheme.TXT_MAIN
-                     ).pack(anchor="w", pady=(0, 16))
+        wrap = QFrame()
+        wrap.setStyleSheet("background: transparent;")
+        wrap_layout = QVBoxLayout(wrap)
+        wrap_layout.setContentsMargins(0, 0, 0, 0)
+        wrap_layout.setSpacing(0)
 
-        ctk.CTkLabel(wrap,
-                     text="Esta funcionalidade está em desenvolvimento.",
-                     text_color="#64748b",
-                     font=("Segoe UI", 14)).pack(pady=50)
+        titulo = QLabel("Lista de Arquivos")
+        titulo.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
+        titulo.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+        titulo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        wrap_layout.addWidget(titulo)
+        wrap_layout.addSpacing(16)
+
+        texto = QLabel("Esta funcionalidade está em desenvolvimento.")
+        texto.setFont(QFont("Segoe UI", 14))
+        texto.setStyleSheet("color: #64748b;")
+        texto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        wrap_layout.addWidget(texto)
+        wrap_layout.addStretch()
+
+        root.addWidget(wrap)

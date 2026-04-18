@@ -4,8 +4,10 @@ Widgets customizados para a interface de consulta.
 Tabela: inscrenov
 """
 
-import customtkinter as ctk
-from tkinter import ttk, Menu
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import ttk, Menu
 from app.theme import AppTheme
 
 # Colunas da tabela inscrenov
