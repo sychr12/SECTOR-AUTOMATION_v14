@@ -198,4 +198,4 @@ class EmailService:
                 f.write(log.to_log_string() + "\n")
                 
         except Exception as e:
-            print(f"Erro ao registrar log de email: {e}")
+            # print(f"Erro ao registrar log de email: {e}")

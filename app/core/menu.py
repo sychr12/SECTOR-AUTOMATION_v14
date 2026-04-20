@@ -1,508 +1,690 @@
 # -*- coding: utf-8 -*-
-import customtkinter as ctk
-from tkinter import messagebox
-import inspect
+"""
+Menu Principal - AppPrincipal (Usuário Comum)
+Com todas as telas integradas do sistema
+HOME é o DASHBOARD principal
+"""
+
 import sys
 import os
-import threading
 from datetime import datetime
-from PIL import Image
+import inspect
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-app_dir = os.path.dirname(current_dir)
-if app_dir not in sys.path:
-    sys.path.insert(0, app_dir)
+from PyQt6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QFrame, QMessageBox, QStackedWidget,
+    QScrollArea, QApplication
+)
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 
-from theme import apply_theme, AppTheme
-from ui.abas.Consultar   import ConsultarUI
-from ui.abas.bancoantigo import ConsultaBancoUI
-from ui.abas.Email       import BaixarEmailUI
-from ui.abas.Analises    import AnaliseUI
-from ui.abas.lancamentos import LancamentoUI
-from ui.abas.memorando   import MemorandoUI
-from ui.abas.anexar      import AnexarUI
-from ui.abas.relatorios  import RelatoriosUI
-from ui.abas.senha.senha import SenhaUI
-from ui.abas.analiseap   import AnaliseapUI
-from ui.abas.Carteira    import CarteiraDigitalUI
-from services.database   import get_connection
+# Adicionar path
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 
-# ── Paleta Corporativa ──────────────────────────────────────────────────────────
-_AZUL_PRIMARY   = "#2c5f8a"
-_AZUL_DARK      = "#1e3a5f"
-_AZUL_LIGHT     = "#e8f0f7"
-_AZUL_ACCENT    = "#3b82f6"
-_AZUL_HOVER     = "#e0eef9"
-_SIDEBAR_BG     = "#1a2c3e"
-_SIDEBAR_ITEM   = "#2a3f54"
-_SIDEBAR_ATIV   = "#2c5f8a"
-_BRANCO         = "#ffffff"
-_CINZA_BG       = "#f8fafc"
-_CINZA_BORDER   = "#e2e8f0"
-_CINZA_MEDIO    = "#64748b"
-_CINZA_TEXTO    = "#1e293b"
-_VERDE_STATUS   = "#10b981"
-_VERDE_HOVER    = "#d1fae5"
-_DANGER         = "#ef4444"
-_DANGER_DK      = "#dc2626"
-_TEXT_SIDEBAR   = "#cbd5e1"
-_TEXT_SECTION   = "#60a5fa"
-_TEXT_MUTED     = "#64748b"
-_CARD_BORDER    = "#e2e8f0"
-_HEADER_BG      = "#ffffff"
-
-# Caminho dos ícones
-ICONS_DIR = r"images\icons\sidebar"
-
-
-def carregar_icone(nome_arquivo, size=(20, 20)):
-    """Carrega ícone PNG da pasta images/icons/sidebar"""
-    try:
-        path = os.path.join(ICONS_DIR, nome_arquivo)
-        if os.path.exists(path):
-            img = Image.open(path)
-            img = img.resize(size, Image.Resampling.LANCZOS)
-            return ctk.CTkImage(light_image=img, dark_image=img, size=size)
-        else:
-            print(f"[Menu] Ícone não encontrado: {path}")
-    except Exception as e:
-        print(f"[Menu] Erro ao carregar ícone {nome_arquivo}: {e}")
-    return None
-
-
-# Ícones para cada menu (nomes dos arquivos que você tem na pasta)
-ICONES_MENU = {
-    "Consulta": carregar_icone("consulta.png", (20, 20)),
-    "Banco Antigo": carregar_icone("arquivo.png", (20, 20)),
-    "Análises": carregar_icone("analise.png", (20, 20)),
-    "E-mails": carregar_icone("email.png", (20, 20)),
-    "Lançamento": carregar_icone("lancamento.png", (20, 20)),
-    "Carteira": carregar_icone("carteira.png", (20, 20)),
-    "Memorando": carregar_icone("memorando.png", (20, 20)),
-    "Anexar": carregar_icone("anexo.png", (20, 20)),
-    "Relatórios": carregar_icone("relatorio.png", (20, 20)),
-    "Senha": carregar_icone("senha.png", (20, 20)),
+# ═══════════════════════════════════════════════════════
+# PALETA DE CORES PREMIUM
+# ═══════════════════════════════════════════════════════
+C = {
+    "bg":           "#f5f7fa",
+    "sidebar":      "#1a3a2a",
+    "sidebar_dark": "#0f2a1f",
+    "card":         "#ffffff",
+    "surface":      "#f0f4ef",
+    "emerald":      "#00b96b",
+    "gold":         "#f5b642",
+    "danger":       "#ef4444",
+    "info":         "#3b82f6",
+    "warn":         "#f59e0b",
+    "purple":       "#8b5cf6",
+    "cyan":         "#06b6d4",
+    "txt_primary":  "#1f2937",
+    "txt_secondary": "#6b7280",
+    "txt_muted":    "#9ca3af",
+    "txt_sidebar":  "#d4d8d4",
+    "txt_white":    "#ffffff",
+    "border":       "rgba(0,0,0,0.06)",
+    "border_light": "rgba(255,255,255,0.1)",
 }
-# Grupos de navegação com nomes de ícones
-_GRUPOS = [
-    ("CONSULTAS", [
-        ("consulta", "Consulta",      ConsultarUI,      "Consultas avançadas"),
-        ("arquivo",  "Banco Antigo", ConsultaBancoUI,  "Dados históricos"),
-        ("analise",  "Análises",      AnaliseUI,        "Análise de dados"),
-    ]),
-    ("OPERAÇÕES", [
-        ("email",     "E-mails",       BaixarEmailUI,    "Gerenciar emails"),
-        ("lancamento","Lançamento",    LancamentoUI,     "Novos lançamentos"),
-        ("carteira",  "Carteira",      CarteiraDigitalUI,"Gestão financeira"),
-    ]),
-    ("DOCUMENTOS", [
-        ("memorando", "Memorando",     MemorandoUI,      "Documentos internos"),
-        ("anexo",     "Anexar",        AnexarUI,         "Gerenciar anexos"),
-        ("relatorio", "Relatórios",    RelatoriosUI,     "Gerar relatórios"),
-    ]),
-    ("SISTEMA", [
-        ("seguranca", "Senha",         SenhaUI,          "Alterar senha"),
-    ]),
-]
-
-SIDEBAR_W = 280
 
 
-# ── Item de navegação com ícone PNG ────────────────────────────────────────────
-class NavItem(ctk.CTkFrame):
-    def __init__(self, parent, icon_name: str, label: str, command, is_active=False):
-        super().__init__(parent, fg_color="transparent", height=44)
-        self.pack(fill="x", padx=12, pady=2)
-        self.pack_propagate(False)
-
-        self._cmd    = command
-        self._active = is_active
-        self._icon_img = ICONES_MENU.get(label)
-
-        self._indicator = ctk.CTkFrame(
-            self, width=3,
-            fg_color=_AZUL_ACCENT if is_active else "transparent",
-            corner_radius=2,
-        )
-        self._indicator.pack(side="left", fill="y")
-
-        self._bg = ctk.CTkFrame(
-            self,
-            fg_color=_SIDEBAR_ATIV if is_active else "transparent",
-            corner_radius=8,
-        )
-        self._bg.pack(side="left", fill="both", expand=True, padx=(6, 0))
-
-        if self._icon_img:
-            self._icon = ctk.CTkLabel(
-                self._bg, text="",
-                image=self._icon_img,
-                width=28,
-            )
-        else:
-            icon_emoji = {
-                "Consulta": "🔍", "Banco Antigo": "🗄️", "Análises": "📈",
-                "E-mails": "📥", "Lançamento": "📋", "Carteira": "💳",
-                "Memorando": "📄", "Anexar": "📎", "Relatórios": "📊",
-                "Senha": "🔒",
-            }.get(label, "📄")
-            self._icon = ctk.CTkLabel(
-                self._bg, text=icon_emoji,
-                font=("Segoe UI", 15),
-                text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
-                width=32,
-            )
-        self._icon.pack(side="left", padx=(12, 8))
-
-        self._text = ctk.CTkLabel(
-            self._bg, text=label,
-            font=("Segoe UI", 12, "bold" if is_active else "normal"),
-            text_color=_BRANCO if is_active else _TEXT_SIDEBAR,
-            anchor="w",
-        )
-        self._text.pack(side="left", fill="x", expand=True)
-
-        self._dot = ctk.CTkFrame(
-            self._bg, width=6, height=6, corner_radius=3,
-            fg_color=_AZUL_ACCENT if is_active else "transparent",
-        )
-        self._dot.pack(side="right", padx=(0, 12))
-
-        for w in (self, self._bg, self._icon, self._text):
-            w.bind("<Enter>",    self._enter)
-            w.bind("<Leave>",    self._leave)
-            w.bind("<Button-1>", self._click)
-
-    def set_active(self, val: bool):
-        self._active = val
-        if val:
-            self._indicator.configure(fg_color=_AZUL_ACCENT)
-            self._bg.configure(fg_color=_SIDEBAR_ATIV)
-            if self._icon_img:
-                self._icon.configure(text="")
-            else:
-                self._icon.configure(text_color=_BRANCO)
-            self._text.configure(text_color=_BRANCO, font=("Segoe UI", 12, "bold"))
-            self._dot.configure(fg_color=_AZUL_ACCENT)
-        else:
-            self._indicator.configure(fg_color="transparent")
-            self._bg.configure(fg_color="transparent")
-            if self._icon_img:
-                self._icon.configure(text="")
-            else:
-                self._icon.configure(text_color=_TEXT_SIDEBAR)
-            self._text.configure(text_color=_TEXT_SIDEBAR,
-                                 font=("Segoe UI", 12, "normal"))
-            self._dot.configure(fg_color="transparent")
-
-    def _enter(self, _=None):
-        if not self._active:
-            self._bg.configure(fg_color=_SIDEBAR_ITEM)
-            if not self._icon_img:
-                self._icon.configure(text_color=_BRANCO)
-            self._text.configure(text_color=_BRANCO)
-
-    def _leave(self, _=None):
-        if not self._active:
-            self._bg.configure(fg_color="transparent")
-            if not self._icon_img:
-                self._icon.configure(text_color=_TEXT_SIDEBAR)
-            self._text.configure(text_color=_TEXT_SIDEBAR)
-
-    def _click(self, _=None):
-        if self._cmd:
-            self._cmd()
+# ═══════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════
+def label(txt, size=13, weight=500, color="#000"):
+    l = QLabel(txt)
+    l.setStyleSheet(f"font-size:{size}px; font-weight:{weight}; color:{color}; background:transparent;")
+    return l
 
 
-# ── Janela principal ─────────────────────────────────────────────────────────
-class AppPrincipal(ctk.CTkToplevel):
+def separator():
+    sep = QFrame()
+    sep.setFrameShape(QFrame.Shape.HLine)
+    sep.setStyleSheet(f"background: {C['border_light']}; height: 1px; margin: 8px 0;")
+    return sep
 
-    def __init__(self, usuario_dados, master=None, on_logout=None):
-        apply_theme()
-        super().__init__(master)
-        self.title("Sector Automation — Sistema Corporativo")
-        self.geometry("1440x900")
-        self.minsize(1200, 700)
-        self.configure(fg_color=_CINZA_BG)
 
-        try:
-            self.iconbitmap(os.path.join(current_dir, "assets", "icon.ico"))
-        except Exception:
-            pass
-
-        self.usuario    = usuario_dados["username"]
-        self.perfil     = usuario_dados.get("perfil", "usuario")
-        self.on_logout = on_logout
-        self.tela_atual = None
-        self.nav_items: list[tuple[str, NavItem]] = []
-        self.carregando = False
-
-        self._build()
-        self._abrir(ConsultarUI, "Consulta")
-
-    def conectar_bd(self):
-        try:
-            return get_connection()
-        except Exception as exc:
-            messagebox.showerror("Conexão", str(exc))
-            return None
-
-    def _build(self):
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        self.sidebar = ctk.CTkFrame(
-            self, width=SIDEBAR_W,
-            fg_color=_SIDEBAR_BG, corner_radius=0,
-        )
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_propagate(False)
-
-        self.right = ctk.CTkFrame(self, fg_color=_CINZA_BG, corner_radius=0)
-        self.right.grid(row=0, column=1, sticky="nsew")
-        self.right.grid_columnconfigure(0, weight=1)
-        self.right.grid_rowconfigure(1, weight=1)
-
-        self._build_sidebar()
-        self._build_topbar()
-
-        wrap = ctk.CTkFrame(self.right, fg_color="transparent")
-        wrap.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 24))
-        wrap.grid_columnconfigure(0, weight=1)
-        wrap.grid_rowconfigure(0, weight=1)
-
-        self.main = ctk.CTkFrame(
-            wrap,
-            fg_color=_BRANCO,
-            corner_radius=12,
-            border_width=1,
-            border_color=_CARD_BORDER,
-        )
-        self.main.grid(row=0, column=0, sticky="nsew")
-
-    def _build_sidebar(self):
-        logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=80)
-        logo_frame.pack(fill="x", padx=20, pady=(24, 0))
-        logo_frame.pack_propagate(False)
-
-        icon_pill = ctk.CTkFrame(
-            logo_frame, width=44, height=44, corner_radius=12,
-            fg_color=_AZUL_PRIMARY,
-        )
-        icon_pill.pack(side="left")
-        icon_pill.pack_propagate(False)
+# ═══════════════════════════════════════════════════════
+# BOTAO DE MENU PREMIUM
+# ═══════════════════════════════════════════════════════
+class MenuButton(QPushButton):
+    def __init__(self, emoji, nome, cor=C["emerald"]):
+        super().__init__(f"  {emoji}   {nome}")
+        self.nome = nome
+        self.cor = cor
+        self._active = False
         
-        ctk.CTkLabel(
-            icon_pill, text="S",
-            font=("Segoe UI", 22, "bold"),
-            text_color=_BRANCO,
-        ).place(relx=0.5, rely=0.5, anchor="center")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(42)
+        self._apply_style()
+        
+    def _apply_style(self):
+        if self._active:
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    text-align: left;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: {self.cor};
+                    background: rgba({self._hex_to_rgb(self.cor)},0.15);
+                    border-left: 3px solid {self.cor};
+                }}
+            """)
+        else:
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    text-align: left;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: {C['txt_sidebar']};
+                    background: transparent;
+                    border: none;
+                }}
+                QPushButton:hover {{
+                    background: rgba(255,255,255,0.08);
+                    color: {C['txt_white']};
+                    padding-left: 20px;
+                }}
+            """)
+    
+    def set_active(self, active):
+        self._active = active
+        self._apply_style()
+    
+    def _hex_to_rgb(self, hex_color):
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) == 6:
+            r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+            return f"{r},{g},{b}"
+        return "245,182,66"
 
-        name_col = ctk.CTkFrame(logo_frame, fg_color="transparent")
-        name_col.pack(side="left", padx=(12, 0))
 
-        ctk.CTkLabel(
-            name_col, text="SECTOR",
-            font=("Segoe UI", 18, "bold"),
-            text_color=_BRANCO,
-        ).pack(anchor="w")
+# ═══════════════════════════════════════════════════════
+# JANELA PRINCIPAL - APP PRINCIPAL
+# ═══════════════════════════════════════════════════════
+class AppPrincipal(QMainWindow):
 
-        ctk.CTkLabel(
-            name_col, text="Automation Platform",
-            font=("Segoe UI", 10),
-            text_color=_TEXT_SECTION,
-        ).pack(anchor="w")
+    def __init__(self, usuario, on_logout=None):
+        super().__init__()
+        self.usuario = usuario.get("username", usuario.get("nome", "Usuário"))
+        self.usuario_data = usuario
+        self.perfil = usuario.get("perfil", "usuario")
+        self.on_logout = on_logout
 
-        self._divider(self.sidebar)
+        self.setWindowTitle("AgroFarm | Gestão Agropecuária")
+        self.resize(1300, 850)
+        self.setMinimumSize(1100, 700)
+        
+        self.telas = {}
+        self.botoes = {}
+        
+        self._setup_ui()
+        self._init_clock()
+        
+        # Animacao de entrada
+        self.setWindowOpacity(0.0)
+        self.fade_in = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_in.setDuration(400)
+        self.fade_in.setStartValue(0.0)
+        self.fade_in.setEndValue(1.0)
+        self.fade_in.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.fade_in.start()
+    
+    def _setup_ui(self):
+        central = QWidget()
+        central.setStyleSheet(f"background: {C['bg']};")
+        self.setCentralWidget(central)
+        
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Sidebar
+        main_layout.addWidget(self._criar_sidebar())
+        
+        # Area de conteudo
+        content_area = QVBoxLayout()
+        content_area.setContentsMargins(16, 16, 16, 16)
+        content_area.setSpacing(16)
+        
+        # Topbar
+        content_area.addWidget(self._criar_topbar())
+        
+        # Stack de telas
+        self.stack = QStackedWidget()
+        self.stack.setStyleSheet(f"""
+            QStackedWidget {{
+                background: {C['card']};
+                border-radius: 20px;
+            }}
+        """)
+        content_area.addWidget(self.stack)
+        
+        main_layout.addLayout(content_area, 1)
+        
+        # Carregar telas
+        self._carregar_telas()
+        
+        # Abrir tela inicial (HOME como Dashboard)
+        QTimer.singleShot(100, lambda: self.abrir_tela("Dashboard"))
+    
+    def _criar_sidebar(self):
+        sidebar = QFrame()
+        sidebar.setFixedWidth(280)
+        sidebar.setStyleSheet(f"""
+            QFrame {{
+                background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 {C['sidebar']}, stop:1 {C['sidebar_dark']});
+                border-top-right-radius: 24px;
+                border-bottom-right-radius: 24px;
+            }}
+        """)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(16, 24, 16, 24)
+        layout.setSpacing(12)
+        
+        # ========== LOGO ==========
+        logo_frame = QFrame()
+        logo_layout = QHBoxLayout(logo_frame)
+        logo_layout.setContentsMargins(8, 0, 8, 0)
+        
+        logo_icon = QLabel("🌿")
+        logo_icon.setStyleSheet(f"""
+            font-size: 28px;
+            background: {C['gold']};
+            border-radius: 16px;
+            padding: 8px;
+            min-width: 48px;
+            min-height: 48px;
+        """)
+        logo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        logo_text = QLabel("AgroFarm\nTech")
+        logo_text.setStyleSheet(f"""
+            font-size: 16px;
+            font-weight: 800;
+            color: {C['txt_white']};
+            letter-spacing: -0.5px;
+        """)
+        
+        logo_layout.addWidget(logo_icon)
+        logo_layout.addWidget(logo_text)
+        logo_layout.addStretch()
+        layout.addWidget(logo_frame)
+        layout.addWidget(separator())
+        
+        # ========== SECAO PRINCIPAL ==========
+        layout.addWidget(label("PRINCIPAL", 10, 700, C["txt_muted"]))
+        layout.addSpacing(4)
+        
+        btn_dash = MenuButton("🏠", "Dashboard", C["emerald"])
+        btn_dash.clicked.connect(lambda: self.abrir_tela("Dashboard"))
+        layout.addWidget(btn_dash)
+        self.botoes["Dashboard"] = btn_dash
+        
+        btn_consultar = MenuButton("🔍", "Consultar", C["info"])
+        btn_consultar.clicked.connect(lambda: self.abrir_tela("Consultar"))
+        layout.addWidget(btn_consultar)
+        self.botoes["Consultar"] = btn_consultar
+        
+        layout.addSpacing(8)
+        
+        # ========== SECAO ANALISES ==========
+        layout.addWidget(label("ANÁLISES", 10, 700, C["txt_muted"]))
+        layout.addSpacing(4)
+        
+        btn_analises = MenuButton("📈", "Análises", C["purple"])
+        btn_analises.clicked.connect(lambda: self.abrir_tela("Analises"))
+        layout.addWidget(btn_analises)
+        self.botoes["Analises"] = btn_analises
+        
+        btn_analiseap = MenuButton("🔬", "Análise AP", C["cyan"])
+        btn_analiseap.clicked.connect(lambda: self.abrir_tela("AnaliseAP"))
+        layout.addWidget(btn_analiseap)
+        self.botoes["AnaliseAP"] = btn_analiseap
+        
+        btn_relatorios = MenuButton("📊", "Relatórios", C["warn"])
+        btn_relatorios.clicked.connect(lambda: self.abrir_tela("Relatorios"))
+        layout.addWidget(btn_relatorios)
+        self.botoes["Relatorios"] = btn_relatorios
+        
+        layout.addSpacing(8)
+        
+        # ========== SECAO FINANCEIRO ==========
+        layout.addWidget(label("FINANCEIRO", 10, 700, C["txt_muted"]))
+        layout.addSpacing(4)
+        
+        btn_carteira = MenuButton("💰", "Carteira", C["gold"])
+        btn_carteira.clicked.connect(lambda: self.abrir_tela("Carteira"))
+        layout.addWidget(btn_carteira)
+        self.botoes["Carteira"] = btn_carteira
+        
+        btn_lancamentos = MenuButton("📝", "Lançamentos", C["emerald"])
+        btn_lancamentos.clicked.connect(lambda: self.abrir_tela("Lancamentos"))
+        layout.addWidget(btn_lancamentos)
+        self.botoes["Lancamentos"] = btn_lancamentos
+        
+        btn_devolucao = MenuButton("🔄", "Devolução", C["danger"])
+        btn_devolucao.clicked.connect(lambda: self.abrir_tela("Devolucao"))
+        layout.addWidget(btn_devolucao)
+        self.botoes["Devolucao"] = btn_devolucao
+        
+        layout.addSpacing(8)
+        
+        # ========== SECAO DOCUMENTOS ==========
+        layout.addWidget(label("DOCUMENTOS", 10, 700, C["txt_muted"]))
+        layout.addSpacing(4)
+        
+        btn_email = MenuButton("📧", "E-mail", C["purple"])
+        btn_email.clicked.connect(lambda: self.abrir_tela("Email"))
+        layout.addWidget(btn_email)
+        self.botoes["Email"] = btn_email
+        
+        btn_memorando = MenuButton("📋", "Memorando", C["info"])
+        btn_memorando.clicked.connect(lambda: self.abrir_tela("Memorando"))
+        layout.addWidget(btn_memorando)
+        self.botoes["Memorando"] = btn_memorando
+        
+        btn_anexar = MenuButton("📎", "Anexar", C["cyan"])
+        btn_anexar.clicked.connect(lambda: self.abrir_tela("Anexar"))
+        layout.addWidget(btn_anexar)
+        self.botoes["Anexar"] = btn_anexar
+        
+        btn_adicionar = MenuButton("➕", "Adicionar", C["emerald"])
+        btn_adicionar.clicked.connect(lambda: self.abrir_tela("Adicionar"))
+        layout.addWidget(btn_adicionar)
+        self.botoes["Adicionar"] = btn_adicionar
+        
+        layout.addSpacing(8)
+        
+        # ========== SECAO SISTEMA ==========
+        layout.addWidget(label("SISTEMA", 10, 700, C["txt_muted"]))
+        layout.addSpacing(4)
+        
+        btn_senha = MenuButton("🔐", "Alterar Senha", C["danger"])
+        btn_senha.clicked.connect(lambda: self.abrir_tela("Senha"))
+        layout.addWidget(btn_senha)
+        self.botoes["Senha"] = btn_senha
+        
+        layout.addStretch()
+        layout.addWidget(separator())
+        
+        # ========== USUARIO ==========
+        user_frame = QFrame()
+        user_frame.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(255,255,255,0.06);
+                border-radius: 16px;
+                padding: 8px;
+            }}
+        """)
+        
+        user_layout = QHBoxLayout(user_frame)
+        user_layout.setContentsMargins(12, 10, 12, 10)
+        user_layout.setSpacing(12)
+        
+        avatar = QLabel("👤")
+        avatar.setStyleSheet(f"""
+            font-size: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 6px;
+        """)
+        
+        user_info = QVBoxLayout()
+        user_info.setSpacing(2)
+        user_info.addWidget(label(self.usuario, 12, 700, C["txt_white"]))
+        
+        status_lbl = QLabel("● Online")
+        status_lbl.setStyleSheet(f"font-size: 10px; color: {C['emerald']};")
+        user_info.addWidget(status_lbl)
+        
+        user_layout.addWidget(avatar)
+        user_layout.addLayout(user_info)
+        user_layout.addStretch()
+        
+        layout.addWidget(user_frame)
+        layout.addSpacing(8)
+        
+        # ========== BOTAO SAIR ==========
+        btn_sair = QPushButton("  🚪   Sair do Sistema")
+        btn_sair.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_sair.setStyleSheet(f"""
+            QPushButton {{
+                text-align: left;
+                padding: 12px 16px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                color: #ffb3b3;
+                background: rgba(239,68,68,0.15);
+                border: 1px solid rgba(239,68,68,0.3);
+            }}
+            QPushButton:hover {{
+                background: {C['danger']};
+                color: white;
+                border-color: {C['danger']};
+            }}
+        """)
+        btn_sair.clicked.connect(self.sair)
+        layout.addWidget(btn_sair)
+        
+        scroll.setWidget(container)
+        
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.addWidget(scroll)
+        
+        return sidebar
+    
+    def _criar_topbar(self):
+        topbar = QFrame()
+        topbar.setFixedHeight(64)
+        topbar.setStyleSheet(f"""
+            QFrame {{
+                background: {C['card']};
+                border-radius: 20px;
+                border: 1px solid {C['border']};
+            }}
+        """)
+        
+        layout = QHBoxLayout(topbar)
+        layout.setContentsMargins(24, 0, 24, 0)
+        
+        self.titulo_label = QLabel("Dashboard")
+        self.titulo_label.setStyleSheet(f"""
+            font-size: 18px;
+            font-weight: 800;
+            color: {C['txt_primary']};
+        """)
+        
+        status_frame = QFrame()
+        status_frame.setStyleSheet(f"""
+            QFrame {{
+                background: {C['emerald']}12;
+                border-radius: 20px;
+                border: 1px solid {C['emerald']}25;
+            }}
+        """)
+        status_layout = QHBoxLayout(status_frame)
+        status_layout.setContentsMargins(12, 6, 16, 6)
+        status_layout.setSpacing(8)
+        
+        status_dot = QLabel("●")
+        status_dot.setStyleSheet(f"color: {C['emerald']}; font-size: 10px;")
+        status_text = label("Sistema Online", 11, 600, C["emerald"])
+        
+        status_layout.addWidget(status_dot)
+        status_layout.addWidget(status_text)
+        
+        self.clock_label = QLabel()
+        self.clock_label.setStyleSheet(f"""
+            font-size: 12px;
+            font-weight: 600;
+            color: {C['txt_secondary']};
+            background: {C['bg']};
+            padding: 8px 18px;
+            border-radius: 20px;
+        """)
+        
+        layout.addWidget(self.titulo_label)
+        layout.addStretch()
+        layout.addWidget(status_frame)
+        layout.addSpacing(12)
+        layout.addWidget(self.clock_label)
+        
+        return topbar
 
-        scroll = ctk.CTkScrollableFrame(
-            self.sidebar, fg_color="transparent",
-            scrollbar_button_color=_AZUL_PRIMARY,
-            scrollbar_button_hover_color=_AZUL_ACCENT,
-        )
-        scroll.pack(fill="both", expand=True, pady=(8, 0))
+    def _instanciar_tela(self, classe, nome_tela):
+        """
+        Instancia as telas de forma segura, sem inverter parent/usuario.
+        """
+        try:
+            if nome_tela == "Memorando":
+                return classe(self, self.usuario_data)
 
-        for grupo, itens in _GRUPOS:
-            ctk.CTkLabel(
-                scroll, text=grupo,
-                font=("Segoe UI", 10, "bold"),
-                text_color=_TEXT_SECTION,
-                anchor="w",
-            ).pack(anchor="w", padx=20, pady=(20, 8))
-
-            for icon_name, label, tela, _ in itens:
-                item = NavItem(
-                    scroll, icon_name, label,
-                    command=lambda t=tela, l=label: self._abrir(t, l),
-                )
-                self.nav_items.append((label, item))
-
-            ctk.CTkFrame(scroll, height=1, fg_color=_SIDEBAR_ITEM).pack(
-                fill="x", padx=18, pady=(12, 0)
-            )
-
-        self._build_sidebar_footer()
-
-    def _divider(self, parent, padx=20, pady=12):
-        ctk.CTkFrame(
-            parent, height=1,
-            fg_color=_SIDEBAR_ITEM, corner_radius=0,
-        ).pack(fill="x", padx=padx, pady=pady)
-
-    def _build_sidebar_footer(self):
-        footer = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        footer.pack(fill="x", side="bottom", pady=(0, 20))
-
-        self._divider(footer, padx=18, pady=(0, 16))
-
-        card = ctk.CTkFrame(footer, fg_color=_SIDEBAR_ITEM, corner_radius=12)
-        card.pack(fill="x", padx=16)
-
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=12, pady=12)
-
-        initials = self.usuario[0].upper()
-        av = ctk.CTkFrame(row, width=40, height=40, corner_radius=10,
-                          fg_color=_AZUL_PRIMARY)
-        av.pack(side="left")
-        av.pack_propagate(False)
-        ctk.CTkLabel(
-            av, text=initials,
-            font=("Segoe UI", 16, "bold"),
-            text_color=_BRANCO,
-        ).place(relx=0.5, rely=0.5, anchor="center")
-
-        info = ctk.CTkFrame(row, fg_color="transparent")
-        info.pack(side="left", fill="x", expand=True, padx=(12, 0))
-
-        ctk.CTkLabel(
-            info, text=self.usuario,
-            font=("Segoe UI", 12, "bold"),
-            text_color=_BRANCO, anchor="w",
-        ).pack(fill="x")
-
-        ctk.CTkLabel(
-            info, text=self.perfil.upper(),
-            font=("Segoe UI", 9),
-            text_color=_TEXT_SIDEBAR, anchor="w",
-        ).pack(fill="x", pady=(2, 0))
-
-        ctk.CTkButton(
-            row, text="Sair", width=56, height=32, corner_radius=8,
-            font=("Segoe UI", 11, "bold"),
-            fg_color=_DANGER, hover_color=_DANGER_DK,
-            text_color=_BRANCO,
-            command=self.sair,
-        ).pack(side="right")
-
-    def _build_topbar(self):
-        bar = ctk.CTkFrame(
-            self.right, height=70,
-            fg_color=_HEADER_BG, corner_radius=0,
-        )
-        bar.grid(row=0, column=0, sticky="ew")
-        bar.grid_propagate(False)
-
-        ctk.CTkFrame(bar, height=1, fg_color=_CARD_BORDER, corner_radius=0).place(
-            relx=0, rely=1.0, relwidth=1, anchor="sw"
-        )
-
-        inner = ctk.CTkFrame(bar, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=32)
-
-        left = ctk.CTkFrame(inner, fg_color="transparent")
-        left.pack(side="left", fill="y")
-
-        self.lbl_titulo = ctk.CTkLabel(
-            left, text="Consulta",
-            font=("Segoe UI", 22, "bold"),
-            text_color=_CINZA_TEXTO,
-        )
-        self.lbl_titulo.pack(anchor="w")
-
-        self.lbl_bread = ctk.CTkLabel(
-            left, text="Sistema / Consulta",
-            font=("Segoe UI", 12),
-            text_color=_CINZA_MEDIO,
-        )
-        self.lbl_bread.pack(anchor="w", pady=(2, 0))
-
-        right = ctk.CTkFrame(inner, fg_color="transparent")
-        right.pack(side="right", fill="y")
-
-        self.lbl_clock = ctk.CTkLabel(
-            right, text="",
-            font=("Segoe UI", 12),
-            text_color=_CINZA_MEDIO,
-        )
-        self.lbl_clock.pack(side="left", padx=(0, 20))
-
-        status_pill = ctk.CTkFrame(right, fg_color=_AZUL_LIGHT, corner_radius=20)
-        status_pill.pack(side="left")
-
-        ctk.CTkFrame(
-            status_pill, width=8, height=8, corner_radius=4,
-            fg_color=_VERDE_STATUS,
-        ).pack(side="left", padx=(10, 6), pady=6)
-
-        ctk.CTkLabel(
-            status_pill, text="Online",
-            font=("Segoe UI", 11, "bold"),
-            text_color=_AZUL_PRIMARY,
-        ).pack(side="left", padx=(0, 12), pady=6)
-
-        self._tick()
-
-    def _tick(self):
-        self.lbl_clock.configure(text=datetime.now().strftime("%d/%m/%Y • %H:%M"))
-        self.after(1000, self._tick)
-
-    def _abrir(self, tela_class, titulo: str):
-        if self.carregando:
-            return
-        self.carregando = True
-
-        for label, item in self.nav_items:
-            item.set_active(label == titulo)
-
-        self.lbl_titulo.configure(text=titulo)
-        self.lbl_bread.configure(text=f"Sistema  /  {titulo}")
-
-        for w in self.main.winfo_children():
             try:
-                w.destroy()
-            except Exception:
+                return classe(parent=self, usuario=self.usuario_data)
+            except TypeError:
                 pass
 
-        self.tela_atual = None
-        self.after(10, lambda: self._load(tela_class, titulo))
+            try:
+                return classe(self, self.usuario_data)
+            except TypeError:
+                pass
 
-    def _load(self, tela_class, titulo: str):
+            try:
+                return classe(usuario=self.usuario_data)
+            except TypeError:
+                pass
+
+            try:
+                return classe(parent=self)
+            except TypeError:
+                pass
+
+            try:
+                return classe(self)
+            except TypeError:
+                pass
+
+            try:
+                return classe(conectar_bd=self._conectar_bd)
+            except TypeError:
+                pass
+
+            try:
+                return classe()
+            except TypeError:
+                pass
+
+            return None
+        except Exception as e:
+            print(f"Erro ao instanciar tela {nome_tela}: {e}")
+            return None
+    
+    def _carregar_tela_real(self, nome_modulo, nome_classe, nome_tela):
+        """Tenta carregar uma tela real do sistema"""
         try:
-            params = list(inspect.signature(tela_class.__init__).parameters)
-            if "conectar_bd" in params:
-                self.tela_atual = tela_class(
-                    self.main, self.usuario, conectar_bd=self.conectar_bd)
+            modulo_path = f"ui.abas.{nome_modulo}"
+            modulo = __import__(modulo_path, fromlist=[nome_classe])
+            
+            if hasattr(modulo, nome_classe):
+                classe = getattr(modulo, nome_classe)
+                tela = self._instanciar_tela(classe, nome_tela)
+                if isinstance(tela, QWidget):
+                    return tela
+            return None
+        except Exception as e:
+            print(f"Erro ao carregar tela {nome_tela}: {e}")
+            return None
+    
+    def _conectar_bd(self):
+        """Conexão com banco de dados"""
+        try:
+            from services.database import get_connection
+            return get_connection()
+        except Exception:
+            return None
+    
+    def _criar_tela_placeholder(self, nome):
+        """Cria uma tela placeholder para módulos não implementados"""
+        tela = QWidget()
+        tela.setStyleSheet("background: transparent;")
+        
+        layout = QVBoxLayout(tela)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(20)
+        
+        icones = {
+            "Consultar": "🔍", "Email": "📧", "Analises": "📈",
+            "AnaliseAP": "🔬", "Relatorios": "📊", "Carteira": "💰",
+            "Lancamentos": "📝", "Devolucao": "🔄", "Memorando": "📋",
+            "Anexar": "📎", "Adicionar": "➕", "Senha": "🔐"
+        }
+        
+        icon_lbl = QLabel(icones.get(nome, "📄"))
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setStyleSheet("font-size: 56px; padding: 24px;")
+        
+        titulo_lbl = QLabel(nome)
+        titulo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        titulo_lbl.setStyleSheet("font-size: 24px; font-weight: 800; color: #1f2937;")
+        
+        msg_lbl = QLabel("Módulo em Desenvolvimento")
+        msg_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        msg_lbl.setStyleSheet("font-size: 14px; color: #9ca3af;")
+        
+        layout.addWidget(icon_lbl)
+        layout.addWidget(titulo_lbl)
+        layout.addWidget(msg_lbl)
+        
+        return tela
+    
+    def _carregar_telas(self):
+        """Carrega todas as telas no stack"""
+        try:
+            from ui.abas.home import home
+            if hasattr(home, 'Home'):
+                try:
+                    dashboard = home.Home(parent=self, usuario=self.usuario_data)
+                except TypeError:
+                    try:
+                        dashboard = home.Home(self, self.usuario_data)
+                    except TypeError:
+                        dashboard = home.Home(self.usuario_data)
+            elif hasattr(home, 'home'):
+                try:
+                    dashboard = home.home(parent=self, usuario=self.usuario_data)
+                except TypeError:
+                    try:
+                        dashboard = home.home(self, self.usuario_data)
+                    except TypeError:
+                        dashboard = home.home(self.usuario_data)
+            elif callable(home):
+                try:
+                    dashboard = home(parent=self, usuario=self.usuario_data)
+                except TypeError:
+                    try:
+                        dashboard = home(self, self.usuario_data)
+                    except TypeError:
+                        dashboard = home(self.usuario_data)
             else:
-                self.tela_atual = tela_class(self.main, self.usuario)
-            self.after(0, self._show)
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            messagebox.showerror("Erro ao carregar", f"{titulo}:\n{exc}")
-            self.carregando = False
-
-    def _show(self):
-        try:
-            if self.tela_atual:
-                self.tela_atual.pack(fill="both", expand=True, padx=8, pady=8)
-        finally:
-            self.carregando = False
-
+                dashboard = self._criar_tela_placeholder("Dashboard")
+        except Exception as e:
+            print(f"Erro ao carregar home: {e}")
+            dashboard = self._criar_tela_placeholder("Dashboard")
+        
+        self.stack.addWidget(dashboard)
+        self.telas["Dashboard"] = dashboard
+        
+        telas_config = [
+            ("Consultar", "Consultar", "ConsultarUI"),
+            ("Email", "Email", "BaixarEmailUI"),
+            ("Analises", "Analises", "Analises"),
+            ("AnaliseAP", "analiseap", "AnaliseAP"),
+            ("Relatorios", "relatorios", "RelatoriosUI"),
+            ("Carteira", "Carteira", "CarteiraDigitalUI"),
+            ("Lancamentos", "lancamentos", "LancamentoUI"),
+            ("Devolucao", "devolucao", "DevolucaoUI"),
+            ("Memorando", "memorando", "MemorandoUI"),
+            ("Anexar", "anexar", "AnexarUI"),
+            ("Adicionar", "adicionar", "AdicionarUI"),
+            ("Senha", "senha", "SenhaUI"),
+        ]
+        
+        for nome_tela, modulo_nome, classe_nome in telas_config:
+            tela = self._carregar_tela_real(modulo_nome, classe_nome, nome_tela)
+            if tela is None:
+                tela = self._criar_tela_placeholder(nome_tela)
+            
+            self.stack.addWidget(tela)
+            self.telas[nome_tela] = tela
+    
+    def abrir_tela(self, nome):
+        """Abre uma tela especifica"""
+        if nome in self.telas:
+            self.titulo_label.setText(nome)
+            self.stack.setCurrentWidget(self.telas[nome])
+            
+            for n, btn in self.botoes.items():
+                btn.set_active(n == nome)
+    
+    def _init_clock(self):
+        self.update_clock()
+        timer = QTimer(self)
+        timer.timeout.connect(self.update_clock)
+        timer.start(1000)
+    
+    def update_clock(self):
+        self.clock_label.setText(datetime.now().strftime("%d/%m/%Y  •  %H:%M"))
+    
     def sair(self):
-        if messagebox.askyesno("Sair", "Deseja encerrar a sessão?"):
-            callback = getattr(self, "on_logout", None)
-            self.destroy()
-            if callable(callback):
-                callback()
+        resp = QMessageBox.question(
+            self, "Sair do Sistema",
+            "Deseja realmente encerrar sua sessão?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if resp == QMessageBox.StandardButton.Yes:
+            self.fade_out = QPropertyAnimation(self, b"windowOpacity")
+            self.fade_out.setDuration(300)
+            self.fade_out.setStartValue(1.0)
+            self.fade_out.setEndValue(0.0)
+            self.fade_out.setEasingCurve(QEasingCurve.Type.InCubic)
+            self.fade_out.finished.connect(self._do_logout)
+            self.fade_out.start()
+    
+    def _do_logout(self):
+        self.close()
+        if self.on_logout:
+            self.on_logout()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    
+    usuario = {
+        "username": "João Silva",
+        "nome": "João Silva",
+        "perfil": "usuario",
+        "email": "joao@agrofarm.com"
+    }
+    
+    window = AppPrincipal(usuario)
+    window.show()
+    sys.exit(app.exec())

@@ -3,8 +3,10 @@
 View para interface de relatórios SEFAZ
 """
 # Essa é a parte mais "visual" da aplicação, então tem bastante código relacionado à criação de widgets e layout.
-import customtkinter as ctk
-from tkinter import messagebox
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 from typing import Callable
 from app.theme import AppTheme
 
@@ -214,3 +216,4 @@ class RelatoriosView(ctk.CTkFrame):
                 if var.get()
             ]
         }
+

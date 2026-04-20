@@ -29,5 +29,7 @@ class AdicionarService:
     
     def listar_registros(self, tipo=None, data_inicio=None, data_fim=None):
         """Lista registros do banco"""
-        # Implementação opcional para carregar registros existentes
-        return []
+        try:
+            return self.repo.listar_registros(tipo, data_inicio, data_fim)
+        except Exception:
+            return []

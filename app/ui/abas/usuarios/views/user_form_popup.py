@@ -1,14 +1,33 @@
 # -*- coding: utf-8 -*-
-"""UserFormPopup — popup modal para criar ou editar usuário."""
+"""UserFormPopup — popup modal para criar ou editar usuário.
+Versão PyQt6.
+"""
 
-import customtkinter as ctk
-from app.theme import AppTheme
+import re
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QLineEdit, QComboBox, QPushButton, QCheckBox, QFrame
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
-def _aplicar_mascara_cpf(entry):
+_VERDE = "#22c55e"
+_VERDE_H = "#16a34a"
+_VERM = "#ef4444"
+_VERM_H = "#dc2626"
+_MUTED = "#64748b"
+_BRANCO = "#ffffff"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_BG = "#f5f7fc"
+
+PERFIS = ["administrador", "chefe", "usuario"]
+
+
+def aplicar_mascara_cpf(entry):
     """Aplica máscara CPF (000.000.000-00) em tempo real ao entry."""
-    def _on_key(event=None):
-        texto = entry.get()
-        apenas_numeros = ''.join(c for c in texto if c.isdigit())[:11]
+    def on_key():
+        texto = entry.text()
+        apenas_numeros = re.sub(r"\D", "", texto)[:11]
         mascara = ''
         for i, d in enumerate(apenas_numeros):
             if i == 3 or i == 6:
@@ -16,178 +35,293 @@ def _aplicar_mascara_cpf(entry):
             elif i == 9:
                 mascara += '-'
             mascara += d
-        entry.delete(0, 'end')
-        entry.insert(0, mascara)
-    entry.bind('<KeyRelease>', _on_key)
+        entry.blockSignals(True)
+        entry.setText(mascara)
+        entry.blockSignals(False)
+    
+    entry.textChanged.connect(on_key)
 
 
-_VERDE  = "#22c55e"
-_VERDE_H = "#16a34a"
-_VERM   = "#ef4444"
-_VERM_H = "#dc2626"
-_MUTED  = "#64748b"
+class UserFormPopup(QDialog):
+    """Popup modal para criar/editar usuário."""
 
-# Perfis atualizados
-PERFIS = ["administrador", "chefe", "usuario"]
-
-
-class UserFormPopup(ctk.CTkToplevel):
-
-    def __init__(self, master, on_save, on_delete=None,
-                 user_data: dict = None):
-        super().__init__(master)
-        self._on_save   = on_save
+    def __init__(self, parent, on_save, on_delete=None, user_data: dict = None):
+        super().__init__(parent)
+        self._on_save = on_save
         self._on_delete = on_delete
         self._user_data = user_data
-        self._is_new    = user_data is None
+        self._is_new = user_data is None
 
-        titulo = ("➕ Novo Usuário" if self._is_new
-                  else f"✏️ Editando: {user_data.get('username', '')}")
-        self.title(titulo)
-        self.geometry("560x500")
-        self.resizable(False, False)
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
-        self.after(0, self._centralizar)
+        titulo = "➕ Novo Usuário" if self._is_new else f"✏️ Editando: {user_data.get('username', '')}"
+        self.setWindowTitle(titulo)
+        self.setModal(True)
+        self.setFixedSize(560, 520)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
+
         self._build()
         if not self._is_new:
             self._carregar_dados()
 
+        self._centralizar()
+
     def _centralizar(self):
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = self.winfo_screenwidth()  // 2 - w // 2
-        y = self.winfo_screenheight() // 2 - h // 2
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
     def _build(self):
-        wrap = ctk.CTkFrame(self, fg_color=AppTheme.BG_CARD, corner_radius=16)
-        wrap.pack(fill="both", expand=True, padx=20, pady=20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
 
-        inner = ctk.CTkFrame(wrap, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=24, pady=20)
+        # Card
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 16px;
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 20, 24, 20)
+        card_layout.setSpacing(16)
 
-        titulo = ("➕ Novo Usuário" if self._is_new
-                  else f"✏️ Editando: {self._user_data.get('username', '')}")
-        ctk.CTkLabel(inner, text=titulo,
-                     font=("Segoe UI", 18, "bold"),
-                     text_color=AppTheme.TXT_MAIN,
-                     ).pack(anchor="w", pady=(0, 18))
+        # Título
+        titulo = "➕ Novo Usuário" if self._is_new else f"✏️ Editando: {self._user_data.get('username', '') if self._user_data else ''}"
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        lbl_titulo.setStyleSheet("color: #1e2f3e;")
+        card_layout.addWidget(lbl_titulo)
 
-        grid = ctk.CTkFrame(inner, fg_color="transparent")
-        grid.pack(fill="x")
-        grid.columnconfigure((0, 1), weight=1)
+        # Grid de campos
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
 
-        def _lbl(txt, row, col):
-            ctk.CTkLabel(grid, text=txt,
-                         font=("Segoe UI", 11, "bold"),
-                         text_color=_MUTED, anchor="w",
-                         ).grid(row=row * 2, column=col,
-                                padx=(0, 8) if col == 0 else (8, 0),
-                                pady=(8, 2), sticky="w")
+        # Linha 0: Usuário e Perfil
+        lbl_user = QLabel("Usuário *")
+        lbl_user.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_user.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_user, 0, 0)
+        
+        self._e_user = QLineEdit()
+        self._e_user.setPlaceholderText("nome.sobrenome")
+        self._e_user.setFixedHeight(40)
+        self._e_user.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+        """)
+        grid.addWidget(self._e_user, 1, 0)
 
-        def _entry(ph, row, col, show=""):
-            e = ctk.CTkEntry(
-                grid, placeholder_text=ph,
-                height=40, corner_radius=10,
-                font=("Segoe UI", 12),
-                fg_color=AppTheme.BG_INPUT,
-                border_color=AppTheme.BG_INPUT,
-                text_color=AppTheme.TXT_MAIN,
-                show=show)
-            e.grid(row=row * 2 + 1, column=col,
-                   padx=(0, 8) if col == 0 else (8, 0),
-                   sticky="ew")
-            return e
+        lbl_perfil = QLabel("Perfil *")
+        lbl_perfil.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_perfil.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_perfil, 0, 1)
 
-        _lbl("Usuário *", 0, 0); self._e_user = _entry("nome.sobrenome", 0, 0)
-        _lbl("Perfil *",  0, 1)
-        self._combo = ctk.CTkComboBox(
-            grid, values=PERFIS,
-            height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE, button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN)
-        self._combo.grid(row=1, column=1, padx=(8, 0), sticky="ew")
-        self._combo.set("usuario")   # padrão é "usuario"
+        self._combo = QComboBox()
+        self._combo.addItems(PERFIS)
+        self._combo.setFixedHeight(40)
+        self._combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 5px 10px;
+            }}
+        """)
+        self._combo.setCurrentText("usuario")
+        grid.addWidget(self._combo, 1, 1)
 
-        _lbl("CPF",         1, 0); self._e_cpf   = _entry("000.000.000-00",              1, 0)
-        _aplicar_mascara_cpf(self._e_cpf)
-        _lbl("E-mail",      1, 1); self._e_email = _entry("usuario@dominio.com",          1, 1)
-        _lbl("Senha",       2, 0)
-        self._e_senha = _entry(
-            "Senha obrigatória" if self._is_new else "Deixe em branco p/ manter",
-            2, 0, show="*")
-        _lbl("Observações", 2, 1); self._e_obs = _entry("Observações opcionais", 2, 1)
+        # Linha 1: CPF e Email
+        lbl_cpf = QLabel("CPF")
+        lbl_cpf.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_cpf.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_cpf, 2, 0)
 
-        self._var_ativo = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(
-            inner, text="Usuário ativo",
-            variable=self._var_ativo,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            font=("Segoe UI", 12),
-            text_color=AppTheme.TXT_MAIN,
-        ).pack(anchor="w", pady=(12, 16))
+        self._e_cpf = QLineEdit()
+        self._e_cpf.setPlaceholderText("000.000.000-00")
+        self._e_cpf.setFixedHeight(40)
+        self._e_cpf.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+        """)
+        aplicar_mascara_cpf(self._e_cpf)
+        grid.addWidget(self._e_cpf, 3, 0)
 
-        btns = ctk.CTkFrame(inner, fg_color="transparent")
-        btns.pack(fill="x")
+        lbl_email = QLabel("E-mail")
+        lbl_email.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_email.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_email, 2, 1)
 
-        self._btn_salvar = ctk.CTkButton(
-            btns, text="💾 Salvar",
-            height=42, corner_radius=10,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            font=("Segoe UI", 13, "bold"), text_color="#fff",
-            command=self._salvar)
-        self._btn_salvar.pack(side="left", padx=(0, 8))
+        self._e_email = QLineEdit()
+        self._e_email.setPlaceholderText("usuario@dominio.com")
+        self._e_email.setFixedHeight(40)
+        self._e_email.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+        """)
+        grid.addWidget(self._e_email, 3, 1)
 
-        ctk.CTkButton(
-            btns, text="Cancelar",
-            height=42, corner_radius=10,
-            fg_color=AppTheme.BG_INPUT, hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 13), text_color=AppTheme.TXT_MAIN,
-            command=self.destroy,
-        ).pack(side="left")
+        # Linha 2: Senha e Observações
+        lbl_senha = QLabel("Senha")
+        lbl_senha.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_senha.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_senha, 4, 0)
+
+        placeholder_senha = "Senha obrigatória" if self._is_new else "Deixe em branco p/ manter"
+        self._e_senha = QLineEdit()
+        self._e_senha.setPlaceholderText(placeholder_senha)
+        self._e_senha.setEchoMode(QLineEdit.EchoMode.Password)
+        self._e_senha.setFixedHeight(40)
+        self._e_senha.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+        """)
+        grid.addWidget(self._e_senha, 5, 0)
+
+        lbl_obs = QLabel("Observações")
+        lbl_obs.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_obs.setStyleSheet(f"color: {_MUTED};")
+        grid.addWidget(lbl_obs, 4, 1)
+
+        self._e_obs = QLineEdit()
+        self._e_obs.setPlaceholderText("Observações opcionais")
+        self._e_obs.setFixedHeight(40)
+        self._e_obs.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+            }}
+        """)
+        grid.addWidget(self._e_obs, 5, 1)
+
+        card_layout.addLayout(grid)
+
+        # Checkbox Ativo
+        self._var_ativo = QCheckBox("Usuário ativo")
+        self._var_ativo.setChecked(True)
+        self._var_ativo.setFont(QFont("Segoe UI", 12))
+        self._var_ativo.setStyleSheet(f"color: {_MUTED};")
+        card_layout.addWidget(self._var_ativo)
+
+        # Botões
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+
+        self._btn_salvar = QPushButton("💾 Salvar")
+        self._btn_salvar.setFixedHeight(42)
+        self._btn_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERDE_H};
+            }}
+        """)
+        self._btn_salvar.clicked.connect(self._salvar)
+        btn_layout.addWidget(self._btn_salvar)
+
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setFixedHeight(42)
+        btn_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: #1e2f3e;
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 13px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancelar)
 
         if not self._is_new and self._on_delete:
-            ctk.CTkButton(
-                btns, text="🗑 Excluir",
-                height=42, corner_radius=10,
-                fg_color=_VERM, hover_color=_VERM_H,
-                font=("Segoe UI", 13), text_color="#fff",
-                command=self._excluir,
-            ).pack(side="right")
+            btn_excluir = QPushButton("🗑 Excluir")
+            btn_excluir.setFixedHeight(42)
+            btn_excluir.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {_VERM};
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    padding: 8px 20px;
+                }}
+                QPushButton:hover {{
+                    background-color: {_VERM_H};
+                }}
+            """)
+            btn_excluir.clicked.connect(self._excluir)
+            btn_layout.addWidget(btn_excluir)
+
+        card_layout.addLayout(btn_layout)
+        main_layout.addWidget(card)
 
     def _carregar_dados(self):
-        u = self._user_data
-        self._e_user.insert(0,  u.get("username",   "") or "")
-        self._e_user.configure(state="disabled")
-        self._combo.set(u.get("perfil", "usuario"))
-        self._e_cpf.insert(0,   u.get("cpf",        "") or "")
-        self._e_email.insert(0, u.get("email",       "") or "")
-        self._e_obs.insert(0,   u.get("observacoes", "") or "")
-        self._var_ativo.set(bool(u.get("ativo", True)))
+        """Carrega dados do usuário no formulário."""
+        if not self._user_data:
+            return
+            
+        self._e_user.setText(self._user_data.get("username", ""))
+        self._e_user.setReadOnly(True)
+        self._combo.setCurrentText(self._user_data.get("perfil", "usuario"))
+        self._e_cpf.setText(self._user_data.get("cpf", ""))
+        self._e_email.setText(self._user_data.get("email", ""))
+        self._e_obs.setText(self._user_data.get("observacoes", ""))
+        self._var_ativo.setChecked(self._user_data.get("ativo", True))
 
     def show_saving_state(self):
-        self._btn_salvar.configure(state="disabled", text="⏳ Salvando...")
+        """Desabilita botão durante salvamento."""
+        self._btn_salvar.setEnabled(False)
+        self._btn_salvar.setText("⏳ Salvando...")
 
     def hide_saving_state(self):
-        self._btn_salvar.configure(state="normal", text="💾 Salvar")
+        """Reabilita botão após salvamento."""
+        self._btn_salvar.setEnabled(True)
+        self._btn_salvar.setText("💾 Salvar")
 
     def _salvar(self):
+        """Coleta dados e chama callback de salvamento."""
         form = {
-            "username":    self._e_user.get().strip(),
-            "perfil":      self._combo.get().strip(),
-            "cpf":         self._e_cpf.get().strip(),
-            "email":       self._e_email.get().strip(),
-            "senha":       self._e_senha.get().strip(),
-            "observacoes": self._e_obs.get().strip(),
-            "ativo":       self._var_ativo.get(),
+            "username": self._e_user.text().strip(),
+            "perfil": self._combo.currentText().strip(),
+            "cpf": self._e_cpf.text().strip(),
+            "email": self._e_email.text().strip(),
+            "senha": self._e_senha.text().strip(),
+            "observacoes": self._e_obs.text().strip(),
+            "ativo": self._var_ativo.isChecked(),
         }
         self._on_save(form, self._is_new, self._user_data, self)
 
     def _excluir(self):
+        """Chama callback de exclusão."""
         if self._on_delete:
             self._on_delete(self._user_data, self)

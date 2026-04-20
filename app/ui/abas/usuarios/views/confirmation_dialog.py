@@ -1,89 +1,115 @@
 # -*- coding: utf-8 -*-
 """
 ConfirmationDialog — popup modal de confirmação com suporte a tipos de alerta.
-
-Uso:
-    dlg = ConfirmationDialog(master, "Título", "Mensagem", type="warning")
-    if dlg.show():
-        ...  # confirmado
+Versão PyQt6.
 """
 
-import customtkinter as ctk
-from app.theme import AppTheme
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 _VERDE   = "#22c55e"
 _VERDE_H = "#16a34a"
 _VERM    = "#ef4444"
 _VERM_H  = "#dc2626"
 _MUTED   = "#64748b"
+_BRANCO  = "#ffffff"
+_CINZA_BG = "#f5f7fc"
+_CINZA_BORDER = "#e2e8f0"
 
 
-class ConfirmationDialog(ctk.CTkToplevel):
+class ConfirmationDialog(QDialog):
+    """Popup modal de confirmação."""
 
-    def __init__(self, master, titulo: str, mensagem: str,
+    def __init__(self, parent=None, titulo: str = "", mensagem: str = "",
                  type: str = "question", **kwargs):
-        super().__init__(master, **kwargs)
-        self.title(titulo)
-        self.geometry("440x230")
-        self.resizable(False, False)
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        super().__init__(parent, **kwargs)
+        self.setWindowTitle(titulo)
+        self.setModal(True)
+        self.setFixedSize(440, 230)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
+        
         self._resultado = False
         self._build(titulo, mensagem, type)
-        self.after(0, self._centralizar)
+        self._centralizar()
 
     def _centralizar(self):
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = self.winfo_screenwidth()  // 2 - w // 2
-        y = self.winfo_screenheight() // 2 - h // 2
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
     def _build(self, titulo, mensagem, type):
-        wrap = ctk.CTkFrame(self, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=28, pady=24)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
 
         icone = {"question": "❓", "warning": "⚠️",
                  "error": "❌", "info": "ℹ️"}.get(type, "❓")
 
-        ctk.CTkLabel(wrap, text=f"{icone}  {titulo}",
-                     font=("Segoe UI", 16, "bold"),
-                     text_color=AppTheme.TXT_MAIN,
-                     ).pack(anchor="w", pady=(0, 10))
+        titulo_label = QLabel(f"{icone}  {titulo}")
+        titulo_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        titulo_label.setStyleSheet("color: #1e2f3e;")
+        layout.addWidget(titulo_label)
 
-        ctk.CTkLabel(wrap, text=mensagem,
-                     font=("Segoe UI", 12),
-                     text_color=_MUTED,
-                     wraplength=380, justify="left",
-                     ).pack(anchor="w", pady=(0, 20))
+        msg_label = QLabel(mensagem)
+        msg_label.setFont(QFont("Segoe UI", 12))
+        msg_label.setStyleSheet(f"color: {_MUTED};")
+        msg_label.setWordWrap(True)
+        layout.addWidget(msg_label)
 
-        btns = ctk.CTkFrame(wrap, fg_color="transparent")
-        btns.pack(fill="x")
-        btns.columnconfigure((0, 1), weight=1)
+        layout.addStretch()
 
-        cor   = _VERM  if type in ("warning", "error") else _VERDE
+        # Botões
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+
+        cor = _VERM if type in ("warning", "error") else _VERDE
         cor_h = _VERM_H if type in ("warning", "error") else _VERDE_H
 
-        ctk.CTkButton(
-            btns, text="Confirmar",
-            height=42, corner_radius=10,
-            fg_color=cor, hover_color=cor_h,
-            font=("Segoe UI", 12, "bold"), text_color="#fff",
-            command=self._confirmar,
-        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        btn_confirmar = QPushButton("Confirmar")
+        btn_confirmar.setFixedHeight(42)
+        btn_confirmar.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        btn_confirmar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {cor};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 8px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {cor_h};
+            }}
+        """)
+        btn_confirmar.clicked.connect(self._confirmar)
+        btn_layout.addWidget(btn_confirmar)
 
-        ctk.CTkButton(
-            btns, text="Cancelar",
-            height=42, corner_radius=10,
-            fg_color=AppTheme.BG_INPUT, hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 12), text_color=AppTheme.TXT_MAIN,
-            command=self.destroy,
-        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setFixedHeight(42)
+        btn_cancelar.setFont(QFont("Segoe UI", 12))
+        btn_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: #1e2f3e;
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancelar)
+
+        layout.addLayout(btn_layout)
 
     def _confirmar(self):
         self._resultado = True
-        self.destroy()
+        self.accept()
 
     def show(self) -> bool:
-        self.wait_window()
-        return self._resultado
+        return self.exec() == QDialog.DialogCode.Accepted and self._resultado

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Linha de seleção de pasta"""
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 
 class PastaRow(ctk.CTkFrame):

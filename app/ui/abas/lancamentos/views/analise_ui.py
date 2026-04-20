@@ -6,9 +6,11 @@ from datetime import datetime
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from tkinter import END, filedialog, messagebox
+from PyQt6.QtWidgets import *
 
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 from app.theme import AppTheme
 from ui.base_ui import BaseUI

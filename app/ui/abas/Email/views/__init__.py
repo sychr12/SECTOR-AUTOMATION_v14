@@ -1,15 +1,15 @@
 # app/ui/abas/Email/views/__init__.py
 # -*- coding: utf-8 -*-
-from .components import HeaderCard, ActionButton, LogTableView
-from .widgets import ProgressoDownload, EstatisticasDownload, CardInfo
-from .forms import ConfiguracaoDownloadForm
+"""
+Views do módulo Email.
+
+Importante:
+não importar todas as views automaticamente aqui,
+para evitar que uma view com erro derrube o módulo inteiro.
+"""
 
 __all__ = [
-    'HeaderCard',
-    'ActionButton',
-    'LogTableView',
-    'ProgressoDownload',
-    'EstatisticasDownload',
-    'CardInfo',
-    'ConfiguracaoDownloadForm',
+    "components",
+    "widgets",
+    "forms",
 ]

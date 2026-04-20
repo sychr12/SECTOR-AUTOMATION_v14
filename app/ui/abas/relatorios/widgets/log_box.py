@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Caixa de log com cores"""
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 from datetime import datetime
 
 

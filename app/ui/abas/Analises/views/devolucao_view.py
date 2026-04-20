@@ -1,116 +1,198 @@
 # -*- coding: utf-8 -*-
-"""Popup de devolução — design refinado."""
-import customtkinter as ctk
-from app.theme import AppTheme
+"""Popup de devolução — design refinado (PyQt6)."""
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
+    QRadioButton, QButtonGroup, QTextEdit, QPushButton, QMessageBox
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
-_VERDE   = "#22c55e"
+_VERDE = "#22c55e"
 _VERDE_H = "#16a34a"
-_VERM    = "#ef4444"
-_VERM_H  = "#dc2626"
-_MUTED   = "#64748b"
+_VERM = "#ef4444"
+_VERM_H = "#dc2626"
+_MUTED = "#64748b"
+_BRANCO = "#ffffff"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_BG = "#f5f7fc"
+_CINZA_TEXTO = "#1e2f3e"
 
 MOTIVOS = ["Endereço", "Documentos", "Cadastro",
            "Pesca", "Simples Nacional", "Animais", "Outros"]
 
 
-class DevolucaoPopup(ctk.CTkToplevel):
+class DevolucaoPopup(QDialog):
+    """Popup de devolução de processos."""
 
-    def __init__(self, master, callback):
-        super().__init__(master)
+    def __init__(self, parent=None, callback=None):
+        super().__init__(parent)
         self.callback = callback
 
-        self.title("Devolução de Processos")
-        self.geometry("520x460")
-        self.resizable(False, False)
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        self.setWindowTitle("Devolução de Processos")
+        self.setModal(True)
+        self.setFixedSize(520, 460)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
+
         self._build()
-        # Centralizar após a janela ser desenhada
-        self.after(0, self._centralizar)
+        self._centralizar()
 
     def _centralizar(self):
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = (self.winfo_screenwidth()  // 2) - (w // 2)
-        y = (self.winfo_screenheight() // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
     def _build(self):
-        wrap = ctk.CTkFrame(self, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=28, pady=24)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
 
         # Título
-        ctk.CTkLabel(wrap, text="Devolução de Processos",
-                     font=("Segoe UI", 20, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(anchor="w",
-                                                         pady=(0, 20))
+        lbl_title = QLabel("Devolução de Processos")
+        lbl_title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        layout.addWidget(lbl_title)
 
         # Card de motivos
-        card = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                            corner_radius=14)
-        card.pack(fill="x", pady=(0, 16))
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 14px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 18, 20, 18)
+        card_layout.setSpacing(10)
 
-        ctk.CTkLabel(card, text="Motivo da devolução:",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w",
-                                             padx=20, pady=(18, 10))
+        lbl_motivo = QLabel("Motivo da devolução:")
+        lbl_motivo.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        lbl_motivo.setStyleSheet(f"color: {_MUTED};")
+        card_layout.addWidget(lbl_motivo)
 
-        self.motivo_var = ctk.StringVar(value="Endereço")
+        # Grid de radio buttons
+        self.motivo_group = QButtonGroup(self)
+        grid_layout = QHBoxLayout()
+        grid_layout.setSpacing(20)
 
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(padx=20, pady=(0, 16))
-
+        left_col = QVBoxLayout()
+        right_col = QVBoxLayout()
+        
         for i, m in enumerate(MOTIVOS):
-            ctk.CTkRadioButton(
-                grid, text=m,
-                variable=self.motivo_var, value=m,
-                fg_color=_VERDE, hover_color=_VERDE_H,
-                text_color=AppTheme.TXT_MAIN,
-                font=("Segoe UI", 12),
-            ).grid(row=i // 2, column=i % 2,
-                   padx=16, pady=5, sticky="w")
+            radio = QRadioButton(m)
+            radio.setFont(QFont("Segoe UI", 12))
+            radio.setStyleSheet(f"""
+                QRadioButton {{
+                    color: {_CINZA_TEXTO};
+                    spacing: 8px;
+                }}
+                QRadioButton::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid {_VERDE};
+                    border-radius: 8px;
+                    background-color: white;
+                }}
+                QRadioButton::indicator:checked {{
+                    background-color: {_VERDE};
+                }}
+            """)
+            if i == 0:
+                radio.setChecked(True)
+            self.motivo_group.addButton(radio, i)
+            
+            if i < 4:
+                left_col.addWidget(radio)
+            else:
+                right_col.addWidget(radio)
+        
+        grid_layout.addLayout(left_col)
+        grid_layout.addLayout(right_col)
+        card_layout.addLayout(grid_layout)
 
-        # Detalhes
-        ctk.CTkLabel(wrap, text="Detalhes adicionais (opcional):",
-                     font=("Segoe UI", 11, "bold"),
-                     text_color=_MUTED).pack(anchor="w",
-                                              pady=(0, 6))
+        layout.addWidget(card)
 
-        self.detalhes = ctk.CTkTextbox(
-            wrap, height=80, corner_radius=12,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_width=0,
-            text_color=AppTheme.TXT_MAIN,
-        )
-        self.detalhes.pack(fill="x", pady=(0, 20))
+        # Detalhes adicionais
+        lbl_detalhes = QLabel("Detalhes adicionais (opcional):")
+        lbl_detalhes.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_detalhes.setStyleSheet(f"color: {_MUTED};")
+        layout.addWidget(lbl_detalhes)
+
+        self.detalhes = QTextEdit()
+        self.detalhes.setPlaceholderText("Digite detalhes adicionais sobre a devolução...")
+        self.detalhes.setFixedHeight(80)
+        self.detalhes.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 12px;
+                padding: 8px;
+                font-family: 'Segoe UI';
+                font-size: 12px;
+            }}
+            QTextEdit:focus {{
+                border: 2px solid {_VERDE};
+            }}
+        """)
+        layout.addWidget(self.detalhes)
 
         # Botões
-        btns = ctk.CTkFrame(wrap, fg_color="transparent")
-        btns.pack(fill="x")
-        btns.grid_columnconfigure((0, 1), weight=1)
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
 
-        ctk.CTkButton(
-            btns, text="Confirmar Devolução",
-            height=46, corner_radius=12,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            font=("Segoe UI", 13, "bold"), text_color="#fff",
-            command=self._confirmar
-        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        btn_confirmar = QPushButton("Confirmar Devolução")
+        btn_confirmar.setFixedHeight(46)
+        btn_confirmar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE};
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-family: 'Segoe UI';
+                font-size: 13px;
+                font-weight: bold;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERDE_H};
+            }}
+        """)
+        btn_confirmar.clicked.connect(self._confirmar)
+        btn_layout.addWidget(btn_confirmar)
 
-        ctk.CTkButton(
-            btns, text="Cancelar",
-            height=46, corner_radius=12,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 13),
-            text_color=AppTheme.TXT_MAIN,
-            command=self.destroy
-        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setFixedHeight(46)
+        btn_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 12px;
+                font-family: 'Segoe UI';
+                font-size: 13px;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancelar)
+
+        layout.addLayout(btn_layout)
 
     def _confirmar(self):
-        motivo   = self.motivo_var.get()
-        detalhes = self.detalhes.get("1.0", "end-1c").strip()
+        """Confirma a devolução e chama o callback."""
+        selected_button = self.motivo_group.checkedButton()
+        if selected_button:
+            motivo = selected_button.text()
+        else:
+            motivo = MOTIVOS[0]
+        
+        detalhes = self.detalhes.toPlainText().strip()
         resultado = f"[{motivo}] {detalhes}" if detalhes else f"[{motivo}]"
-        self.callback(resultado)
-        self.destroy()
+        
+        if self.callback:
+            self.callback(resultado)
+        self.accept()
