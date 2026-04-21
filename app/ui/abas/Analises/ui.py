@@ -1,28 +1,18 @@
 # -*- coding: utf-8 -*-
 """Interface de Análise de Processos — design refinado (PyQt6)."""
-import base64
 import os
 import threading
 from datetime import datetime
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
     QPushButton, QComboBox, QTextEdit, QRadioButton, QButtonGroup,
     QCheckBox, QFileDialog, QMessageBox, QTabWidget, QScrollArea,
-    QScrollBar, QGroupBox
+    QDialog
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-
-from app.theme import AppTheme
 from .controller import AnaliseController
 from .services import AnaliseService
 from .views.devolucao_view import DevolucaoPopup
@@ -87,6 +77,8 @@ class AnaliseUI(QWidget):
         self.urgencia = False
         self.registros_vars = {}
         self.registros_checkboxes = {}
+        self._popup_motivos = None
+        self._historico_dialog = None
 
         # Carrega motivos de devolução
         self._motivos = self._carregar_motivos()
@@ -96,6 +88,13 @@ class AnaliseUI(QWidget):
 
         # Carregar dados em thread
         threading.Thread(target=self._carregar_thread, daemon=True).start()
+
+    def closeEvent(self, event):
+        """Fecha recursos abertos ao encerrar a tela."""
+        try:
+            self._on_close()
+        finally:
+            super().closeEvent(event)
 
     def _build_interface(self):
         layout = QVBoxLayout(self)
@@ -126,7 +125,7 @@ class AnaliseUI(QWidget):
 
         self.tab_analise = QWidget()
         self.tab_adicionar = QWidget()
-        
+
         self.tab_widget.addTab(self.tab_analise, "  Análise de Processos  ")
         self.tab_widget.addTab(self.tab_adicionar, "  Adicionar Registro  ")
 
@@ -235,12 +234,12 @@ class AnaliseUI(QWidget):
         if not motivos:
             return
 
-        popup = QWidget()
+        popup = QDialog(self)
         popup.setWindowTitle(f"Motivos — {categoria}")
+        popup.setModal(True)
         popup.setFixedSize(520, 420)
-        popup.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Dialog)
         popup.setStyleSheet(f"background-color: {_CINZA_BG};")
-        
+
         layout = QVBoxLayout(popup)
         layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(16)
@@ -252,12 +251,12 @@ class AnaliseUI(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("border: none; background-color: transparent;")
-        
+
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(2)
-        
+
         for mot in motivos:
             btn = QPushButton(mot)
             btn.setStyleSheet(f"""
@@ -275,19 +274,20 @@ class AnaliseUI(QWidget):
                     background-color: {_CINZA_BORDER};
                 }}
             """)
-            btn.clicked.connect(lambda checked, m=mot: self._selecionar_motivo(m, popup))
+            btn.clicked.connect(lambda checked=False, m=mot, p=popup: self._selecionar_motivo(m, p))
             scroll_layout.addWidget(btn)
-        
+
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
-        
-        popup.show()
+
+        self._popup_motivos = popup
+        popup.exec()
 
     def _selecionar_motivo(self, motivo: str, popup):
         """Seleciona um motivo e fecha o popup."""
         self.motivo.setText(motivo)
-        popup.close()
+        popup.accept()
 
     def _on_close(self):
         self.controller.fechar_driver()
@@ -296,6 +296,9 @@ class AnaliseUI(QWidget):
     # ABA 1 — ANÁLISE
     # ────────────────────────────────────────────────────────────────
     def _build_analise(self):
+        main_layout = QVBoxLayout(self.tab_analise)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
         wrap = QWidget(self.tab_analise)
         wrap.setStyleSheet("background-color: transparent;")
         layout = QVBoxLayout(wrap)
@@ -403,13 +406,13 @@ class AnaliseUI(QWidget):
                 border-radius: 14px;
             }}
         """)
-        
+
         self.tabela_content = QWidget()
         self.tabela_layout = QVBoxLayout(self.tabela_content)
         self.tabela_layout.setContentsMargins(0, 0, 0, 0)
         self.tabela_layout.setSpacing(4)
         self.tabela_layout.addStretch()
-        
+
         self.tabela_container.setWidget(self.tabela_content)
         layout.addWidget(self.tabela_container)
 
@@ -464,7 +467,7 @@ class AnaliseUI(QWidget):
         rodape_layout.addStretch()
         layout.addWidget(rodape)
 
-        self.tab_analise.setLayout(layout)
+        main_layout.addWidget(wrap)
 
     # ────────────────────────────────────────────────────────────────
     # ABA 2 — ADICIONAR
@@ -473,7 +476,7 @@ class AnaliseUI(QWidget):
         scroll = QScrollArea(self.tab_adicionar)
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("border: none; background-color: transparent;")
-        
+
         wrap = QWidget()
         wrap.setStyleSheet("background-color: transparent;")
         layout = QVBoxLayout(wrap)
@@ -495,21 +498,21 @@ class AnaliseUI(QWidget):
         """)
         tipo_layout = QVBoxLayout(tipo_card)
         tipo_layout.setContentsMargins(20, 16, 20, 16)
-        
+
         tipo_inner = QHBoxLayout()
         self.radio_group = QButtonGroup(self)
-        
+
         self.radio_insc = QRadioButton("Inscrição")
         self.radio_insc.setChecked(True)
         self.radio_insc.toggled.connect(self._reset_form)
         self.radio_group.addButton(self.radio_insc)
         tipo_inner.addWidget(self.radio_insc)
-        
+
         self.radio_dev = QRadioButton("Devolução")
         self.radio_dev.toggled.connect(self._reset_form)
         self.radio_group.addButton(self.radio_dev)
         tipo_inner.addWidget(self.radio_dev)
-        
+
         tipo_inner.addStretch()
         tipo_layout.addLayout(tipo_inner)
         layout.addWidget(tipo_card)
@@ -554,7 +557,7 @@ class AnaliseUI(QWidget):
         self.nome = _create_field("Nome Completo *", "Ex: João da Silva")
         self.cpf = _create_field("CPF *", "000.000.000-00")
         self.cpf.textChanged.connect(self._formatar_cpf)
-        
+
         self.municipio = _create_field("Município *", "Ex: Manaus")
         self.memorando = _create_field("Memorando *", "Ex: 001/2025")
 
@@ -563,7 +566,7 @@ class AnaliseUI(QWidget):
         lbl_tipo.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         lbl_tipo.setStyleSheet(f"color: {_MUTED};")
         form_layout.addWidget(lbl_tipo)
-        
+
         self.tipo_combo = QComboBox()
         self.tipo_combo.addItems(["INSC", "RENOV"])
         self.tipo_combo.setFixedHeight(44)
@@ -583,7 +586,7 @@ class AnaliseUI(QWidget):
         lbl_categoria.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         lbl_categoria.setStyleSheet(f"color: {_MUTED};")
         form_layout.addWidget(lbl_categoria)
-        
+
         self.categoria_combo = QComboBox()
         self.categoria_combo.addItems(["Endereço", "Documentos", "Cadastro", "Pesca", "Simples Nacional", "Animais", "Outros"])
         self.categoria_combo.setFixedHeight(44)
@@ -598,12 +601,12 @@ class AnaliseUI(QWidget):
         """)
         self.categoria_combo.currentTextChanged.connect(self._abrir_motivos)
         form_layout.addWidget(self.categoria_combo)
-        
+
         lbl_motivo = QLabel("Motivo da Devolução *")
         lbl_motivo.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         lbl_motivo.setStyleSheet(f"color: {_MUTED};")
         form_layout.addWidget(lbl_motivo)
-        
+
         self.motivo = QTextEdit()
         self.motivo.setPlaceholderText("Digite o motivo da devolução...")
         self.motivo.setFixedHeight(100)
@@ -626,7 +629,7 @@ class AnaliseUI(QWidget):
         self.categoria_combo.hide()
         lbl_motivo.hide()
         self.motivo.hide()
-        
+
         self._lbl_categoria = lbl_categoria
         self._lbl_motivo = lbl_motivo
         self._lbl_tipo = lbl_tipo
@@ -634,7 +637,7 @@ class AnaliseUI(QWidget):
         # Botões
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
-        
+
         btn_salvar = QPushButton("💾 Salvar Registro")
         btn_salvar.setFixedHeight(50)
         btn_salvar.setStyleSheet(f"""
@@ -652,7 +655,7 @@ class AnaliseUI(QWidget):
         """)
         btn_salvar.clicked.connect(self._salvar_registro)
         btn_row.addWidget(btn_salvar)
-        
+
         btn_email = QPushButton("📧 Enviar E-mail")
         btn_email.setFixedHeight(50)
         btn_email.setStyleSheet(f"""
@@ -670,10 +673,10 @@ class AnaliseUI(QWidget):
         """)
         btn_email.clicked.connect(self._enviar_email_form)
         btn_row.addWidget(btn_email)
-        
+
         form_layout.addLayout(btn_row)
         layout.addWidget(form_card)
-        
+
         scroll.setWidget(wrap)
         main_layout = QVBoxLayout(self.tab_adicionar)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -685,7 +688,7 @@ class AnaliseUI(QWidget):
     def _reset_form(self):
         """Mostra/oculta campos conforme tipo selecionado."""
         is_dev = self.radio_dev.isChecked()
-        
+
         if is_dev:
             self._lbl_tipo.hide()
             self.tipo_combo.hide()
@@ -752,7 +755,7 @@ class AnaliseUI(QWidget):
             lbl.setStyleSheet(f"color: {_MUTED}; font-size: 13px; padding: 40px;")
             self.tabela_layout.insertWidget(0, lbl)
             return
-            
+
         for reg in registros:
             self._criar_linha(reg)
 
@@ -770,7 +773,7 @@ class AnaliseUI(QWidget):
                 background-color: {_CINZA_BG};
             }}
         """)
-        
+
         layout = QHBoxLayout(linha)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
@@ -837,7 +840,7 @@ class AnaliseUI(QWidget):
                 background-color: {_AZUL_H};
             }}
         """)
-        btn_ver.clicked.connect(lambda checked, aid=reg["id"]: self.visualizar_pdf(aid))
+        btn_ver.clicked.connect(lambda checked=False, aid=reg["id"]: self.visualizar_pdf(aid))
         layout.addWidget(btn_ver)
 
         btn_download = QPushButton("↓")
@@ -854,7 +857,7 @@ class AnaliseUI(QWidget):
                 background-color: {_CINZA_BORDER};
             }}
         """)
-        btn_download.clicked.connect(lambda checked, aid=reg["id"], n=reg["nome_pdf"]: self.baixar_pdf(aid, n))
+        btn_download.clicked.connect(lambda checked=False, aid=reg["id"], n=reg["nome_pdf"]: self.baixar_pdf(aid, n))
         layout.addWidget(btn_download)
 
         self.tabela_layout.insertWidget(self.tabela_layout.count() - 1, linha)
@@ -909,7 +912,7 @@ class AnaliseUI(QWidget):
                 with open(caminho, 'wb') as f:
                     f.write(resultado[1])
                 QMessageBox.information(self, "Salvo", f"PDF salvo em:\n{caminho}")
-        elif resultado[0] is False and resultado[1] != "Operação cancelada":
+        elif isinstance(resultado, tuple) and resultado[0] is False and resultado[1] != "Operação cancelada":
             QMessageBox.critical(self, "Erro", resultado[1])
 
     def processar(self, novo_status: str):
@@ -948,7 +951,8 @@ class AnaliseUI(QWidget):
             else:
                 QMessageBox.critical(self, "Erro", msg)
 
-        DevolucaoPopup(self, _confirmar)
+        popup = DevolucaoPopup(self, _confirmar)
+        popup.exec()
 
     def _abrir_sefaz_thread(self):
         threading.Thread(target=self._abrir_sefaz, daemon=True).start()
@@ -1022,4 +1026,5 @@ class AnaliseUI(QWidget):
         QMessageBox.information(self, "E-mail", "Funcionalidade de envio de e-mail em desenvolvimento.")
 
     def abrir_historico(self):
-        HistoricoView(self, self.usuario, self.controller)
+        self._historico_dialog = HistoricoView(self, self.usuario, self.controller)
+        self._historico_dialog.exec()
