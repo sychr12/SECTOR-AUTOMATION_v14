@@ -2,220 +2,282 @@
 # -*- coding: utf-8 -*-
 """
 Histórico de Carteiras Digitais.
-
-BUG CORRIGIDO: classe estava truncada com comentário "# ... resto do código..."
-deixando _build() e _atualizar() ausentes, causando AttributeError em runtime.
+Versão PyQt6.
 """
-import customtkinter as ctk
+import re
 from datetime import datetime
-from tkinter import messagebox, ttk
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
+    QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
+    QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
-from app.theme import AppTheme
-from ..utils.constants import VERDE, VERDE_HOVER, AZUL, AZUL_HOVER, MUTED, VERMELHO
 from ..utils.formatters import format_cpf
 
+# ── Cores ─────────────────────────────────────────────────────────────────────
+_VERDE = "#22c55e"
+_AZUL = "#3b82f6"
+_AZUL_H = "#2563eb"
+_MUTED = "#64748b"
+_VERMELHO = "#ef4444"
+_BRANCO = "#ffffff"
+_CINZA_BG = "#f8fafc"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_TEXTO = "#1e2f3e"
 
-class HistoricoView(ctk.CTkToplevel):
 
-    def __init__(self, master, usuario, controller):
-        super().__init__(master)
-        self.usuario    = usuario
+class HistoricoView(QDialog):
+    """Janela de histórico de carteiras digitais."""
+
+    def __init__(self, parent=None, usuario=None, controller=None):
+        super().__init__(parent)
+        self.usuario = usuario
         self.controller = controller
 
-        self.title("Histórico de Carteiras Digitais")
-        self.geometry("1200x750")
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        self.setWindowTitle("Histórico de Carteiras Digitais")
+        self.setModal(True)
+        self.resize(1200, 750)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
 
-        largura = 900
-        altura = 600
-        
-        
-
-        self.update_idletasks()
-        w, h = 1200, 750
-        x = (self.winfo_screenwidth() // 2) - (w // 2)
-        y = (self.winfo_screenheight() // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
         self._build()
         self._atualizar()
-        
-        
+        self._centralizar()
+
+    def _centralizar(self):
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
+
     # ── Layout ────────────────────────────────────────────────────────────────
-
     def _build(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
         # Cabeçalho
-        hdr = ctk.CTkFrame(self, fg_color="transparent")
-        hdr.pack(fill="x", padx=24, pady=(20, 8))
+        hdr_layout = QHBoxLayout()
+        lbl_title = QLabel("Histórico de Carteiras Digitais")
+        lbl_title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        hdr_layout.addWidget(lbl_title)
 
-        ctk.CTkLabel(
-            hdr, text="Histórico de Carteiras Digitais",
-            font=("Segoe UI", 20, "bold"),
-            text_color=AppTheme.TXT_MAIN,
-        ).pack(side="left")
-
-        ctk.CTkButton(
-            hdr, text="✕ Fechar",
-            width=90, height=34, corner_radius=8,
-            fg_color=AppTheme.BG_INPUT, hover_color=AppTheme.BORDER,
-            text_color=MUTED, font=("Segoe UI", 11),
-            command=self.destroy,
-        ).pack(side="right")
+        btn_fechar = QPushButton("✕ Fechar")
+        btn_fechar.setFixedSize(90, 34)
+        btn_fechar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_MUTED};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {_CINZA_BORDER}; }}
+        """)
+        btn_fechar.clicked.connect(self.close)
+        hdr_layout.addWidget(btn_fechar, alignment=Qt.AlignmentFlag.AlignRight)
+        layout.addLayout(hdr_layout)
 
         # Filtros
-        filtros = ctk.CTkFrame(self, fg_color=AppTheme.BG_CARD,
-                               corner_radius=12)
-        filtros.pack(fill="x", padx=24, pady=(0, 12))
+        filtros_card = QFrame()
+        filtros_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        filtros_layout = QHBoxLayout(filtros_card)
+        filtros_layout.setContentsMargins(16, 12, 16, 12)
+        filtros_layout.setSpacing(16)
 
-        linha = ctk.CTkFrame(filtros, fg_color="transparent")
-        linha.pack(fill="x", padx=16, pady=12)
+        # Busca
+        lbl_busca = QLabel("Pesquisar:")
+        lbl_busca.setStyleSheet(f"color: {_MUTED};")
+        filtros_layout.addWidget(lbl_busca)
 
-        ctk.CTkLabel(linha, text="Pesquisar:",
-                     font=("Segoe UI", 11), text_color=MUTED).pack(side="left")
+        self._entry_busca = QLineEdit()
+        self._entry_busca.setPlaceholderText("Nome, CPF ou UNLOC...")
+        self._entry_busca.setFixedWidth(280)
+        self._entry_busca.setStyleSheet(self._entry_style())
+        self._entry_busca.textChanged.connect(self._on_filtro_changed)
+        filtros_layout.addWidget(self._entry_busca)
 
-        self._entry_busca = ctk.CTkEntry(
-            linha,
-            placeholder_text="Nome, CPF ou UNLOC...",
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, height=34, corner_radius=8, width=280,
-        )
-        self._entry_busca.pack(side="left", padx=(8, 16))
-        self._entry_busca.bind("<KeyRelease>", lambda _: self._atualizar())
+        # Período
+        lbl_periodo = QLabel("Período:")
+        lbl_periodo.setStyleSheet(f"color: {_MUTED};")
+        filtros_layout.addWidget(lbl_periodo)
 
-        ctk.CTkLabel(linha, text="Período:",
-                     font=("Segoe UI", 11), text_color=MUTED).pack(side="left")
+        self._periodo = QComboBox()
+        self._periodo.addItems(["TODOS", "HOJE", "SEMANA", "MES", "ANO"])
+        self._periodo.setFixedWidth(130)
+        self._periodo.setStyleSheet(self._combo_style())
+        self._periodo.currentTextChanged.connect(self._on_filtro_changed)
+        filtros_layout.addWidget(self._periodo)
 
-        self._periodo = ctk.CTkComboBox(
-            linha,
-            values=["TODOS", "HOJE", "SEMANA", "MES", "ANO"],
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, height=34, width=130,
-            command=lambda _: self._atualizar(),
-        )
-        self._periodo.set("TODOS")
-        self._periodo.pack(side="left", padx=(8, 16))
+        # Usuário
+        lbl_usuario = QLabel("Usuário:")
+        lbl_usuario.setStyleSheet(f"color: {_MUTED};")
+        filtros_layout.addWidget(lbl_usuario)
 
-        ctk.CTkLabel(linha, text="Usuário:",
-                     font=("Segoe UI", 11), text_color=MUTED).pack(side="left")
+        self._usuario_combo = QComboBox()
+        self._usuario_combo.addItems(["TODOS"])
+        self._usuario_combo.setFixedWidth(160)
+        self._usuario_combo.setStyleSheet(self._combo_style())
+        self._usuario_combo.currentTextChanged.connect(self._on_filtro_changed)
+        filtros_layout.addWidget(self._usuario_combo)
 
-        usuarios = ["TODOS"] + self.controller.buscar_usuarios_unicos()
-        self._usuario_combo = ctk.CTkComboBox(
-            linha,
-            values=usuarios,
-            fg_color=AppTheme.BG_INPUT, border_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, height=34, width=160,
-            command=lambda _: self._atualizar(),
-        )
-        self._usuario_combo.set("TODOS")
-        self._usuario_combo.pack(side="left", padx=(8, 0))
+        # Botão Atualizar
+        btn_atualizar = QPushButton("🔄 Atualizar")
+        btn_atualizar.setFixedSize(110, 34)
+        btn_atualizar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {_AZUL_H}; }}
+        """)
+        btn_atualizar.clicked.connect(self._atualizar)
+        filtros_layout.addWidget(btn_atualizar)
 
-        ctk.CTkButton(
-            linha, text="🔄 Atualizar",
-            width=110, height=34, corner_radius=8,
-            fg_color=AZUL, hover_color=AZUL_HOVER,
-            text_color="#fff", font=("Segoe UI", 11),
-            command=self._atualizar,
-        ).pack(side="right")
+        layout.addWidget(filtros_card)
 
         # Contador
-        self._lbl_total = ctk.CTkLabel(
-            self, text="",
-            font=("Segoe UI", 11), text_color=MUTED,
-        )
-        self._lbl_total.pack(anchor="w", padx=24, pady=(0, 6))
+        self._lbl_total = QLabel("")
+        self._lbl_total.setFont(QFont("Segoe UI", 11))
+        self._lbl_total.setStyleSheet(f"color: {_MUTED};")
+        layout.addWidget(self._lbl_total)
 
-        # Treeview
-        frame_tree = ctk.CTkFrame(self, fg_color=AppTheme.BG_CARD,
-                                  corner_radius=12)
-        frame_tree.pack(fill="both", expand=True, padx=24, pady=(0, 8))
-
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Hist.Treeview",
-                        background=AppTheme.BG_INPUT,
-                        fieldbackground=AppTheme.BG_INPUT,
-                        foreground=AppTheme.TXT_MAIN,
-                        rowheight=32, font=("Segoe UI", 11),
-                        borderwidth=0)
-        style.configure("Hist.Treeview.Heading",
-                        background=AppTheme.BG_CARD,
-                        foreground=MUTED,
-                        font=("Segoe UI", 10, "bold"),
-                        relief="flat")
-        style.map("Hist.Treeview",
-                  background=[("selected", "#1e3a5f")])
-
-        self._tree = ttk.Treeview(
-            frame_tree,
-            columns=("id", "nome", "cpf", "unloc", "validade", "usuario", "data"),
-            show="headings",
-            style="Hist.Treeview",
-            selectmode="browse",
-        )
-        cols_cfg = [
-            ("id",       "ID",       55,  False),
-            ("nome",     "Nome",     220, True),
-            ("cpf",      "CPF",      130, False),
-            ("unloc",    "UNLOC",    100, False),
-            ("validade", "Validade", 100, False),
-            ("usuario",  "Usuário",  130, False),
-            ("data",     "Data",     140, False),
-        ]
-        for col_id, titulo, w, stretch in cols_cfg:
-            self._tree.heading(col_id, text=titulo,
-                               command=lambda c=col_id: self._sort_by(c))
-            self._tree.column(col_id, width=w, minwidth=50, stretch=stretch)
-
-        vsb = ttk.Scrollbar(frame_tree, orient="vertical",
-                            command=self._tree.yview)
-        self._tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y", pady=6)
-        self._tree.pack(fill="both", expand=True, padx=6, pady=6)
-        self._tree.bind("<Double-1>", self._on_duplo_clique)
+        # Tabela
+        self._table = QTableWidget()
+        self._table.setColumnCount(7)
+        self._table.setHorizontalHeaderLabels(["ID", "Nome", "CPF", "UNLOC", "Validade", "Usuário", "Data"])
+        self._table.setAlternatingRowColors(True)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 12px;
+                gridline-color: {_CINZA_BORDER};
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+            }}
+            QHeaderView::section {{
+                background-color: {_CINZA_BORDER};
+                color: {_MUTED};
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        
+        self._table.itemDoubleClicked.connect(self._visualizar_pdf)
+        layout.addWidget(self._table)
 
         # Botões de ação
-        acoes = ctk.CTkFrame(self, fg_color="transparent")
-        acoes.pack(fill="x", padx=24, pady=(0, 16))
+        acoes_layout = QHBoxLayout()
+        acoes_layout.setSpacing(8)
 
-        ctk.CTkButton(
-            acoes, text="👁️ Visualizar PDF",
-            height=38, corner_radius=10,
-            fg_color=AZUL, hover_color=AZUL_HOVER,
-            text_color="#fff", font=("Segoe UI", 12),
-            command=self._visualizar_pdf,
-        ).pack(side="left")
+        btn_visualizar = QPushButton("👁️ Visualizar PDF")
+        btn_visualizar.setFixedSize(140, 38)
+        btn_visualizar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {_AZUL_H}; }}
+        """)
+        btn_visualizar.clicked.connect(self._visualizar_pdf)
+        acoes_layout.addWidget(btn_visualizar)
 
-        ctk.CTkButton(
-            acoes, text="⬇️ Baixar PDF",
-            height=38, corner_radius=10,
-            fg_color=AppTheme.BG_INPUT, hover_color=AppTheme.BORDER,
-            text_color=AppTheme.TXT_MAIN, font=("Segoe UI", 12),
-            command=self._baixar_pdf,
-        ).pack(side="left", padx=(8, 0))
+        btn_baixar = QPushButton("⬇️ Baixar PDF")
+        btn_baixar.setFixedSize(140, 38)
+        btn_baixar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ background-color: {_CINZA_BORDER}; }}
+        """)
+        btn_baixar.clicked.connect(self._baixar_pdf)
+        acoes_layout.addWidget(btn_baixar)
 
-        self._lbl_status = ctk.CTkLabel(
-            acoes, text="",
-            font=("Segoe UI", 11), text_color=MUTED,
-        )
-        self._lbl_status.pack(side="left", padx=16)
+        acoes_layout.addStretch()
+        layout.addLayout(acoes_layout)
+
+    def _entry_style(self):
+        return f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {_AZUL};
+            }}
+        """
+
+    def _combo_style(self):
+        return f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 6px;
+                font-size: 11px;
+            }}
+        """
+
+    def _on_filtro_changed(self):
+        QTimer.singleShot(300, self._atualizar)
 
     # ── Dados ─────────────────────────────────────────────────────────────────
-
     def _atualizar(self):
-        termo   = self._entry_busca.get().strip()
-        periodo = self._periodo.get()
-        usuario = self._usuario_combo.get()
+        termo = self._entry_busca.text().strip()
+        periodo = self._periodo.currentText()
+        usuario = self._usuario_combo.currentText()
+
+        # Carregar usuários se necessário
+        if self._usuario_combo.count() <= 1:
+            try:
+                usuarios = self.controller.buscar_usuarios_unicos()
+                self._usuario_combo.addItems(usuarios)
+            except Exception:
+                pass
 
         try:
             registros = self.controller.carregar_historico(termo, periodo, usuario)
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao carregar histórico:\n{e}", parent=self)
+            QMessageBox.critical(self, "Erro", f"Erro ao carregar histórico:\n{e}")
             return
 
-        for item in self._tree.get_children():
-            self._tree.delete(item)
+        self._table.setRowCount(len(registros))
 
-        for reg in registros:
+        for i, reg in enumerate(registros):
             data_str = ""
             if reg.get("criado_em"):
                 try:
@@ -227,64 +289,39 @@ class HistoricoView(ctk.CTkToplevel):
                 except Exception:
                     data_str = str(reg["criado_em"])
 
-            self._tree.insert("", "end", values=(
-                reg.get("id", ""),
-                reg.get("nome", ""),
-                format_cpf(reg.get("cpf", "") or ""),
-                reg.get("unloc", ""),
-                reg.get("validade", ""),
-                reg.get("usuario", ""),
-                data_str,
-            ))
+            self._table.setItem(i, 0, QTableWidgetItem(str(reg.get("id", ""))))
+            self._table.setItem(i, 1, QTableWidgetItem(reg.get("nome", "")))
+            self._table.setItem(i, 2, QTableWidgetItem(format_cpf(reg.get("cpf", "") or "")))
+            self._table.setItem(i, 3, QTableWidgetItem(reg.get("unloc", "")))
+            self._table.setItem(i, 4, QTableWidgetItem(reg.get("validade", "")))
+            self._table.setItem(i, 5, QTableWidgetItem(reg.get("usuario", "")))
+            self._table.setItem(i, 6, QTableWidgetItem(data_str))
 
         total = len(registros)
-        self._lbl_total.configure(
-            text=f"{total} registro(s) encontrado(s)",
-            text_color=AppTheme.TXT_MAIN if total else MUTED,
-        )
-
-    def _sort_by(self, col):
-        """Ordena a treeview pela coluna clicada."""
-        items = [(self._tree.set(k, col), k) for k in self._tree.get_children("")]
-        items.sort()
-        for index, (_, k) in enumerate(items):
-            self._tree.move(k, "", index)
+        self._lbl_total.setText(f"{total} registro(s) encontrado(s)")
 
     def _get_selected(self):
-        """Retorna (carteira_id, nome) da linha selecionada ou (None, None)."""
-        sel = self._tree.selection()
-        if not sel:
-            messagebox.showwarning("Aviso", "Selecione um registro na lista.", parent=self)
+        """Retorna (carteira_id, nome) da linha selecionada."""
+        current_row = self._table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Aviso", "Selecione um registro na lista.")
             return None, None
-        values = self._tree.item(sel[0], "values")
-        return values[0], values[1]  # id, nome
-
-    def _on_duplo_clique(self, _event):
-        self._visualizar_pdf()
+        return self._table.item(current_row, 0).text(), self._table.item(current_row, 1).text()
 
     def _visualizar_pdf(self):
         carteira_id, nome = self._get_selected()
         if not carteira_id:
             return
-        self._lbl_status.configure(text="Abrindo PDF...", text_color=MUTED)
-        self.update_idletasks()
-        ok, msg = self.controller.visualizar_pdf(carteira_id)
-        self._lbl_status.configure(
-            text=msg if ok else f"❌ {msg}",
-            text_color=VERDE if ok else VERMELHO,
-        )
+        ok, msg = self.controller.visualizar_pdf(int(carteira_id))
+        if not ok:
+            QMessageBox.critical(self, "Erro", msg)
 
     def _baixar_pdf(self):
         carteira_id, nome = self._get_selected()
         if not carteira_id:
             return
-        self._lbl_status.configure(text="Baixando...", text_color=MUTED)
-        self.update_idletasks()
-        ok, msg = self.controller.baixar_pdf(carteira_id, nome)
+        ok, msg = self.controller.baixar_pdf(int(carteira_id), nome)
         if ok:
-            self._lbl_status.configure(text="✅ PDF salvo.", text_color=VERDE)
-            messagebox.showinfo("Sucesso", f"PDF salvo em:\n{msg}", parent=self)
-        else:
-            self._lbl_status.configure(text=f"❌ {msg}", text_color=VERMELHO)
-            if msg != "Operação cancelada":
-                messagebox.showerror("Erro", msg, parent=self)
+            QMessageBox.information(self, "Sucesso", f"PDF salvo em:\n{msg}")
+        elif msg != "Operação cancelada":
+            QMessageBox.critical(self, "Erro", msg)

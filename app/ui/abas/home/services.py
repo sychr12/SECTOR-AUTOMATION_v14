@@ -105,8 +105,6 @@ class DashboardService:
             "WHERE ultimo_acesso >= ? AND ativo = 1",
             (cinco_min,)
         )
-        if err:
-            print(f"[Dashboard] usuários online: {err}")
         stats.usuarios_online  = row[0] if row else 0
         stats.usuarios_offline = stats.total_usuarios - stats.usuarios_online
 
@@ -117,8 +115,6 @@ class DashboardService:
             "SELECT COUNT(*) FROM memorandos WHERE CAST(criado_em AS DATE) = ?",
             (hoje,)
         )
-        if err:
-            print(f"[Dashboard] relatórios hoje: {err}")
         stats.relatorios_gerados_hoje = row[0] if row else 0
 
         # 4. Relatórios gerados este mês
@@ -128,26 +124,18 @@ class DashboardService:
             "SELECT COUNT(*) FROM memorandos WHERE CAST(criado_em AS DATE) >= ?",
             (inicio_mes,)
         )
-        if err:
-            print(f"[Dashboard] relatórios mês: {err}")
         stats.relatorios_gerados_mes = row[0] if row else 0
 
         # 5. Total de relatórios
         row, err = _query_one(conectar_bd, "SELECT COUNT(*) FROM memorandos")
-        if err:
-            print(f"[Dashboard] total memorandos: {err}")
         stats.relatorios_gerados_total = row[0] if row else 0
 
         # 6. Total de inscrições — tabela inscricoes
         row, err = _query_one(conectar_bd, "SELECT COUNT(*) FROM inscricoes")
-        if err:
-            print(f"[Dashboard] inscricoes: {err}")
         stats.total_inscricoes = row[0] if row else 0
 
         # 7. Total de devoluções — tabela devolucoes
         row, err = _query_one(conectar_bd, "SELECT COUNT(*) FROM devolucoes")
-        if err:
-            print(f"[Dashboard] devolucoes: {err}")
         stats.total_devolucoes = row[0] if row else 0
 
         # 8. Último acesso
@@ -155,8 +143,6 @@ class DashboardService:
             conectar_bd,
             "SELECT MAX(ultimo_acesso) FROM requerentes"
         )
-        if err:
-            print(f"[Dashboard] ultimo acesso: {err}")
         if row and row[0]:
             val = row[0]
             stats.ultimo_acesso = (

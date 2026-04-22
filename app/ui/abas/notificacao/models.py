@@ -50,7 +50,7 @@ Recomendamos que altere sua senha no primeiro acesso.
                         if key in dados:
                             config_padrao[key] = dados[key]
             except Exception as e:
-                print(f"Erro ao carregar configuração: {e}")
+                # print(f"Erro ao carregar configuração: {e}")
         
         return cls(**config_padrao)
     
@@ -65,7 +65,7 @@ Recomendamos que altere sua senha no primeiro acesso.
                 json.dump(dados, f, indent=4, ensure_ascii=False)
             return True
         except Exception as e:
-            print(f"Erro ao salvar configuração: {e}")
+            # print(f"Erro ao salvar configuração: {e}")
             return False
     
     def validar(self) -> tuple[bool, str]:

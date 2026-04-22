@@ -1,224 +1,279 @@
 # -*- coding: utf-8 -*-
-"""Histórico de Processos — design refinado com ttk.Treeview."""
+"""Histórico de Processos — design refinado (PyQt6)."""
 import threading
 from datetime import datetime
-from tkinter import messagebox, ttk
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont, QColor
 
-import customtkinter as ctk
-
-from app.theme import AppTheme
-
-_VERDE   = "#22c55e"
-_VERDE_H = "#16a34a"
-_AZUL    = "#3b82f6"
-_AZUL_H  = "#2563eb"
-_VERM    = "#ef4444"
-_AMBER   = "#f59e0b"
-_MUTED   = "#64748b"
+_VERDE = "#22c55e"
+_AZUL = "#3b82f6"
+_AZUL_H = "#2563eb"
+_VERM = "#ef4444"
+_AMBER = "#f59e0b"
+_MUTED = "#64748b"
+_BRANCO = "#ffffff"
+_CINZA_BG = "#f8fafc"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_TEXTO = "#1e2f3e"
 
 STATUS_COR = {
     "DEVOLUCAO": _VERM,
     "RENOVACAO": _VERDE,
     "INSCRICAO": _AZUL,
-    "PENDENTE":  _MUTED,
+    "PENDENTE": _MUTED,
 }
 
 
-class HistoricoView(ctk.CTkToplevel):
+class HistoricoView(QDialog):
+    """Janela de histórico de movimentações."""
 
-    def __init__(self, master, usuario, controller):
-        super().__init__(master)
-        self.usuario    = usuario
+    def __init__(self, parent=None, usuario=None, controller=None):
+        super().__init__(parent)
+        self.usuario = usuario
         self.controller = controller
+        self._dados = []
+        self._dados_filtrados = []
 
-        self.title("Histórico de Movimentações")
-        self.geometry("1200x700")
-        self.configure(fg_color=AppTheme.BG_APP)
-        self.grab_set()
+        self.setWindowTitle("Histórico de Movimentações")
+        self.setModal(True)
+        self.resize(1200, 700)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
+
         self._build()
         self._carregar()
-        # Centralizar após a janela ser desenhada
-        self.after(0, self._centralizar)
+        self._centralizar()
 
     def _centralizar(self):
-        self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = (self.winfo_screenwidth()  // 2) - (w // 2)
-        y = (self.winfo_screenheight() // 2) - (h // 2)
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        screen = self.screen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
-    # ── Layout ──────────────────────────────────────────────────────
+    # ── Layout ────────────────────────────────────────────────────────────────
     def _build(self):
-        wrap = ctk.CTkFrame(self, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=32, pady=24)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(16)
 
         # Cabeçalho
-        hdr = ctk.CTkFrame(wrap, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 20))
-        ctk.CTkLabel(hdr, text="Histórico de Movimentações",
-                     font=("Segoe UI", 22, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(side="left")
+        lbl_title = QLabel("Histórico de Movimentações")
+        lbl_title.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        layout.addWidget(lbl_title)
 
         # Painel de filtros
-        filtro = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                              corner_radius=14)
-        filtro.pack(fill="x", pady=(0, 16))
+        filtros_card = QFrame()
+        filtros_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 14px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        filtros_layout = QVBoxLayout(filtros_card)
+        filtros_layout.setContentsMargins(20, 14, 20, 14)
+        filtros_layout.setSpacing(10)
 
-        linha1 = ctk.CTkFrame(filtro, fg_color="transparent")
-        linha1.pack(fill="x", padx=20, pady=(14, 6))
+        # Filtro por status (radio buttons)
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(20)
 
-        ctk.CTkLabel(linha1, text="Status:",
-                     font=("Segoe UI", 11, "bold"),
-                     text_color=_MUTED).pack(side="left", padx=(0, 12))
+        self.filtro_var = "TODOS"
+        self.filtro_buttons = {}
 
-        self.filtro_var = ctk.StringVar(value="TODOS")
         for txt, val, cor in [
-            ("Todos",     "TODOS",     _MUTED),
+            ("Todos", "TODOS", _MUTED),
             ("Devolução", "DEVOLUCAO", _VERM),
             ("Renovação", "RENOVACAO", _VERDE),
             ("Inscrição", "INSCRICAO", _AZUL),
         ]:
-            ctk.CTkRadioButton(
-                linha1, text=txt,
-                variable=self.filtro_var, value=val,
-                fg_color=cor, hover_color=cor,
-                text_color=AppTheme.TXT_MAIN,
-                font=("Segoe UI", 12),
-                command=self._atualizar,
-            ).pack(side="left", padx=10)
+            radio = QPushButton(txt)
+            radio.setCheckable(True)
+            radio.setFixedHeight(36)
+            radio.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {_BRANCO};
+                    color: {_CINZA_TEXTO};
+                    border: 1px solid {_CINZA_BORDER};
+                    border-radius: 10px;
+                    padding: 0 16px;
+                    font-size: 12px;
+                }}
+                QPushButton:checked {{
+                    background-color: {cor};
+                    color: white;
+                    border: none;
+                }}
+                QPushButton:hover {{
+                    background-color: {_CINZA_BORDER};
+                }}
+            """)
+            radio.clicked.connect(lambda checked, v=val: self._set_filtro(v))
+            if val == "TODOS":
+                radio.setChecked(True)
+            status_layout.addWidget(radio)
+            self.filtro_buttons[val] = radio
 
-        linha2 = ctk.CTkFrame(filtro, fg_color="transparent")
-        linha2.pack(fill="x", padx=20, pady=(0, 14))
+        status_layout.addStretch()
+        filtros_layout.addLayout(status_layout)
 
-        self.pesquisa_var = ctk.StringVar()
-        self.pesquisa_var.trace_add("write", lambda *_: self._atualizar())
+        # Barra de pesquisa
+        search_layout = QHBoxLayout()
+        self.pesquisa_entry = QLineEdit()
+        self.pesquisa_entry.setPlaceholderText("Buscar por nome do arquivo ou usuário...")
+        self.pesquisa_entry.setFixedHeight(36)
+        self.pesquisa_entry.textChanged.connect(self._on_search_changed)
+        self.pesquisa_entry.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {_AZUL};
+            }}
+        """)
+        search_layout.addWidget(self.pesquisa_entry)
 
-        ctk.CTkEntry(linha2,
-                     textvariable=self.pesquisa_var,
-                     placeholder_text="Buscar por nome do arquivo ou usuário...",
-                     height=36, corner_radius=10,
-                     fg_color=AppTheme.BG_INPUT,
-                     border_color=AppTheme.BG_INPUT,
-                     font=("Segoe UI", 12),
-                     text_color=AppTheme.TXT_MAIN,
-                     ).pack(side="left", fill="x", expand=True)
+        btn_limpar = QPushButton("Limpar")
+        btn_limpar.setFixedSize(80, 36)
+        btn_limpar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_BRANCO};
+                color: {_MUTED};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_limpar.clicked.connect(self._limpar_filtros)
+        search_layout.addWidget(btn_limpar)
 
-        ctk.CTkButton(linha2, text="Limpar",
-                      width=80, height=36, corner_radius=10,
-                      fg_color=AppTheme.BG_INPUT,
-                      hover_color=AppTheme.BG_APP,
-                      font=("Segoe UI", 11),
-                      text_color=_MUTED,
-                      command=lambda: (self.pesquisa_var.set(""),
-                                       self.filtro_var.set("TODOS"))
-                      ).pack(side="right", padx=(10, 0))
+        filtros_layout.addLayout(search_layout)
+        layout.addWidget(filtros_card)
 
-        # Tabela com ttk.Treeview (muito mais performática que CTkFrame por linha)
-        frame_tb = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                corner_radius=14)
-        frame_tb.pack(fill="both", expand=True)
+        # Tabela
+        self._table = QTableWidget()
+        self._table.setColumnCount(6)
+        self._table.setHorizontalHeaderLabels(["Arquivo PDF", "Status Anterior", "Status Atual", "Usuário", "Data/Hora", "Motivo"])
+        self._table.setAlternatingRowColors(True)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 12px;
+                gridline-color: {_CINZA_BORDER};
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+            }}
+            QHeaderView::section {{
+                background-color: {_CINZA_BORDER};
+                color: {_MUTED};
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
 
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Hist.Treeview",
-                        background=AppTheme.BG_CARD,
-                        fieldbackground=AppTheme.BG_CARD,
-                        foreground=AppTheme.TXT_MAIN,
-                        rowheight=36,
-                        font=("Segoe UI", 11),
-                        borderwidth=0)
-        style.configure("Hist.Treeview.Heading",
-                        background=AppTheme.BG_INPUT,
-                        foreground=_MUTED,
-                        font=("Segoe UI", 10, "bold"),
-                        relief="flat")
-        style.map("Hist.Treeview",
-                  background=[("selected", "#1e3a5f")])
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
 
-        cols = ("arquivo", "anterior", "atual", "usuario",
-                "data", "motivo")
-        self._tree = ttk.Treeview(frame_tb, columns=cols,
-                                  show="headings",
-                                  style="Hist.Treeview",
-                                  selectmode="browse")
-
-        hdrs = [("arquivo",  "Arquivo PDF",     280),
-                ("anterior", "Status Anterior",  120),
-                ("atual",    "Status Atual",      120),
-                ("usuario",  "Usuário",           120),
-                ("data",     "Data/Hora",         130),
-                ("motivo",   "Motivo",            200)]
-
-        for col, titulo, w in hdrs:
-            self._tree.heading(col, text=titulo)
-            self._tree.column(col, width=w, minwidth=60,
-                              stretch=(col in ("arquivo", "motivo")))
-
-        vsb = ttk.Scrollbar(frame_tb, orient="vertical",
-                            command=self._tree.yview)
-        self._tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y", pady=8)
-        self._tree.pack(fill="both", expand=True, padx=8, pady=8)
-
-        # Tags de cor por status
-        self._tree.tag_configure("DEVOLUCAO", foreground=_VERM)
-        self._tree.tag_configure("RENOVACAO", foreground=_VERDE)
-        self._tree.tag_configure("INSCRICAO", foreground=_AZUL)
-        self._tree.tag_configure("par",   background=AppTheme.BG_CARD)
-        self._tree.tag_configure("impar", background=AppTheme.BG_INPUT)
-
-        # Duplo clique → visualizar PDF
-        self._tree.bind("<Double-1>",
-                        lambda e: self._visualizar_selecionado())
+        self._table.itemDoubleClicked.connect(self._visualizar_selecionado)
+        layout.addWidget(self._table)
 
         # Rodapé
-        rodape = ctk.CTkFrame(wrap, fg_color="transparent")
-        rodape.pack(fill="x", pady=(12, 0))
+        rodape_layout = QHBoxLayout()
 
-        ctk.CTkLabel(rodape,
-                     text="Duplo clique para visualizar o PDF",
-                     font=("Segoe UI", 11),
-                     text_color=_MUTED).pack(side="left")
+        lbl_info = QLabel("Duplo clique para visualizar o PDF")
+        lbl_info.setFont(QFont("Segoe UI", 11))
+        lbl_info.setStyleSheet(f"color: {_MUTED};")
+        rodape_layout.addWidget(lbl_info)
 
-        ctk.CTkButton(rodape, text="Baixar PDF selecionado",
-                      height=38, corner_radius=10,
-                      fg_color=_AZUL, hover_color=_AZUL_H,
-                      font=("Segoe UI", 12, "bold"),
-                      text_color="#fff",
-                      command=self._baixar_selecionado
-                      ).pack(side="right")
+        btn_baixar = QPushButton("Baixar PDF selecionado")
+        btn_baixar.setFixedSize(180, 38)
+        btn_baixar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {_AZUL_H};
+            }}
+        """)
+        btn_baixar.clicked.connect(self._baixar_selecionado)
+        rodape_layout.addWidget(btn_baixar, alignment=Qt.AlignmentFlag.AlignRight)
 
-    # ── Dados ────────────────────────────────────────────────────────
+        layout.addLayout(rodape_layout)
+
+    def _set_filtro(self, valor):
+        self.filtro_var = valor
+        self._atualizar_tabela()
+
+    def _on_search_changed(self):
+        QTimer.singleShot(300, self._atualizar_tabela)
+
+    def _limpar_filtros(self):
+        self.pesquisa_entry.clear()
+        for val, btn in self.filtro_buttons.items():
+            btn.setChecked(val == "TODOS")
+        self.filtro_var = "TODOS"
+        self._atualizar_tabela()
+
+    # ── Dados ────────────────────────────────────────────────────────────────
     def _carregar(self):
-        threading.Thread(target=self._worker_carregar,
-                         daemon=True).start()
+        threading.Thread(target=self._worker_carregar, daemon=True).start()
 
     def _worker_carregar(self):
         try:
             dados = self.controller.carregar_historico()
-            self._dados = dados
-            self.after(0, self._atualizar)
+            self._dados = dados or []
+            QTimer.singleShot(0, self._atualizar_tabela)
         except Exception as exc:
-            self.after(0, messagebox.showerror,
-                       "Erro", f"Erro ao carregar histórico:\n{exc}")
+            QTimer.singleShot(0, lambda: QMessageBox.critical(
+                self, "Erro", f"Erro ao carregar histórico:\n{exc}"))
 
-    def _atualizar(self):
-        if not hasattr(self, "_dados"):
-            return
-
-        filtro   = self.filtro_var.get()
-        pesquisa = self.pesquisa_var.get().lower()
+    def _filtrar_dados(self):
+        filtro = self.filtro_var
+        pesquisa = self.pesquisa_entry.text().lower().strip()
 
         dados = self._dados
         if filtro != "TODOS":
-            dados = [d for d in dados if d["novo_status"] == filtro]
+            dados = [d for d in dados if d.get("novo_status") == filtro]
         if pesquisa:
-            dados = [d for d in dados
-                     if pesquisa in d["nome_pdf"].lower()
-                     or pesquisa in d["usuario"].lower()]
+            dados = [
+                d for d in dados
+                if pesquisa in d.get("nome_pdf", "").lower()
+                or pesquisa in d.get("usuario", "").lower()
+            ]
+        return dados
 
-        for item in self._tree.get_children():
-            self._tree.delete(item)
+    def _atualizar_tabela(self):
+        self._dados_filtrados = self._filtrar_dados()
+        dados = self._dados_filtrados
+
+        self._table.setRowCount(len(dados))
 
         for i, h in enumerate(dados):
             data = h.get("data_acao")
@@ -229,53 +284,73 @@ class HistoricoView(ctk.CTkToplevel):
                     data = None
             data_txt = data.strftime("%d/%m/%Y %H:%M") if data else "—"
 
-            tag_linha = "par" if i % 2 == 0 else "impar"
-            tag_status = h.get("novo_status", "")
+            item_nome = QTableWidgetItem(h.get("nome_pdf", "—"))
+            item_nome.setData(Qt.ItemDataRole.UserRole, h)
+            self._table.setItem(i, 0, item_nome)
 
-            self._tree.insert("", "end",
-                              iid=f"{h.get('analise_id','')}__{i}",
-                              values=(
-                                  h.get("nome_pdf",        "—"),
-                                  h.get("status_anterior", "—"),
-                                  h.get("novo_status",     "—"),
-                                  h.get("usuario",         "—"),
-                                  data_txt,
-                                  h.get("motivo",          ""),
-                              ),
-                              tags=(tag_linha, tag_status))
+            self._table.setItem(i, 1, QTableWidgetItem(h.get("status_anterior", "—")))
 
-    def _get_analise_id(self): 
-        sel = self._tree.selection()
-        if not sel:
+            status_atual = h.get("novo_status", "—")
+            item_status = QTableWidgetItem(status_atual)
+            cor = STATUS_COR.get(status_atual, _MUTED)
+            item_status.setForeground(QColor(cor))
+            self._table.setItem(i, 2, item_status)
+
+            self._table.setItem(i, 3, QTableWidgetItem(h.get("usuario", "—")))
+            self._table.setItem(i, 4, QTableWidgetItem(data_txt))
+            self._table.setItem(i, 5, QTableWidgetItem(h.get("motivo", "")))
+
+    def _get_registro_selecionado(self):
+        current_row = self._table.currentRow()
+        if current_row < 0:
             return None
-        iid = sel[0]
-        # iid = "{analise_id}__{idx}"
-        parte = iid.split("__")[0]
-        if not parte:
+        if current_row >= len(self._dados_filtrados):
             return None
-        try:
-            return int(parte)
-        except (ValueError, TypeError):
-            return None
+        return self._dados_filtrados[current_row]
 
     def _visualizar_selecionado(self):
-        aid = self._get_analise_id()
-        if not aid:
-            messagebox.showwarning("Aviso", "Selecione um registro com PDF.")
+        reg = self._get_registro_selecionado()
+        if not reg:
+            QMessageBox.warning(self, "Aviso", "Selecione um registro com PDF.")
             return
-        ok, msg = self.controller.visualizar_pdf(aid)
-        if not ok:
-            messagebox.showerror("Erro", msg)
+
+        aid = reg.get("analise_id")
+        if aid:
+            ok, msg = self.controller.visualizar_pdf(aid)
+            if not ok:
+                QMessageBox.critical(self, "Erro", msg)
 
     def _baixar_selecionado(self):
-        aid = self._get_analise_id()
-        if not aid:
-            messagebox.showwarning("Aviso", "Selecione um registro com PDF.")
+        reg = self._get_registro_selecionado()
+        if not reg:
+            QMessageBox.warning(self, "Aviso", "Selecione um registro com PDF.")
             return
-        sel  = self._tree.selection()[0]
-        nome = self._tree.item(sel, "values")[0]
-        ok, msg = self.controller.baixar_pdf(aid, nome)
-        if ok:
-            messagebox.showinfo("Salvo", f"PDF salvo em:\n{msg}")
-        elif msg != "Operação cancelada":
-            messagebox.showerror("Erro", msg)
+
+        aid = reg.get("analise_id")
+        nome = reg.get("nome_pdf", "documento")
+        if not aid:
+            QMessageBox.warning(self, "Aviso", "Selecione um registro com PDF.")
+            return
+
+        resultado = self.controller.baixar_pdf(aid, nome)
+
+        if isinstance(resultado, tuple) and len(resultado) == 3 and resultado[0]:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self,
+                "Salvar PDF",
+                nome.replace("/", "_").replace("\\", "_"),
+                "PDF Files (*.pdf)"
+            )
+            if not caminho:
+                return
+
+            try:
+                with open(caminho, "wb") as f:
+                    f.write(resultado[1])
+                QMessageBox.information(self, "Salvo", f"PDF salvo em:\n{caminho}")
+            except Exception as exc:
+                QMessageBox.critical(self, "Erro", f"Erro ao salvar PDF:\n{exc}")
+
+        elif isinstance(resultado, tuple) and len(resultado) >= 2 and resultado[0] is False:
+            if resultado[1] != "Operação cancelada":
+                QMessageBox.critical(self, "Erro", resultado[1])

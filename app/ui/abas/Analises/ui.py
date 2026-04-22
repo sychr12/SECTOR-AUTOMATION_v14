@@ -1,102 +1,138 @@
 # -*- coding: utf-8 -*-
-"""Interface de Análise de Processos — design refinado + bugs corrigidos."""
-import base64
+"""Interface de Análise de Processos — design refinado (PyQt6)."""
 import os
 import threading
 from datetime import datetime
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from tkinter import END, filedialog, messagebox
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QLineEdit,
+    QPushButton, QComboBox, QTextEdit, QRadioButton, QButtonGroup,
+    QCheckBox, QFileDialog, QMessageBox, QTabWidget, QScrollArea,
+    QDialog
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
-import customtkinter as ctk
-
-from app.theme import AppTheme
-from ui.base_ui import BaseUI
 from .controller import AnaliseController
 from .services import AnaliseService
 from .views.devolucao_view import DevolucaoPopup
 from .views.historico_view import HistoricoView
 
 # ── Caminhos dos arquivos OAuth2 ─────────────────────────────────────────────
-_BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
-_TOKEN_PATH      = os.path.join(_BASE_DIR, "token.json")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TOKEN_PATH = os.path.join(_BASE_DIR, "token.json")
 _CREDENTIALS_PATH = os.path.join(_BASE_DIR, "credentials.json")
-_GMAIL_SCOPES    = ["https://www.googleapis.com/auth/gmail.send"]
+_GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
 # ── Paleta ───────────────────────────────────────────────────────────────
-_VERDE    = "#22c55e"
-_VERDE_H  = "#16a34a"
-_AZUL     = "#3b82f6"
-_AZUL_H   = "#2563eb"
+_VERDE = "#22c55e"
+_VERDE_H = "#16a34a"
+_AZUL = "#3b82f6"
+_AZUL_H = "#2563eb"
 _VERMELHO = "#ef4444"
-_VERM_H   = "#dc2626"
-_MUTED    = "#64748b"
-_AMBER    = "#f59e0b"
+_VERM_H = "#dc2626"
+_MUTED = "#64748b"
+_AMBER = "#f59e0b"
+_BRANCO = "#ffffff"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_BG = "#f5f7fc"
+_CINZA_TEXTO = "#1e2f3e"
 
 
-def _badge(parent, texto: str, cor: str) -> ctk.CTkLabel:
+def _badge(parent, texto: str, cor: str) -> QFrame:
     """Mini badge colorido."""
-    frame = ctk.CTkFrame(parent, fg_color=cor, corner_radius=6)
-    lbl = ctk.CTkLabel(frame, text=texto,
-                       font=("Segoe UI", 10, "bold"),
-                       text_color="#ffffff", padx=8, pady=2)
-    lbl.pack()
+    frame = QFrame(parent)
+    frame.setStyleSheet(f"""
+        QFrame {{
+            background-color: {cor};
+            border-radius: 6px;
+        }}
+    """)
+    lbl = QLabel(texto, frame)
+    lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+    lbl.setStyleSheet("color: white; padding: 2px 8px;")
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    layout = QHBoxLayout(frame)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(lbl)
     return frame
 
 
-class AnaliseUI(BaseUI):
+class AnaliseUI(QWidget):
+    """Interface de Análise de Processos."""
 
-    def __init__(self, master, usuario: str,
+    def __init__(self, parent=None, usuario: str = None,
                  on_refresh_lancamento=None,
                  on_refresh_devolucao=None):
-        super().__init__(master)
-        self.usuario    = usuario
-        self.service    = AnaliseService()
+        super().__init__(parent)
+        self.usuario = usuario
+        self.service = AnaliseService()
         self.controller = AnaliseController(
             usuario, self.service.repo,
             self.service.repo_ap,
             self.service.sefaz_repo
         )
         self._on_refresh_lancamento = on_refresh_lancamento
-        self._on_refresh_devolucao  = on_refresh_devolucao
-        self.var_urgencia   = ctk.BooleanVar(value=False)
-        self.registros_vars: dict[int, ctk.BooleanVar] = {}
+        self._on_refresh_devolucao = on_refresh_devolucao
+        self.urgencia = False
+        self.registros_vars = {}
+        self.registros_checkboxes = {}
+        self._popup_motivos = None
+        self._historico_dialog = None
 
-        # Carrega motivos de devolução do JSON
+        # Carrega motivos de devolução
         self._motivos = self._carregar_motivos()
 
-        self.configure(fg_color=AppTheme.BG_APP)
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
+        self._build_interface()
 
-        # ── Notebook ────────────────────────────────────────────────
-        self.nb = ctk.CTkTabview(
-            self,
-            fg_color=AppTheme.BG_CARD,
-            segmented_button_fg_color=AppTheme.BG_INPUT,
-            segmented_button_selected_color=_VERDE,
-            segmented_button_selected_hover_color=_VERDE_H,
-            segmented_button_unselected_color=AppTheme.BG_INPUT,
-            segmented_button_unselected_hover_color=AppTheme.BG_CARD,
-            text_color=AppTheme.TXT_MAIN,
-            text_color_disabled=_MUTED,
-        )
-        self.nb.pack(fill="both", expand=True, padx=0, pady=0)
+        # Carregar dados em thread
+        threading.Thread(target=self._carregar_thread, daemon=True).start()
 
-        self.tab_analise   = self.nb.add("  Análise de Processos  ")
-        self.tab_adicionar = self.nb.add("  Adicionar Registro  ")
+    def closeEvent(self, event):
+        """Fecha recursos abertos ao encerrar a tela."""
+        try:
+            self._on_close()
+        finally:
+            super().closeEvent(event)
+
+    def _build_interface(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet(f"""
+            QTabWidget::pane {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+            }}
+            QTabBar::tab {{
+                background-color: {_CINZA_BG};
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {_BRANCO};
+                border-bottom: 2px solid {_VERDE};
+            }}
+            QTabBar::tab:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+
+        self.tab_analise = QWidget()
+        self.tab_adicionar = QWidget()
+
+        self.tab_widget.addTab(self.tab_analise, "  Análise de Processos  ")
+        self.tab_widget.addTab(self.tab_adicionar, "  Adicionar Registro  ")
 
         self._build_analise()
         self._build_adicionar()
 
-        # Carregar dados em thread para não travar UI
-        threading.Thread(target=self._carregar_thread, daemon=True).start()
-
-        if hasattr(master, "protocol"):
-            master.protocol("WM_DELETE_WINDOW", self._on_close)
+        layout.addWidget(self.tab_widget)
 
     # ────────────────────────────────────────────────────────────────
     # Motivos de devolução
@@ -198,355 +234,582 @@ class AnaliseUI(BaseUI):
         if not motivos:
             return
 
-        popup = ctk.CTkToplevel(self)
-        popup.title(f"Motivos — {categoria}")
-        popup.geometry("520x420")
-        popup.resizable(False, False)
-        popup.configure(fg_color=AppTheme.BG_APP)
-        popup.grab_set()
-        popup.after(0, lambda: popup.geometry(
-            f"520x420+"
-            f"{popup.winfo_screenwidth()  // 2 - 260}+"
-            f"{popup.winfo_screenheight() // 2 - 210}"
-        ))
+        popup = QDialog(self)
+        popup.setWindowTitle(f"Motivos — {categoria}")
+        popup.setModal(True)
+        popup.setFixedSize(520, 420)
+        popup.setStyleSheet(f"background-color: {_CINZA_BG};")
 
-        ctk.CTkLabel(popup, text=f"Selecione o motivo — {categoria}",
-                     font=("Segoe UI", 13, "bold"),
-                     text_color=AppTheme.TXT_MAIN
-                     ).pack(padx=24, pady=(18, 10), anchor="w")
+        layout = QVBoxLayout(popup)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(16)
 
-        scroll = ctk.CTkScrollableFrame(
-            popup, fg_color=AppTheme.BG_CARD, corner_radius=12,
-            scrollbar_button_color=AppTheme.BG_INPUT)
-        scroll.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        lbl_title = QLabel(f"Selecione o motivo — {categoria}")
+        lbl_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        layout.addWidget(lbl_title)
 
-        def _selecionar(texto: str):
-            self.motivo.delete("1.0", END)
-            self.motivo.insert("1.0", texto)
-            popup.destroy()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: transparent;")
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(2)
 
         for mot in motivos:
-            row = ctk.CTkFrame(scroll, fg_color="transparent")
-            row.pack(fill="x", pady=2)
+            btn = QPushButton(mot)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    text-align: left;
+                    padding: 8px 12px;
+                    border: none;
+                    border-radius: 6px;
+                    background-color: {_BRANCO};
+                    color: {_CINZA_TEXTO};
+                    font-family: 'Segoe UI';
+                    font-size: 11px;
+                }}
+                QPushButton:hover {{
+                    background-color: {_CINZA_BORDER};
+                }}
+            """)
+            btn.clicked.connect(lambda checked=False, m=mot, p=popup: self._selecionar_motivo(m, p))
+            scroll_layout.addWidget(btn)
 
-            lbl = ctk.CTkLabel(
-                row, text=mot,
-                font=("Segoe UI", 12),
-                text_color=AppTheme.TXT_MAIN,
-                anchor="w", wraplength=440, justify="left",
-                cursor="hand2",
-            )
-            lbl.pack(fill="x", padx=14, pady=6)
-            lbl.bind("<Enter>",  lambda e, l=lbl: l.configure(text_color=_VERDE))
-            lbl.bind("<Leave>",  lambda e, l=lbl: l.configure(text_color=AppTheme.TXT_MAIN))
-            lbl.bind("<Button-1>", lambda e, m=mot: _selecionar(m))
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+
+        self._popup_motivos = popup
+        popup.exec()
+
+    def _selecionar_motivo(self, motivo: str, popup):
+        """Seleciona um motivo e fecha o popup."""
+        self.motivo.setText(motivo)
+        popup.accept()
 
     def _on_close(self):
         self.controller.fechar_driver()
-        if hasattr(self.master, "destroy"):
-            self.master.destroy()
 
     # ────────────────────────────────────────────────────────────────
     # ABA 1 — ANÁLISE
     # ────────────────────────────────────────────────────────────────
     def _build_analise(self):
-        wrap = ctk.CTkFrame(self.tab_analise, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=32, pady=24)
+        main_layout = QVBoxLayout(self.tab_analise)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        wrap = QWidget(self.tab_analise)
+        wrap.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(wrap)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(20)
 
         # cabeçalho
-        hdr = ctk.CTkFrame(wrap, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 20))
-        ctk.CTkLabel(hdr, text="Análise de Processos",
-                     font=("Segoe UI", 24, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(side="left")
+        hdr = QWidget()
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(0, 0, 0, 20)
+        lbl_title = QLabel("Análise de Processos")
+        lbl_title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        hdr_layout.addWidget(lbl_title)
+        layout.addWidget(hdr)
 
         # barra de ações
-        bar = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                           corner_radius=14)
-        bar.pack(fill="x", pady=(0, 16))
+        bar = QFrame()
+        bar.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 14px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(20, 14, 20, 14)
+        bar_layout.setSpacing(12)
 
-        ctk.CTkCheckBox(
-            bar, text="URGÊNCIA",
-            variable=self.var_urgencia,
-            fg_color=_AMBER, hover_color="#d97706",
-            text_color=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12, "bold")
-        ).pack(side="left", padx=20, pady=14)
+        self.chk_urgencia = QCheckBox("URGÊNCIA")
+        self.chk_urgencia.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.chk_urgencia.setStyleSheet(f"""
+            QCheckBox {{
+                color: {_CINZA_TEXTO};
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border: 2px solid {_AMBER};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {_AMBER};
+            }}
+        """)
+        bar_layout.addWidget(self.chk_urgencia)
 
-        # separador vertical
-        ctk.CTkFrame(bar, width=1, height=28,
-                     fg_color=AppTheme.BG_INPUT).pack(side="left", pady=10)
+        # separador
+        sep = QFrame()
+        sep.setFixedSize(1, 28)
+        sep.setStyleSheet(f"background-color: {_CINZA_BORDER};")
+        bar_layout.addWidget(sep)
 
         for txt, cmd, cor, hov in [
-            ("  Selecionar PDFs",          self.select_pdfs,          _VERDE,    _VERDE_H),
-            ("  SEFAZ + Google Maps",      self._abrir_sefaz_thread,  _AZUL,     _AZUL_H),
-            ("  Atualizar",                self.carregar_do_banco,    _MUTED,    AppTheme.BG_INPUT),
+            ("Selecionar PDFs", self.select_pdfs, _VERDE, _VERDE_H),
+            ("SEFAZ + Google Maps", self._abrir_sefaz_thread, _AZUL, _AZUL_H),
+            ("Atualizar", self.carregar_do_banco, _MUTED, _CINZA_BORDER),
         ]:
-            ctk.CTkButton(bar, text=txt, height=36, corner_radius=10,
-                          fg_color=cor, hover_color=hov,
-                          font=("Segoe UI", 12),
-                          text_color="#ffffff",
-                          command=cmd).pack(side="left", padx=(12, 0), pady=14)
+            btn = QPushButton(f"  {txt}")
+            btn.setFixedHeight(36)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {cor};
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 12px;
+                    padding: 0 16px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hov};
+                }}
+            """)
+            btn.clicked.connect(cmd)
+            bar_layout.addWidget(btn)
 
-        ctk.CTkButton(bar, text="  Histórico",
-                      height=36, corner_radius=10,
-                      fg_color=AppTheme.BG_INPUT,
-                      hover_color=AppTheme.BG_APP,
-                      font=("Segoe UI", 12),
-                      text_color=AppTheme.TXT_MAIN,
-                      command=self.abrir_historico
-                      ).pack(side="right", padx=20, pady=14)
+        bar_layout.addStretch()
 
-        # cabeçalho da tabela
-        thead = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_INPUT,
-                             corner_radius=10)
-        thead.pack(fill="x", pady=(0, 4))
-        for txt, w, col in [
-            ("",          40,  0),
-            ("Nome do PDF", 0, 1),
-            ("Prioridade", 100, 2),
-            ("Data/Hora",  140, 3),
-            ("Ações",       90, 4),
-        ]:
-            thead.grid_columnconfigure(col, weight=(1 if col == 1 else 0),
-                                       minsize=w)
-            ctk.CTkLabel(thead, text=txt,
-                         font=("Segoe UI", 11, "bold"),
-                         text_color=_MUTED,
-                         anchor="w"
-                         ).grid(row=0, column=col,
-                                padx=(16 if col == 0 else 8), pady=10,
-                                sticky="w")
+        btn_historico = QPushButton("  Histórico")
+        btn_historico.setFixedHeight(36)
+        btn_historico.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_CINZA_BG};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 12px;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_historico.clicked.connect(self.abrir_historico)
+        bar_layout.addWidget(btn_historico)
 
-        # corpo da tabela
-        self.tabela = ctk.CTkScrollableFrame(
-            wrap, fg_color=AppTheme.BG_CARD, corner_radius=14,
-            scrollbar_button_color=AppTheme.BG_INPUT)
-        self.tabela.pack(fill="both", expand=True)
+        layout.addWidget(bar)
+
+        # corpo da tabela (scroll area)
+        self.tabela_container = QScrollArea()
+        self.tabela_container.setWidgetResizable(True)
+        self.tabela_container.setStyleSheet(f"""
+            QScrollArea {{
+                border: none;
+                background-color: {_BRANCO};
+                border-radius: 14px;
+            }}
+        """)
+
+        self.tabela_content = QWidget()
+        self.tabela_layout = QVBoxLayout(self.tabela_content)
+        self.tabela_layout.setContentsMargins(0, 0, 0, 0)
+        self.tabela_layout.setSpacing(4)
+        self.tabela_layout.addStretch()
+
+        self.tabela_container.setWidget(self.tabela_content)
+        layout.addWidget(self.tabela_container)
 
         # rodapé de ações em lote
-        rodape = ctk.CTkFrame(wrap, fg_color="transparent")
-        rodape.pack(fill="x", pady=(12, 0))
+        rodape = QWidget()
+        rodape_layout = QHBoxLayout(rodape)
+        rodape_layout.setContentsMargins(0, 12, 0, 0)
+        rodape_layout.setSpacing(10)
 
-        ctk.CTkButton(rodape, text="Selecionar Todos",
-                      height=40, corner_radius=10, width=140,
-                      fg_color=AppTheme.BG_INPUT,
-                      hover_color=AppTheme.BG_CARD,
-                      font=("Segoe UI", 11),
-                      text_color=AppTheme.TXT_MAIN,
-                      command=self._selecionar_todos
-                      ).pack(side="left")
+        btn_selecionar_todos = QPushButton("Selecionar Todos")
+        btn_selecionar_todos.setFixedSize(140, 40)
+        btn_selecionar_todos.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_CINZA_BG};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_selecionar_todos.clicked.connect(self._selecionar_todos)
+        rodape_layout.addWidget(btn_selecionar_todos)
 
         for txt, cmd, cor, hov in [
-            ("Renovação",  lambda: self.processar("RENOVACAO"), _VERDE,    _VERDE_H),
-            ("Inscrição",  lambda: self.processar("INSCRICAO"), _AZUL,     _AZUL_H),
-            ("Devolução",  self.processar_devolucao,            _VERMELHO, _VERM_H),
-            ("Enviar E-mail", self.abrir_popup_email,           _AMBER,    "#d97706"),
+            ("Renovação", lambda: self.processar("RENOVACAO"), _VERDE, _VERDE_H),
+            ("Inscrição", lambda: self.processar("INSCRICAO"), _AZUL, _AZUL_H),
+            ("Devolução", self.processar_devolucao, _VERMELHO, _VERM_H),
+            ("Enviar E-mail", self.abrir_popup_email, _AMBER, "#d97706"),
         ]:
-            ctk.CTkButton(rodape, text=txt,
-                          height=40, corner_radius=10,
-                          fg_color=cor, hover_color=hov,
-                          font=("Segoe UI", 12, "bold"),
-                          text_color="#ffffff",
-                          command=cmd).pack(side="left", padx=(10, 0))
+            btn = QPushButton(txt)
+            btn.setFixedHeight(40)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {cor};
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 0 20px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hov};
+                }}
+            """)
+            btn.clicked.connect(cmd)
+            rodape_layout.addWidget(btn)
+
+        rodape_layout.addStretch()
+        layout.addWidget(rodape)
+
+        main_layout.addWidget(wrap)
 
     # ────────────────────────────────────────────────────────────────
     # ABA 2 — ADICIONAR
     # ────────────────────────────────────────────────────────────────
     def _build_adicionar(self):
-        outer = ctk.CTkScrollableFrame(
-            self.tab_adicionar, fg_color="transparent",
-            scrollbar_button_color=AppTheme.BG_INPUT)
-        outer.pack(fill="both", expand=True)
+        scroll = QScrollArea(self.tab_adicionar)
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: transparent;")
 
-        wrap = ctk.CTkFrame(outer, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=40, pady=28)
+        wrap = QWidget()
+        wrap.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(wrap)
+        layout.setContentsMargins(40, 28, 40, 28)
+        layout.setSpacing(20)
 
-        ctk.CTkLabel(wrap, text="Adicionar Registro",
-                     font=("Segoe UI", 24, "bold"),
-                     text_color=AppTheme.TXT_MAIN
-                     ).pack(anchor="w", pady=(0, 20))
+        lbl_title = QLabel("Adicionar Registro")
+        lbl_title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        layout.addWidget(lbl_title)
 
         # tipo selector
-        tipo_card = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                 corner_radius=14)
-        tipo_card.pack(fill="x", pady=(0, 20))
+        tipo_card = QFrame()
+        tipo_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 14px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        tipo_layout = QVBoxLayout(tipo_card)
+        tipo_layout.setContentsMargins(20, 16, 20, 16)
 
-        self.radio = ctk.StringVar(value="insc")
-        tipo_inner = ctk.CTkFrame(tipo_card, fg_color="transparent")
-        tipo_inner.pack(pady=16)
+        tipo_inner = QHBoxLayout()
+        self.radio_group = QButtonGroup(self)
 
-        for txt, val in [("Inscrição", "insc"), ("Devolução", "dev")]:
-            ctk.CTkRadioButton(
-                tipo_inner, text=txt,
-                variable=self.radio, value=val,
-                command=self._reset_form,
-                font=("Segoe UI", 13, "bold"),
-                fg_color=_VERDE, hover_color=_VERDE_H,
-                text_color=AppTheme.TXT_MAIN,
-            ).pack(side="left", padx=28)
+        self.radio_insc = QRadioButton("Inscrição")
+        self.radio_insc.setChecked(True)
+        self.radio_insc.toggled.connect(self._reset_form)
+        self.radio_group.addButton(self.radio_insc)
+        tipo_inner.addWidget(self.radio_insc)
+
+        self.radio_dev = QRadioButton("Devolução")
+        self.radio_dev.toggled.connect(self._reset_form)
+        self.radio_group.addButton(self.radio_dev)
+        tipo_inner.addWidget(self.radio_dev)
+
+        tipo_inner.addStretch()
+        tipo_layout.addLayout(tipo_inner)
+        layout.addWidget(tipo_card)
 
         # formulário
-        form_card = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                 corner_radius=14)
-        form_card.pack(fill="x")
-        self.form = ctk.CTkFrame(form_card, fg_color="transparent")
-        self.form.pack(fill="both", expand=True, padx=28, pady=24)
+        form_card = QFrame()
+        form_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 14px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        form_layout = QVBoxLayout(form_card)
+        form_layout.setContentsMargins(28, 24, 28, 24)
+        form_layout.setSpacing(12)
 
-        def _entry(placeholder):
-            return ctk.CTkEntry(
-                self.form, placeholder_text=placeholder,
-                height=44, corner_radius=12,
-                font=("Segoe UI", 13),
-                fg_color=AppTheme.BG_INPUT,
-                border_color=AppTheme.BG_INPUT,
-                text_color=AppTheme.TXT_MAIN,
-            )
-
-        def _label(txt):
-            ctk.CTkLabel(self.form, text=txt,
-                         font=("Segoe UI", 11, "bold"),
-                         text_color=_MUTED,
-                         anchor="w").pack(fill="x", pady=(10, 3))
+        def _create_field(label_text, placeholder):
+            lbl = QLabel(label_text)
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            lbl.setStyleSheet(f"color: {_MUTED};")
+            entry = QLineEdit()
+            entry.setPlaceholderText(placeholder)
+            entry.setFixedHeight(44)
+            entry.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {_CINZA_BG};
+                    border: 1px solid {_CINZA_BORDER};
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    font-size: 13px;
+                }}
+                QLineEdit:focus {{
+                    border: 2px solid {_VERDE};
+                }}
+            """)
+            form_layout.addWidget(lbl)
+            form_layout.addWidget(entry)
+            return entry
 
         # Campos comuns
-        _label("Nome Completo *")
-        self.nome = _entry("Ex: João da Silva")
-        self.nome.pack(fill="x")
+        self.nome = _create_field("Nome Completo *", "Ex: João da Silva")
+        self.cpf = _create_field("CPF *", "000.000.000-00")
+        self.cpf.textChanged.connect(self._formatar_cpf)
 
-        _label("CPF *")
-        self.cpf = _entry("000.000.000-00")
-        self.cpf.pack(fill="x")
-        self.cpf.bind("<KeyRelease>", self._formatar_cpf)
-
-        _label("Município *")
-        self.municipio = _entry("Ex: Manaus")
-        self.municipio.pack(fill="x")
-
-        _label("Memorando *")
-        self.memorando = _entry("Ex: 001/2025")
-        self.memorando.pack(fill="x")
+        self.municipio = _create_field("Município *", "Ex: Manaus")
+        self.memorando = _create_field("Memorando *", "Ex: 001/2025")
 
         # Campo exclusivo inscrição
-        _label("Tipo")
-        self._lbl_tipo = self.form.winfo_children()[-1]
-        self.tipo = ctk.CTkComboBox(
-            self.form, values=["INSC", "RENOV"],
-            height=44, corner_radius=12,
-            font=("Segoe UI", 13),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-        )
-        self.tipo.pack(fill="x")
+        lbl_tipo = QLabel("Tipo")
+        lbl_tipo.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_tipo.setStyleSheet(f"color: {_MUTED};")
+        form_layout.addWidget(lbl_tipo)
+
+        self.tipo_combo = QComboBox()
+        self.tipo_combo.addItems(["INSC", "RENOV"])
+        self.tipo_combo.setFixedHeight(44)
+        self.tipo_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_CINZA_BG};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }}
+        """)
+        form_layout.addWidget(self.tipo_combo)
 
         # Campos exclusivos devolução (ocultos inicialmente)
-        self._lbl_categoria = ctk.CTkLabel(
-            self.form, text="Categoria *",
-            font=("Segoe UI", 11, "bold"),
-            text_color=_MUTED, anchor="w")
+        lbl_categoria = QLabel("Categoria *")
+        lbl_categoria.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_categoria.setStyleSheet(f"color: {_MUTED};")
+        form_layout.addWidget(lbl_categoria)
 
-        self.categoria = ctk.CTkComboBox(
-            self.form,
-            values=["Endereço", "Documentos", "Cadastro",
-                    "Pesca", "Simples Nacional", "Animais", "Outros"],
-            height=44, corner_radius=12,
-            font=("Segoe UI", 13),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-            command=self._abrir_motivos,
-        )
+        self.categoria_combo = QComboBox()
+        self.categoria_combo.addItems(["Endereço", "Documentos", "Cadastro", "Pesca", "Simples Nacional", "Animais", "Outros"])
+        self.categoria_combo.setFixedHeight(44)
+        self.categoria_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_CINZA_BG};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }}
+        """)
+        self.categoria_combo.currentTextChanged.connect(self._abrir_motivos)
+        form_layout.addWidget(self.categoria_combo)
 
-        self._lbl_motivo = ctk.CTkLabel(
-            self.form, text="Motivo da Devolução *",
-            font=("Segoe UI", 11, "bold"),
-            text_color=_MUTED, anchor="w")
+        lbl_motivo = QLabel("Motivo da Devolução *")
+        lbl_motivo.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        lbl_motivo.setStyleSheet(f"color: {_MUTED};")
+        form_layout.addWidget(lbl_motivo)
 
-        self.motivo = ctk.CTkTextbox(
-            self.form, height=100, corner_radius=12,
-            font=("Segoe UI", 13),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            text_color=AppTheme.TXT_MAIN,
-            border_width=0,
-        )
+        self.motivo = QTextEdit()
+        self.motivo.setPlaceholderText("Digite o motivo da devolução...")
+        self.motivo.setFixedHeight(100)
+        self.motivo.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {_CINZA_BG};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 12px;
+            }}
+            QTextEdit:focus {{
+                border: 2px solid {_VERDE};
+            }}
+        """)
+        form_layout.addWidget(self.motivo)
 
-        # Botões lado a lado — dentro do form para reposicionar no _reset_form
-        self._btn_row = ctk.CTkFrame(self.form, fg_color="transparent")
-        self._btn_row.grid_columnconfigure((0, 1), weight=1)
+        # Ocultar campos de devolução inicialmente
+        lbl_categoria.hide()
+        self.categoria_combo.hide()
+        lbl_motivo.hide()
+        self.motivo.hide()
 
-        self._btn_salvar = ctk.CTkButton(
-            self._btn_row, text="Salvar Registro",
-            height=50, corner_radius=14,
-            font=("Segoe UI", 14, "bold"),
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            text_color="#ffffff",
-            command=self._salvar_registro,
-        )
-        self._btn_salvar.grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        self._lbl_categoria = lbl_categoria
+        self._lbl_motivo = lbl_motivo
+        self._lbl_tipo = lbl_tipo
 
-        self._btn_email_form = ctk.CTkButton(
-            self._btn_row, text="Enviar E-mail",
-            height=50, corner_radius=14,
-            font=("Segoe UI", 14, "bold"),
-            fg_color=_AMBER, hover_color="#d97706",
-            text_color="#ffffff",
-            command=self._enviar_email_form,
-        )
-        self._btn_email_form.grid(row=0, column=1, padx=(6, 0), sticky="ew")
+        # Botões
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
 
-        self._btn_row.pack(fill="x", pady=(20, 0))
+        btn_salvar = QPushButton("💾 Salvar Registro")
+        btn_salvar.setFixedHeight(50)
+        btn_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE};
+                color: white;
+                border: none;
+                border-radius: 14px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERDE_H};
+            }}
+        """)
+        btn_salvar.clicked.connect(self._salvar_registro)
+        btn_row.addWidget(btn_salvar)
+
+        btn_email = QPushButton("📧 Enviar E-mail")
+        btn_email.setFixedHeight(50)
+        btn_email.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AMBER};
+                color: white;
+                border: none;
+                border-radius: 14px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #d97706;
+            }}
+        """)
+        btn_email.clicked.connect(self._enviar_email_form)
+        btn_row.addWidget(btn_email)
+
+        form_layout.addLayout(btn_row)
+        layout.addWidget(form_card)
+
+        scroll.setWidget(wrap)
+        main_layout = QVBoxLayout(self.tab_adicionar)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
 
     # ────────────────────────────────────────────────────────────────
-    # Linha da tabela
+    # Helpers — reset form
     # ────────────────────────────────────────────────────────────────
+    def _reset_form(self):
+        """Mostra/oculta campos conforme tipo selecionado."""
+        is_dev = self.radio_dev.isChecked()
+
+        if is_dev:
+            self._lbl_tipo.hide()
+            self.tipo_combo.hide()
+            self._lbl_categoria.show()
+            self.categoria_combo.show()
+            self._lbl_motivo.show()
+            self.motivo.show()
+        else:
+            self._lbl_categoria.hide()
+            self.categoria_combo.hide()
+            self._lbl_motivo.hide()
+            self.motivo.hide()
+            self._lbl_tipo.show()
+            self.tipo_combo.show()
+
+    # ────────────────────────────────────────────────────────────────
+    # Formatação CPF
+    # ────────────────────────────────────────────────────────────────
+    def _formatar_cpf(self, text):
+        """Formata CPF automaticamente."""
+        cpf_formatado = self.controller.formatar_cpf(text)
+        if cpf_formatado != text:
+            self.cpf.blockSignals(True)
+            self.cpf.setText(cpf_formatado)
+            self.cpf.blockSignals(False)
+
+    # ────────────────────────────────────────────────────────────────
+    # Carregar registros — em thread
+    # ────────────────────────────────────────────────────────────────
+    def _carregar_thread(self):
+        try:
+            registros = self.controller.carregar_registros_pendentes()
+            QTimer.singleShot(0, lambda: self._preencher_tabela(registros))
+        except Exception as exc:
+            QTimer.singleShot(0, lambda: QMessageBox.critical(
+                self, "Erro", f"Erro ao carregar dados:\n{exc}"))
+
+    def carregar_do_banco(self):
+        """Limpa tabela e recarrega em thread."""
+        self._limpar_tabela()
+        self._mostrar_mensagem_carregando()
+        threading.Thread(target=self._carregar_thread, daemon=True).start()
+
+    def _limpar_tabela(self):
+        """Remove todos os itens da tabela."""
+        while self.tabela_layout.count() > 1:
+            item = self.tabela_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.registros_vars.clear()
+        self.registros_checkboxes.clear()
+
+    def _mostrar_mensagem_carregando(self):
+        lbl = QLabel("Carregando...")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet(f"color: {_MUTED}; font-size: 12px; padding: 30px;")
+        self.tabela_layout.insertWidget(0, lbl)
+
+    def _preencher_tabela(self, registros: list):
+        self._limpar_tabela()
+        if not registros:
+            lbl = QLabel("Nenhum registro pendente.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setStyleSheet(f"color: {_MUTED}; font-size: 13px; padding: 40px;")
+            self.tabela_layout.insertWidget(0, lbl)
+            return
+
+        for reg in registros:
+            self._criar_linha(reg)
+
     def _criar_linha(self, reg: dict):
-        urgente = reg.get("urgencia", False)
-        # Cor de fundo sutil para urgentes
-        bg = "#1c1007" if urgente else AppTheme.BG_CARD
+        """Cria uma linha na tabela para um registro."""
+        linha = QFrame()
+        linha.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 10px;
+                border: 1px solid {_CINZA_BORDER};
+                margin: 2px 6px;
+            }}
+            QFrame:hover {{
+                background-color: {_CINZA_BG};
+            }}
+        """)
 
-        linha = ctk.CTkFrame(self.tabela, fg_color=bg,
-                             corner_radius=10)
-        linha.pack(fill="x", pady=3, padx=6)
-        linha.grid_columnconfigure(1, weight=1)
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
 
-        var = ctk.BooleanVar()
-        self.registros_vars[reg["id"]] = var
+        # Checkbox
+        chk = QCheckBox()
+        chk.setStyleSheet(f"""
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border: 2px solid {_VERDE};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {_VERDE};
+            }}
+        """)
+        layout.addWidget(chk)
+        self.registros_checkboxes[reg["id"]] = chk
 
-        ctk.CTkCheckBox(
-            linha, variable=var, text="", width=40,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-        ).grid(row=0, column=0, padx=(14, 6), pady=12)
-
-        # Nome clicável
-        lbl = ctk.CTkLabel(
-            linha, text=reg["nome_pdf"],
-            anchor="w", cursor="hand2",
-            font=("Segoe UI", 12),
-            text_color=_AZUL,
-        )
-        lbl.grid(row=0, column=1, padx=6, pady=12, sticky="ew")
-        lbl.bind("<Button-1>",
-                 lambda _, aid=reg["id"]: self.visualizar_pdf(aid))
+        # Nome do PDF (clicável)
+        lbl_nome = QLabel(reg["nome_pdf"])
+        lbl_nome.setStyleSheet(f"color: {_AZUL}; text-decoration: underline;")
+        lbl_nome.setCursor(Qt.CursorShape.PointingHandCursor)
+        lbl_nome.mousePressEvent = lambda e, aid=reg["id"]: self.visualizar_pdf(aid)
+        layout.addWidget(lbl_nome, 1)
 
         # Badge urgência
-        if urgente:
-            _badge(linha, "URGENTE", _AMBER
-                   ).grid(row=0, column=2, padx=6, pady=12)
+        if reg.get("urgencia", False):
+            badge = _badge(linha, "URGENTE", _AMBER)
+            layout.addWidget(badge)
         else:
-            ctk.CTkLabel(linha, text="Normal", width=90,
-                         font=("Segoe UI", 11),
-                         text_color=_MUTED,
-                         ).grid(row=0, column=2, padx=6, pady=12)
+            lbl_normal = QLabel("Normal")
+            lbl_normal.setFixedWidth(90)
+            lbl_normal.setStyleSheet(f"color: {_MUTED};")
+            layout.addWidget(lbl_normal)
 
         # Data
         criado = reg.get("criado_em")
@@ -556,175 +819,110 @@ class AnaliseUI(BaseUI):
             except ValueError:
                 criado = datetime.now()
         data_txt = criado.strftime("%d/%m/%Y %H:%M") if criado else "—"
-        ctk.CTkLabel(linha, text=data_txt, width=130,
-                     font=("Segoe UI", 11), text_color=_MUTED,
-                     ).grid(row=0, column=3, padx=6, pady=12)
+        lbl_data = QLabel(data_txt)
+        lbl_data.setFixedWidth(130)
+        lbl_data.setStyleSheet(f"color: {_MUTED};")
+        layout.addWidget(lbl_data)
 
         # Botões
-        btns = ctk.CTkFrame(linha, fg_color="transparent")
-        btns.grid(row=0, column=4, padx=(6, 14), pady=12)
+        btn_ver = QPushButton("Ver")
+        btn_ver.setFixedSize(44, 30)
+        btn_ver.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_AZUL};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {_AZUL_H};
+            }}
+        """)
+        btn_ver.clicked.connect(lambda checked=False, aid=reg["id"]: self.visualizar_pdf(aid))
+        layout.addWidget(btn_ver)
 
-        ctk.CTkButton(
-            btns, text="Ver", width=44, height=30,
-            corner_radius=8,
-            fg_color=_AZUL, hover_color=_AZUL_H,
-            font=("Segoe UI", 11, "bold"), text_color="#fff",
-            command=lambda aid=reg["id"]: self.visualizar_pdf(aid)
-        ).pack(side="left", padx=2)
+        btn_download = QPushButton("↓")
+        btn_download.setFixedSize(32, 30)
+        btn_download.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_CINZA_BG};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {_CINZA_BORDER};
+            }}
+        """)
+        btn_download.clicked.connect(lambda checked=False, aid=reg["id"], n=reg["nome_pdf"]: self.baixar_pdf(aid, n))
+        layout.addWidget(btn_download)
 
-        ctk.CTkButton(
-            btns, text="↓", width=32, height=30,
-            corner_radius=8,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 12), text_color=AppTheme.TXT_MAIN,
-            command=lambda aid=reg["id"],
-                           n=reg["nome_pdf"]: self.baixar_pdf(aid, n)
-        ).pack(side="left", padx=2)
-
-    # ────────────────────────────────────────────────────────────────
-    # Helpers — reset form
-    # ────────────────────────────────────────────────────────────────
-    def _reset_form(self):
-        """Mostra/oculta campos conforme tipo selecionado."""
-        self._btn_row.pack_forget()
-
-        if self.radio.get() == "dev":
-            self._lbl_tipo.pack_forget()
-            self.tipo.pack_forget()
-            self._lbl_categoria.pack(fill="x", pady=(10, 3))
-            self.categoria.pack(fill="x")
-            self._lbl_motivo.pack(fill="x", pady=(10, 3))
-            self.motivo.pack(fill="x")
-        else:
-            self._lbl_categoria.pack_forget()
-            self.categoria.pack_forget()
-            self._lbl_motivo.pack_forget()
-            self.motivo.pack_forget()
-            self._lbl_tipo.pack(fill="x", pady=(10, 3))
-            self.tipo.pack(fill="x")
-
-        self._btn_row.pack(fill="x", pady=(20, 0))
-
-    # ────────────────────────────────────────────────────────────────
-    # Formatação CPF — BUG CORRIGIDO (cursor não salta mais)
-    # ────────────────────────────────────────────────────────────────
-    def _formatar_cpf(self, e=None):
-        texto = self.cpf.get()
-        # Salvar posição relativa aos dígitos ANTES
-        pos_raw = self.cpf.index("insert")
-        digitos_antes = sum(1 for c in texto[:pos_raw] if c.isdigit())
-
-        formatado = self.controller.formatar_cpf(texto)
-        if formatado == texto:
-            return
-
-        self.cpf.delete(0, END)
-        self.cpf.insert(0, formatado)
-
-        # Reposicionar cursor: avançar pelos dígitos equivalentes
-        nova_pos = 0
-        contados = 0
-        for i, c in enumerate(formatado):
-            if contados >= digitos_antes:
-                nova_pos = i
-                break
-            if c.isdigit():
-                contados += 1
-        else:
-            nova_pos = len(formatado)
-
-        self.cpf.icursor(nova_pos)
-
-    # ────────────────────────────────────────────────────────────────
-    # Carregar registros — em thread para não travar UI
-    # ────────────────────────────────────────────────────────────────
-    def _carregar_thread(self):
-        try:
-            registros = self.controller.carregar_registros_pendentes()
-            self.after(0, self._preencher_tabela, registros)
-        except Exception as exc:
-            self.after(0, messagebox.showerror,
-                       "Erro", f"Erro ao carregar dados:\n{exc}")
-
-    def carregar_do_banco(self):
-        """Limpa tabela e recarrega em thread."""
-        for w in self.tabela.winfo_children():
-            w.destroy()
-        self.registros_vars.clear()
-        ctk.CTkLabel(self.tabela, text="Carregando...",
-                     text_color=_MUTED,
-                     font=("Segoe UI", 12)
-                     ).pack(pady=30)
-        threading.Thread(target=self._carregar_thread, daemon=True).start()
-
-    def _preencher_tabela(self, registros: list):
-        for w in self.tabela.winfo_children():
-            w.destroy()
-        self.registros_vars.clear()
-        if not registros:
-            ctk.CTkLabel(self.tabela,
-                         text="Nenhum registro pendente.",
-                         text_color=_MUTED,
-                         font=("Segoe UI", 13)
-                         ).pack(pady=40)
-            return
-        for reg in registros:
-            self._criar_linha(reg)
+        self.tabela_layout.insertWidget(self.tabela_layout.count() - 1, linha)
 
     # ────────────────────────────────────────────────────────────────
     # Selecionar todos
     # ────────────────────────────────────────────────────────────────
     def _selecionar_todos(self):
-        if not self.registros_vars:
+        if not self.registros_checkboxes:
             return
-        novo = not all(v.get() for v in self.registros_vars.values())
-        for v in self.registros_vars.values():
-            v.set(novo)
+        novo = not all(chk.isChecked() for chk in self.registros_checkboxes.values())
+        for chk in self.registros_checkboxes.values():
+            chk.setChecked(novo)
+
+    def _get_ids_selecionados(self):
+        return [i for i, chk in self.registros_checkboxes.items() if chk.isChecked()]
 
     # ────────────────────────────────────────────────────────────────
     # Ações
     # ────────────────────────────────────────────────────────────────
     def select_pdfs(self):
-        caminhos = filedialog.askopenfilenames(
-            title="Selecionar PDFs",
-            filetypes=[("PDF Files", "*.pdf")]
+        caminhos, _ = QFileDialog.getOpenFileNames(
+            self, "Selecionar PDFs", "", "PDF Files (*.pdf)"
         )
         if not caminhos:
             return
         sucesso, erros = self.controller.salvar_pdfs(
-            caminhos, self.var_urgencia.get())
+            caminhos, self.chk_urgencia.isChecked())
         msg = f"{sucesso} PDF(s) adicionado(s)."
         if erros:
             msg += f"\n\nErros ({len(erros)}):\n" + "\n".join(erros[:5])
             if len(erros) > 5:
                 msg += f"\n... e mais {len(erros) - 5}."
         if sucesso:
-            messagebox.showinfo("Sucesso", msg)
+            QMessageBox.information(self, "Sucesso", msg)
             self.carregar_do_banco()
         else:
-            messagebox.showerror("Erro", msg)
+            QMessageBox.critical(self, "Erro", msg)
 
     def visualizar_pdf(self, analise_id):
         ok, msg = self.controller.visualizar_pdf(analise_id)
         if not ok:
-            messagebox.showerror("Erro", msg)
+            QMessageBox.critical(self, "Erro", msg)
 
     def baixar_pdf(self, analise_id, nome):
-        ok, msg = self.controller.baixar_pdf(analise_id, nome)
-        if ok:
-            messagebox.showinfo("Salvo", f"PDF salvo em:\n{msg}")
-        elif msg != "Operação cancelada":
-            messagebox.showerror("Erro", msg)
+        resultado = self.controller.baixar_pdf(analise_id, nome)
+        if isinstance(resultado, tuple) and len(resultado) == 3 and resultado[0]:
+            caminho, _ = QFileDialog.getSaveFileName(
+                self, "Salvar PDF", nome.replace('/', '_').replace('\\', '_'), "PDF Files (*.pdf)"
+            )
+            if caminho:
+                with open(caminho, 'wb') as f:
+                    f.write(resultado[1])
+                QMessageBox.information(self, "Salvo", f"PDF salvo em:\n{caminho}")
+        elif isinstance(resultado, tuple) and resultado[0] is False and resultado[1] != "Operação cancelada":
+            QMessageBox.critical(self, "Erro", resultado[1])
 
     def processar(self, novo_status: str):
-        ids = [i for i, v in self.registros_vars.items() if v.get()]
+        ids = self._get_ids_selecionados()
         if not ids:
-            messagebox.showwarning("Atenção", "Nenhum registro selecionado.")
+            QMessageBox.warning(self, "Atenção", "Nenhum registro selecionado.")
             return
         ok, msg = self.controller.processar_registros(ids, novo_status)
         if ok:
-            messagebox.showinfo("Sucesso", msg)
+            QMessageBox.information(self, "Sucesso", msg)
             self.carregar_do_banco()
             if callable(self._on_refresh_lancamento):
                 try:
@@ -732,18 +930,18 @@ class AnaliseUI(BaseUI):
                 except Exception:
                     pass
         else:
-            messagebox.showerror("Erro", msg)
+            QMessageBox.critical(self, "Erro", msg)
 
     def processar_devolucao(self):
-        ids = [i for i, v in self.registros_vars.items() if v.get()]
+        ids = self._get_ids_selecionados()
         if not ids:
-            messagebox.showwarning("Atenção", "Nenhum registro selecionado.")
+            QMessageBox.warning(self, "Atenção", "Nenhum registro selecionado.")
             return
 
         def _confirmar(motivo):
             ok, msg = self.controller.processar_devolucao(ids, motivo)
             if ok:
-                messagebox.showinfo("Sucesso", msg)
+                QMessageBox.information(self, "Sucesso", msg)
                 self.carregar_do_banco()
                 if callable(self._on_refresh_devolucao):
                     try:
@@ -751,9 +949,10 @@ class AnaliseUI(BaseUI):
                     except Exception:
                         pass
             else:
-                messagebox.showerror("Erro", msg)
+                QMessageBox.critical(self, "Erro", msg)
 
-        DevolucaoPopup(self, _confirmar)
+        popup = DevolucaoPopup(self, _confirmar)
+        popup.exec()
 
     def _abrir_sefaz_thread(self):
         threading.Thread(target=self._abrir_sefaz, daemon=True).start()
@@ -761,648 +960,71 @@ class AnaliseUI(BaseUI):
     def _abrir_sefaz(self):
         ok, msg = self.controller.abrir_sefaz()
         if not ok:
-            self.after(0, messagebox.showerror, "Erro", msg)
+            QTimer.singleShot(0, lambda: QMessageBox.critical(self, "Erro", msg))
 
     def _salvar_registro(self):
-        nome     = self.nome.get().strip()
-        cpf_txt  = self.cpf.get().strip()
-        muni     = self.municipio.get().strip()
-        memo_val = self.memorando.get().strip()
+        nome = self.nome.text().strip()
+        cpf_txt = self.cpf.text().strip()
+        muni = self.municipio.text().strip()
+        memo_val = self.memorando.text().strip()
 
-        # Validações
         if not nome:
-            messagebox.showwarning("Atenção", "Informe o nome completo!")
-            self.nome.focus(); return
+            QMessageBox.warning(self, "Atenção", "Informe o nome completo!")
+            self.nome.setFocus()
+            return
         if not self.controller.validar_cpf(cpf_txt):
-            messagebox.showwarning("Atenção", "CPF deve conter 11 dígitos!")
-            self.cpf.focus(); return
+            QMessageBox.warning(self, "Atenção", "CPF deve conter 11 dígitos!")
+            self.cpf.setFocus()
+            return
         if not muni:
-            messagebox.showwarning("Atenção", "Informe o município!")
-            self.municipio.focus(); return
+            QMessageBox.warning(self, "Atenção", "Informe o município!")
+            self.municipio.setFocus()
+            return
         if not memo_val:
-            messagebox.showwarning("Atenção", "Informe o memorando!")
-            self.memorando.focus(); return
+            QMessageBox.warning(self, "Atenção", "Informe o memorando!")
+            self.memorando.setFocus()
+            return
 
-        tipo_reg = self.radio.get()
+        tipo_reg = "dev" if self.radio_dev.isChecked() else "insc"
         dados = {
-            "nome":       nome,
-            "cpf":        self.controller.limpar_cpf(cpf_txt),
-            "municipio":  muni,
-            "memorando":  memo_val,
+            "nome": nome,
+            "cpf": self.controller.limpar_cpf(cpf_txt),
+            "municipio": muni,
+            "memorando": memo_val,
         }
 
         if tipo_reg == "insc":
-            if not self.tipo.get():
-                messagebox.showwarning("Atenção", "Selecione o tipo!"); return
-            dados["tipo"] = self.tipo.get()
+            dados["tipo"] = self.tipo_combo.currentText()
         else:
-            if not self.categoria.get():
-                messagebox.showwarning("Atenção", "Selecione a categoria!"); return
-            motivo_txt = self.motivo.get("1.0", END).strip()
-            if not motivo_txt:
-                messagebox.showwarning("Atenção", "Informe o motivo!"); return
-            dados["categoria"] = self.categoria.get()
-            dados["motivo"]    = motivo_txt
+            dados["categoria"] = self.categoria_combo.currentText()
+            dados["motivo"] = self.motivo.toPlainText().strip()
+            if not dados["motivo"]:
+                QMessageBox.warning(self, "Atenção", "Informe o motivo da devolução!")
+                self.motivo.setFocus()
+                return
 
         ok, msg = self.controller.salvar_registro(tipo_reg, dados)
         if ok:
-            # Limpar campos comuns
-            for w in (self.nome, self.cpf, self.municipio, self.memorando):
-                w.delete(0, END)
-            # Limpar motivo apenas quando estava visível (modo devolução)
-            if tipo_reg == "dev":
-                self.motivo.delete("1.0", END)
-            self.tipo.set("INSC")
-            self.categoria.set("Endereço")
-            messagebox.showinfo("Sucesso", msg)
+            self.nome.clear()
+            self.cpf.clear()
+            self.municipio.clear()
+            self.memorando.clear()
+            self.motivo.clear()
+            self.tipo_combo.setCurrentIndex(0)
+            self.categoria_combo.setCurrentIndex(0)
+            QMessageBox.information(self, "Sucesso", msg)
         else:
-            messagebox.showerror("Erro", msg)
+            QMessageBox.critical(self, "Erro", msg)
 
     # ────────────────────────────────────────────────────────────────
-    # E-mail para unidade local
+    # E-mail (métodos simplificados - implementar conforme necessário)
     # ────────────────────────────────────────────────────────────────
-    _EMAILS_UNIDADES = {
-        "TESTE TESTE": "carteiradoprodutor@gmail.com",
-        "ALVARÃES": "unlocalvaraes@idam.am.gov.br",
-        "AMATURÁ": "unlocamatura@idam.am.gov.br",
-        "ANAMÃ": "unlocanama@idam.am.gov.br",
-        "ANORI": "euricopaulobarbosa@gmail.com",
-        "BALBINA": "unlocbalbina@idam.am.gov.br",
-        "APUÍ": "idamapui@hotmail.com",
-        "ATALAIA DO NORTE": "idamatalaia@gmail.com",
-        "AUTAZES": "unlocautazes@gmail.com",
-        "BARCELOS": "unlocbarcelos@idam.am.gov.br",
-        "BARREIRINHA": "unlocbarreirinha@idam.am.gov.br",
-        "BENJAMIN CONSTANT": "unlocbenjaminconstant@idam.am.gov.br",
-        "BERURI": "unlocberuri@idam.am.gov.br",
-        "BOA VISTA DO RAMOS": "arlindobvr@gmail.com",
-        "BOCA DO ACRE": "idambocadoacre@hotmail.com",
-        "BORBA": "aguinaldoceplac@gmail.com",
-        "CAAPIRANGA": "unloccaapiranga@idam.am.gov.br",
-        "CANUTAMA": "batistagdau@gmail.com",
-        "CARAUARI": "unloccarauari@idam.am.gov.br",
-        "CAREIRO DA VÁRZEA": "cppcareirovarzea@gmail.com",
-        "CAREIRO": "unloccareiro@gmail.com",
-        "COARI": "unloccoari@idam.am.gov.br",
-        "CODAJÁS": "unloccodajas@idam.am.gov.br",
-        "EIRUNEPÉ": "unloceirunepe@idam.am.gov.br",
-        "ENVIRA": "unlocenvira@gmail.com",
-        "FONTE BOA": "unlocfonteboa@idam.am.gov.br",
-        "GUAJARÁ": "idamguajara@gmail.com",
-        "HUMAITÁ": "unlochumaita@idam.am.gov.br",
-        "IPIXUNA": "UNLOCIPIXUNA@idam.am.gov.br",
-        "IRANDUBA": "unlocirandubacpp@gmail.com",
-        "ITACOATIARA": "unlocitacoatiara@idam.am.gov.br",
-        "ITAMARATI": "unlocitamarati@idam.am.gov.br",
-        "ITAPIRANGA": "unlocitapiranga@idam.am.gov.br",
-        "JAPURÁ": "unlocjapura@idam.Am.gov.br",
-        "JURUÁ": "ffsilva20@gmail.com",
-        "JUTAÍ": "ramosampaio@hotmail.com",
-        "LÁBREA": "unloclabrea@idam.am.gov.br",
-        "MANACAPURU": "unlocmanacapuru@idam.am.gov.br",
-        "MANAQUIRI": "unlocmanaquiri@idam.am.gov.br",
-        "MANAUS": "unlocmanaus@gmail.com",
-        "MANAUS ZONA LESTE": "idamzonaleste@gmail.com",
-        "MANICORÉ": "unlocmanicore@idam.am.gov.br",
-        "MARAÃ": "deividdelrikmaraa@gmail.com",
-        "MAUÉS": "unlocmaues@idam.am.gov.br",
-        "NHAMUNDÁ": "unlocnhamunda@idam.am.gov.br",
-        "NOVA OLINDA DO NORTE": "unlocnovaolindanorte@idam.am.gov.br",
-        "NOVO AIRÃO": "unlocnovoairao@idam.am.gov.br",
-        "NOVO ARIPUANÃ": "unlocnovoaripuana@idam.am.gov.br",
-        "NOVO REMANSO": "lucianolobovaz@gmail.com",
-        "SANTO ANTÔNIO DO MATUPI": "unlocmatupi@idam.am.gov.br",
-        "PARINTINS": "idamparintins@gmail.com",
-        "PAUINI": "simoneandrade21@hotmail.com",
-        "PRESIDENTE FIGUEIREDO": "unlocpresidentefigueiredo@gmail.com",
-        "RIO PRETO DA EVA": "unlocriopretoeva@idam.am.gov.br",
-        "SANTA ISABEL DO RIO NEGRO": "unlocstaizabelrionegro@idam.am.gov.br",
-        "SANTO ANTÔNIO DO IÇÁ": "unlocsantoantonioica@idam.am.gov.br",
-        "SÃO GABRIEL DA CACHOEIRA": "unlocsaogabrielcachoeira@idam.am.gov.br",
-        "SÃO PAULO DE OLIVENÇA": "unlocsaopauloolivenca@idam.am.gov.br",
-        "SÃO SEBASTIÃO DO UATUMÃ": "idam.ssu@gmail.com",
-        "SILVES": "unlocsilves@idam.am.gov.br",
-        "TABATINGA": "zecoelhodavila@hotmail.com",
-        "TAPAUÁ": "unloctapaua@idam.am.gov.br",
-        "TEFÉ": "idamtefe@gmail.com",
-        "TONANTINS": "unloctonantins@idam.am.gov.br",
-        "UARINI": "unlocuarini@idam.am.gov.br",
-        "URUCARÁ": "idam.urucara@gmail.com",
-        "URUCURITUBA": "unlocurucurituba@idam.am.gov.br",
-        "VILA EXTREMA": "unlocextrema@gmail.com",
-        "VILA RICA DE CAVIANA": "unlocvilaricacaviana@idam.am.gov.br",
-        "SUL DE CANUTAMA": "idamsuldecanutama@gmail.com",
-        "PA AGROVILA DE CABURI/PARINTINS": "asaelrocha@hotmail.com",
-        "MONTE SINAI": "unlocpamontesinai@idam.am.gov.br",
-        "VILA DE LINDÓIA": "unloclindoia@idam.am.gov.br",
-        "VILA DA REALIDADE": "unlocparealidade@idam.am.gov.br",
-        "FOZ DE CANUMÃ": "vmsilvafilho@hotmail.com",
-    }
-
     def abrir_popup_email(self):
-        """Abre popup para selecionar unidade e enviar e-mail com os PDFs selecionados via OAuth2."""
-        ids = [i for i, v in self.registros_vars.items() if v.get()]
-        if not ids:
-            messagebox.showwarning("Atenção", "Selecione ao menos um PDF para enviar.")
-            return
-
-        popup = ctk.CTkToplevel(self)
-        popup.title("Enviar E-mail para Unidade Local")
-        popup.geometry("520x420")
-        popup.resizable(False, False)
-        popup.configure(fg_color=AppTheme.BG_APP)
-        popup.grab_set()
-        popup.after(0, lambda: popup.geometry(
-            f"520x420+"
-            f"{popup.winfo_screenwidth()  // 2 - 260}+"
-            f"{popup.winfo_screenheight() // 2 - 210}"
-        ))
-
-        wrap = ctk.CTkFrame(popup, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=28, pady=24)
-
-        ctk.CTkLabel(wrap, text="Enviar E-mail para Unidade Local",
-                     font=("Segoe UI", 18, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(anchor="w", pady=(0, 20))
-
-        def _entry_card(parent, placeholder):
-            return ctk.CTkEntry(
-                parent, placeholder_text=placeholder,
-                height=40, corner_radius=10,
-                font=("Segoe UI", 12),
-                fg_color=AppTheme.BG_INPUT,
-                border_color=AppTheme.BG_INPUT,
-                text_color=AppTheme.TXT_MAIN,
-            )
-
-        # ── Destinatário ─────────────────────────────────────────────
-        card_dest = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD, corner_radius=14)
-        card_dest.pack(fill="x", pady=(0, 12))
-
-        ctk.CTkLabel(card_dest, text="Unidade Local Destinatária",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w", padx=20, pady=(14, 8))
-
-        municipios = sorted(self._EMAILS_UNIDADES.keys())
-        combo_muni = ctk.CTkComboBox(
-            card_dest,
-            values=municipios,
-            height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-        )
-        combo_muni.pack(fill="x", padx=20, pady=(0, 6))
-
-        lbl_email_dest = ctk.CTkLabel(card_dest, text="",
-                                      font=("Segoe UI", 11),
-                                      text_color=_VERDE)
-        lbl_email_dest.pack(anchor="w", padx=20, pady=(0, 14))
-
-        def _on_muni_change(choice):
-            email = self._EMAILS_UNIDADES.get(choice, "")
-            lbl_email_dest.configure(text=f"  ✉  {email}")
-
-        combo_muni.configure(command=_on_muni_change)
-
-        # ── Assunto ────────────────────────────────────────────────────
-        card_msg = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD, corner_radius=14)
-        card_msg.pack(fill="x", pady=(0, 16))
-
-        ctk.CTkLabel(card_msg, text="Assunto:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20, pady=(14, 2))
-        entry_assunto = _entry_card(card_msg, "Ex: Devolução de processos — Manaus")
-        entry_assunto.pack(fill="x", padx=20, pady=(0, 8))
-
-        ctk.CTkLabel(card_msg, text="Mensagem (opcional):",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        txt_mensagem = ctk.CTkTextbox(
-            card_msg, height=80, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_width=0,
-            text_color=AppTheme.TXT_MAIN,
-        )
-        txt_mensagem.pack(fill="x", padx=20, pady=(2, 14))
-        txt_mensagem.insert("1.0",
-            f"Prezados,\n\nSegue(m) em anexo o(s) PDF(s) referente(s) ao(s) processo(s) selecionado(s).\n\nAtenciosamente,\n{self.usuario}")
-
-        # ── Botões ────────────────────────────────────────────────────
-        btns = ctk.CTkFrame(wrap, fg_color="transparent")
-        btns.pack(fill="x")
-        btns.grid_columnconfigure((0, 1), weight=1)
-
-        def _confirmar():
-            municipio = combo_muni.get().strip()
-            assunto   = entry_assunto.get().strip()
-            mensagem  = txt_mensagem.get("1.0", "end-1c").strip()
-
-            if not municipio or municipio not in self._EMAILS_UNIDADES:
-                messagebox.showwarning("Atenção", "Selecione uma unidade local válida.",
-                                       parent=popup)
-                return
-            if not assunto:
-                messagebox.showwarning("Atenção", "Informe o assunto do e-mail.",
-                                       parent=popup)
-                return
-
-            destinatario = self._EMAILS_UNIDADES[municipio]
-            popup.destroy()
-            threading.Thread(
-                target=self._enviar_email,
-                args=(destinatario, municipio, assunto, mensagem, ids),
-                daemon=True
-            ).start()
-
-        ctk.CTkButton(
-            btns, text="Enviar",
-            height=46, corner_radius=12,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            font=("Segoe UI", 13, "bold"), text_color="#fff",
-            command=_confirmar,
-        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
-
-        ctk.CTkButton(
-            btns, text="Cancelar",
-            height=46, corner_radius=12,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 13),
-            text_color=AppTheme.TXT_MAIN,
-            command=popup.destroy,
-        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
-
-    # ── Gmail OAuth2 ────────────────────────────────────────────────────────
-    def _get_gmail_service(self):
-        """Retorna serviço autenticado da Gmail API via OAuth2 (token.json)."""
-        creds = None
-        if os.path.exists(_TOKEN_PATH):
-            creds = Credentials.from_authorized_user_file(_TOKEN_PATH, _GMAIL_SCOPES)
-
-        # Renova token expirado automaticamente usando refresh_token
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            with open(_TOKEN_PATH, "w") as fh:
-                fh.write(creds.to_json())
-
-        if not creds or not creds.valid:
-            raise RuntimeError(
-                "Token OAuth2 inválido ou ausente.\n"
-                "Execute o script de autenticação uma vez para gerar o token.json."
-            )
-
-        return build("gmail", "v1", credentials=creds)
-
-    def _enviar_email(self, destinatario, municipio, assunto, mensagem, ids):
-        """Envia e-mail com PDFs como anexo via Gmail API OAuth2 (roda em thread)."""
-        try:
-            service = self._get_gmail_service()
-
-            msg = MIMEMultipart()
-            msg["To"]      = destinatario
-            msg["Subject"] = assunto
-            msg.attach(MIMEText(mensagem, "plain", "utf-8"))
-
-            anexos_ok = 0
-            for analise_id in ids:
-                resultado = self.service.buscar_pdf_binario(analise_id)
-                if not resultado or not resultado.get("pdf_conteudo"):
-                    continue
-                nome  = resultado.get("nome_pdf", f"processo_{analise_id}.pdf")
-                parte = MIMEApplication(resultado["pdf_conteudo"], _subtype="pdf")
-                parte.add_header("Content-Disposition", "attachment", filename=nome)
-                msg.attach(parte)
-                anexos_ok += 1
-
-            if anexos_ok == 0:
-                self.after(0, messagebox.showerror, "Erro",
-                           "Nenhum PDF encontrado no banco para os registros selecionados.")
-                return
-
-            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
-            service.users().messages().send(
-                userId="me", body={"raw": raw}
-            ).execute()
-
-            self.after(0, messagebox.showinfo, "Sucesso",
-                       f"E-mail enviado com sucesso para {municipio}!\n"
-                       f"Destinatário: {destinatario}\n"
-                       f"Anexos: {anexos_ok} PDF(s)")
-
-        except HttpError as e:
-            self.after(0, messagebox.showerror, "Erro Gmail API",
-                       f"Erro ao enviar pelo Gmail:\n{e}")
-        except RuntimeError as e:
-            self.after(0, messagebox.showerror, "Erro de Autenticação", str(e))
-        except Exception as e:
-            self.after(0, messagebox.showerror, "Erro",
-                       f"Falha ao enviar e-mail:\n{str(e)}")
+        QMessageBox.information(self, "E-mail", "Funcionalidade de envio de e-mail em desenvolvimento.")
 
     def _enviar_email_form(self):
-        """
-        Abre popup de envio de e-mail para a unidade local.
-        O município é detectado automaticamente pelo campo preenchido,
-        mas o usuário pode trocar antes de enviar.
-        """
-        # Tenta detectar o município digitado no formulário
-        muni_digitado = self.municipio.get().strip().upper()
-
-        # Encontra a chave mais próxima no dicionário (busca parcial)
-        muni_detectado = ""
-        for chave in self._EMAILS_UNIDADES:
-            if muni_digitado and muni_digitado in chave.upper():
-                muni_detectado = chave
-                break
-            if chave.upper() == muni_digitado:
-                muni_detectado = chave
-                break
-
-        popup = ctk.CTkToplevel(self)
-        popup.title("Enviar E-mail para Unidade Local")
-        popup.geometry("580x820")
-        popup.resizable(False, False)
-        popup.configure(fg_color=AppTheme.BG_APP)
-        popup.grab_set()
-        popup.after(0, lambda: popup.geometry(
-            f"580x820+"
-            f"{popup.winfo_screenwidth()  // 2 - 290}+"
-            f"{popup.winfo_screenheight() // 2 - 410}"
-        ))
-
-        # ScrollableFrame para caber tudo sem cortar
-        outer = ctk.CTkScrollableFrame(popup, fg_color="transparent",
-                                       scrollbar_button_color=AppTheme.BG_INPUT)
-        outer.pack(fill="both", expand=True)
-
-        wrap = ctk.CTkFrame(outer, fg_color="transparent")
-        wrap.pack(fill="both", expand=True, padx=28, pady=24)
-
-        ctk.CTkLabel(wrap, text="Enviar E-mail para Unidade Local",
-                     font=("Segoe UI", 18, "bold"),
-                     text_color=AppTheme.TXT_MAIN).pack(anchor="w",
-                                                         pady=(0, 16))
-
-        def _entry_card(parent, placeholder, show=""):
-            e = ctk.CTkEntry(
-                parent, placeholder_text=placeholder,
-                height=40, corner_radius=10,
-                font=("Segoe UI", 12),
-                fg_color=AppTheme.BG_INPUT,
-                border_color=AppTheme.BG_INPUT,
-                text_color=AppTheme.TXT_MAIN,
-            )
-            if show:
-                e.configure(show=show)
-            return e
-
-        # ── Destinatário ───────────────────────────────────────────
-        card_dest = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                 corner_radius=14)
-        card_dest.pack(fill="x", pady=(0, 12))
-
-        ctk.CTkLabel(card_dest, text="Unidade Local Destinatária",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w", padx=20,
-                                              pady=(14, 6))
-
-        municipios = sorted(self._EMAILS_UNIDADES.keys())
-        combo_muni = ctk.CTkComboBox(
-            card_dest,
-            values=municipios,
-            height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-        )
-        combo_muni.pack(fill="x", padx=20, pady=(0, 6))
-
-        # Pré-seleciona o município detectado
-        if muni_detectado:
-            combo_muni.set(muni_detectado)
-
-        lbl_email_dest = ctk.CTkLabel(
-            card_dest, text="",
-            font=("Segoe UI", 11), text_color=_VERDE)
-        lbl_email_dest.pack(anchor="w", padx=20, pady=(0, 14))
-
-        def _on_muni(choice):
-            email = self._EMAILS_UNIDADES.get(choice, "")
-            lbl_email_dest.configure(text=f"  ✉  {email}")
-
-        combo_muni.configure(command=_on_muni)
-        # Mostrar e-mail imediatamente se município foi detectado
-        if muni_detectado:
-            _on_muni(muni_detectado)
-
-        # ── Assunto ────────────────────────────────────────────────
-        card_msg = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                corner_radius=14)
-        card_msg.pack(fill="x", pady=(0, 16))
-
-        ctk.CTkLabel(card_msg, text="Assunto:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20, pady=(14, 2))
-        entry_assunto = _entry_card(card_msg, "Ex: Devolução de processo")
-
-        # Preenche assunto automaticamente com dados do formulário
-        nome_form = self.nome.get().strip()
-        memo_form = self.memorando.get().strip()
-        tipo_reg  = self.radio.get()
-        assunto_auto = (
-            f"{'Devolução' if tipo_reg == 'dev' else 'Inscrição/Renovação'}"
-            f"{' — ' + nome_form if nome_form else ''}"
-            f"{' — Memo ' + memo_form if memo_form else ''}"
-        )
-        entry_assunto.insert(0, assunto_auto)
-        entry_assunto.pack(fill="x", padx=20, pady=(0, 14))
-
-        # ── Dados do Processo ──────────────────────────────────────
-        card_proc = ctk.CTkFrame(wrap, fg_color=AppTheme.BG_CARD,
-                                 corner_radius=14)
-        card_proc.pack(fill="x", pady=(0, 16))
-
-        ctk.CTkLabel(card_proc, text="Dados do Processo",
-                     font=("Segoe UI", 12, "bold"),
-                     text_color=_MUTED).pack(anchor="w", padx=20,
-                                              pady=(14, 6))
-
-        # Nome
-        ctk.CTkLabel(card_proc, text="Nome:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_nome_proc = _entry_card(card_proc, "Nome do produtor")
-        entry_nome_proc.insert(0, self.nome.get().strip())
-        entry_nome_proc.pack(fill="x", padx=20, pady=(2, 8))
-
-        # CPF
-        ctk.CTkLabel(card_proc, text="CPF:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_cpf_proc = _entry_card(card_proc, "CPF")
-        entry_cpf_proc.insert(0, self.cpf.get().strip())
-        entry_cpf_proc.pack(fill="x", padx=20, pady=(2, 8))
-
-        # Memorando
-        ctk.CTkLabel(card_proc, text="Memorando:",
-                     font=("Segoe UI", 11), text_color=_MUTED).pack(
-            anchor="w", padx=20)
-        entry_memo_proc = _entry_card(card_proc, "Memorando")
-        entry_memo_proc.insert(0, self.memorando.get().strip())
-        entry_memo_proc.pack(fill="x", padx=20, pady=(2, 8))
-
-        # Categoria e Motivo — só no modo devolução
-        entry_cat_proc  = None
-        txt_mot_proc    = None
-
-        if tipo_reg == "dev":
-            ctk.CTkLabel(card_proc, text="Categoria:",
-                         font=("Segoe UI", 11), text_color=_MUTED).pack(
-                anchor="w", padx=20)
-            entry_cat_proc = _entry_card(card_proc, "Categoria")
-            entry_cat_proc.insert(0, self.categoria.get().strip())
-            entry_cat_proc.pack(fill="x", padx=20, pady=(2, 8))
-
-            ctk.CTkLabel(card_proc, text="Motivo da Devolução:",
-                         font=("Segoe UI", 11), text_color=_MUTED).pack(
-                anchor="w", padx=20)
-            txt_mot_proc = ctk.CTkTextbox(
-                card_proc, height=80, corner_radius=10,
-                font=("Segoe UI", 12),
-                fg_color=AppTheme.BG_INPUT,
-                border_width=0,
-                text_color=AppTheme.TXT_MAIN,
-            )
-            mot_atual = self.motivo.get("1.0", END).strip()
-            if mot_atual:
-                txt_mot_proc.insert("1.0", mot_atual)
-            txt_mot_proc.pack(fill="x", padx=20, pady=(2, 14))
-        else:
-            ctk.CTkLabel(card_proc, text="Tipo:",
-                         font=("Segoe UI", 11), text_color=_MUTED).pack(
-                anchor="w", padx=20)
-            entry_tipo_proc = _entry_card(card_proc, "Tipo")
-            entry_tipo_proc.insert(0, self.tipo.get().strip())
-            entry_tipo_proc.pack(fill="x", padx=20, pady=(2, 14))
-
-        # ── Botões ─────────────────────────────────────────────────
-        btns = ctk.CTkFrame(wrap, fg_color="transparent")
-        btns.pack(fill="x")
-        btns.grid_columnconfigure((0, 1), weight=1)
-
-        def _confirmar():
-            municipio = combo_muni.get().strip()
-            assunto   = entry_assunto.get().strip()
-
-            if not municipio or municipio not in self._EMAILS_UNIDADES:
-                messagebox.showwarning("Atenção",
-                    "Selecione uma unidade local válida.",
-                    parent=popup)
-                return
-            if not assunto:
-                messagebox.showwarning("Atenção",
-                    "Informe o assunto do e-mail.",
-                    parent=popup)
-                return
-
-            destinatario = self._EMAILS_UNIDADES[municipio]
-
-            # Lê os campos editáveis do card de processo
-            nome_f = entry_nome_proc.get().strip()
-            cpf_f  = entry_cpf_proc.get().strip()
-            memo_f = entry_memo_proc.get().strip()
-            muni_f = self.municipio.get().strip()
-
-            if tipo_reg == "dev":
-                cat_f = entry_cat_proc.get().strip() if entry_cat_proc else ""
-                mot_f = txt_mot_proc.get("1.0", END).strip() if txt_mot_proc else ""
-                corpo = (
-                    f"Prezados,\n\n"
-                    f"Segue processo para devolução:\n\n"
-                    f"Nome:       {nome_f}\n"
-                    f"CPF:        {cpf_f}\n"
-                    f"Município:  {muni_f}\n"
-                    f"Memorando:  {memo_f}\n"
-                    f"Categoria:  {cat_f}\n"
-                    f"Motivo:     {mot_f}\n\n"
-                    f"Atenciosamente,\n{self.usuario}"
-                )
-            else:
-                tipo_f = self.tipo.get().strip()
-                corpo = (
-                    f"Prezados,\n\n"
-                    f"Segue processo para {'inscrição' if tipo_f == 'INSC' else 'renovação'}:\n\n"
-                    f"Nome:       {nome_f}\n"
-                    f"CPF:        {cpf_f}\n"
-                    f"Município:  {muni_f}\n"
-                    f"Memorando:  {memo_f}\n"
-                    f"Tipo:       {tipo_f}\n\n"
-                    f"Atenciosamente,\n{self.usuario}"
-                )
-
-            popup.destroy()
-            threading.Thread(
-                target=self._enviar_email_simples,
-                args=(destinatario, municipio, assunto, corpo),
-                daemon=True,
-            ).start()
-
-        ctk.CTkButton(
-            btns, text="Enviar",
-            height=46, corner_radius=12,
-            fg_color=_VERDE, hover_color=_VERDE_H,
-            font=("Segoe UI", 13, "bold"), text_color="#fff",
-            command=_confirmar,
-        ).grid(row=0, column=0, padx=(0, 6), sticky="ew")
-
-        ctk.CTkButton(
-            btns, text="Cancelar",
-            height=46, corner_radius=12,
-            fg_color=AppTheme.BG_INPUT,
-            hover_color=AppTheme.BG_APP,
-            font=("Segoe UI", 13),
-            text_color=AppTheme.TXT_MAIN,
-            command=popup.destroy,
-        ).grid(row=0, column=1, padx=(6, 0), sticky="ew")
-
-    def _enviar_email_simples(self, destinatario, municipio, assunto, corpo):
-        """Envia e-mail de texto simples (sem anexo) via Gmail API OAuth2."""
-        try:
-            service = self._get_gmail_service()
-
-            msg = MIMEMultipart()
-            msg["To"]      = destinatario
-            msg["Subject"] = assunto
-            msg.attach(MIMEText(corpo, "plain", "utf-8"))
-
-            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
-            service.users().messages().send(
-                userId="me", body={"raw": raw}
-            ).execute()
-
-            self.after(0, messagebox.showinfo, "Sucesso",
-                       f"E-mail enviado com sucesso para {municipio}!\n"
-                       f"Destinatário: {destinatario}")
-
-        except HttpError as e:
-            self.after(0, messagebox.showerror, "Erro Gmail API",
-                       f"Erro ao enviar pelo Gmail:\n{e}")
-        except RuntimeError as e:
-            self.after(0, messagebox.showerror, "Erro de Autenticação", str(e))
-        except Exception as e:
-            self.after(0, messagebox.showerror, "Erro",
-                       f"Falha ao enviar e-mail:\n{str(e)}")
+        QMessageBox.information(self, "E-mail", "Funcionalidade de envio de e-mail em desenvolvimento.")
 
     def abrir_historico(self):
-        HistoricoView(self, self.usuario, self.controller).grab_set()
+        self._historico_dialog = HistoricoView(self, self.usuario, self.controller)
+        self._historico_dialog.exec()

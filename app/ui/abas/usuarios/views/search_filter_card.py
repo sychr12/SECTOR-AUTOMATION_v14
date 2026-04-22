@@ -1,120 +1,170 @@
 # -*- coding: utf-8 -*-
-import customtkinter as ctk
-from app.theme import AppTheme
+from PyQt6.QtWidgets import (
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
+    QLineEdit, QPushButton, QComboBox
+)
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
-_VERDE  = "#22c55e"
+_VERDE = "#22c55e"
 _VERDE_H = "#16a34a"
+_BRANCO = "#ffffff"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_TEXTO = "#1e2f3e"
+_MUTED = "#64748b"
 
 
-class SearchFilterCard(ctk.CTkFrame):
+class SearchFilterCard(QFrame):
+    """Card de busca e filtros."""
 
-    def __init__(self, master, on_search=None, on_new_user=None, **kwargs):
-        super().__init__(master,
-                         fg_color=AppTheme.BG_CARD,
-                         corner_radius=16, **kwargs)
-        self._on_search   = on_search
+    def __init__(self, on_search=None, on_new_user=None, parent=None):
+        super().__init__(parent)
+        self._on_search = on_search
         self._on_new_user = on_new_user
+        
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 16px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
         self._build()
 
     def _build(self):
-        content = ctk.CTkFrame(self, fg_color="transparent")
-        content.pack(fill="x", padx=16, pady=14)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
 
-        ctk.CTkLabel(content,
-                     text="🔍 Buscar e Filtrar Usuários",
-                     font=("Segoe UI", 14, "bold"),
-                     text_color=AppTheme.TXT_MAIN,
-                     ).pack(anchor="w", pady=(0, 10))
+        # Título
+        title = QLabel("🔍 Buscar e Filtrar Usuários")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        layout.addWidget(title)
 
-        row = ctk.CTkFrame(content, fg_color="transparent")
-        row.pack(fill="x")
+        # Linha de busca
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
 
-        ctk.CTkLabel(row, text="Buscar:",
-                     font=("Segoe UI", 12),
-                     text_color=AppTheme.TXT_MUTED,
-                     ).pack(side="left", padx=(0, 8))
+        lbl_busca = QLabel("Buscar:")
+        lbl_busca.setFont(QFont("Segoe UI", 12))
+        lbl_busca.setStyleSheet(f"color: {_MUTED};")
+        search_row.addWidget(lbl_busca)
 
-        self._entry_search = ctk.CTkEntry(
-            row,
-            placeholder_text="Digite o nome de usuário...",
-            height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            text_color=AppTheme.TXT_MAIN,
-        )
-        self._entry_search.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self._entry_search.bind("<Return>",
-                                lambda _: self._on_search and self._on_search())
+        self._entry_search = QLineEdit()
+        self._entry_search.setPlaceholderText("Digite o nome de usuário...")
+        self._entry_search.setFixedHeight(40)
+        self._entry_search.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid #2c6e9e;
+            }}
+        """)
+        self._entry_search.returnPressed.connect(self._on_search_callback)
+        search_row.addWidget(self._entry_search, 1)
 
         if self._on_search:
-            ctk.CTkButton(
-                row, text="🔍 Buscar",
-                command=self._on_search,
-                height=40, width=100, corner_radius=10,
-                font=("Segoe UI", 12),
-                fg_color=AppTheme.BTN_PRIMARY,
-                hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            ).pack(side="left", padx=(0, 16))
+            btn_buscar = QPushButton("🔍 Buscar")
+            btn_buscar.setFixedSize(100, 40)
+            btn_buscar.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #2c6e9e;
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: #1e4a6e;
+                }}
+            """)
+            btn_buscar.clicked.connect(self._on_search)
+            search_row.addWidget(btn_buscar)
 
-        ctk.CTkLabel(row, text="Perfil:",
-                     font=("Segoe UI", 12),
-                     text_color=AppTheme.TXT_MUTED,
-                     ).pack(side="left", padx=(0, 8))
+        layout.addLayout(search_row)
 
-        # Perfis atualizados: "usuario" no lugar de "analista"
-        self._combo_profile = ctk.CTkComboBox(
-            row,
-            values=["Todos", "administrador", "chefe", "usuario"],
-            width=150, height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-        )
-        self._combo_profile.set("Todos")
-        self._combo_profile.pack(side="left", padx=(0, 16))
+        # Filtros
+        filters_row = QHBoxLayout()
+        filters_row.setSpacing(16)
 
-        ctk.CTkLabel(row, text="Status:",
-                     font=("Segoe UI", 12),
-                     text_color=AppTheme.TXT_MUTED,
-                     ).pack(side="left", padx=(0, 8))
+        # Perfil
+        lbl_perfil = QLabel("Perfil:")
+        lbl_perfil.setFont(QFont("Segoe UI", 12))
+        lbl_perfil.setStyleSheet(f"color: {_MUTED};")
+        filters_row.addWidget(lbl_perfil)
 
-        self._combo_status = ctk.CTkComboBox(
-            row,
-            values=["Todos", "Ativo", "Inativo"],
-            width=120, height=40, corner_radius=10,
-            font=("Segoe UI", 12),
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BG_INPUT,
-            button_color=_VERDE,
-            button_hover_color=_VERDE_H,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_CARD,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-        )
-        self._combo_status.set("Todos")
-        self._combo_status.pack(side="left")
+        self._combo_profile = QComboBox()
+        self._combo_profile.addItems(["Todos", "administrador", "chefe", "usuario"])
+        self._combo_profile.setFixedSize(150, 40)
+        self._combo_profile.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 5px 10px;
+            }}
+        """)
+        self._combo_profile.currentTextChanged.connect(self._on_search_callback)
+        filters_row.addWidget(self._combo_profile)
+
+        # Status
+        lbl_status = QLabel("Status:")
+        lbl_status.setFont(QFont("Segoe UI", 12))
+        lbl_status.setStyleSheet(f"color: {_MUTED};")
+        filters_row.addWidget(lbl_status)
+
+        self._combo_status = QComboBox()
+        self._combo_status.addItems(["Todos", "Ativo", "Inativo"])
+        self._combo_status.setFixedSize(120, 40)
+        self._combo_status.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                padding: 5px 10px;
+            }}
+        """)
+        self._combo_status.currentTextChanged.connect(self._on_search_callback)
+        filters_row.addWidget(self._combo_status)
+
+        filters_row.addStretch()
 
         if self._on_new_user:
-            ctk.CTkButton(
-                row, text="➕ Novo Usuário",
-                command=self._on_new_user,
-                height=40, corner_radius=10,
-                font=("Segoe UI", 12, "bold"),
-                fg_color=AppTheme.BTN_SUCCESS,
-                hover_color=AppTheme.BTN_SUCCESS_HOVER,
-            ).pack(side="right", padx=(16, 0))
+            btn_novo = QPushButton("➕ Novo Usuário")
+            btn_novo.setFixedHeight(40)
+            btn_novo.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {_VERDE};
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    padding: 8px 20px;
+                }}
+                QPushButton:hover {{
+                    background-color: {_VERDE_H};
+                }}
+            """)
+            btn_novo.clicked.connect(self._on_new_user)
+            filters_row.addWidget(btn_novo)
+
+        layout.addLayout(filters_row)
+
+    def _on_search_callback(self):
+        if self._on_search:
+            self._on_search()
 
     def get_search_text(self) -> str:
-        return self._entry_search.get().strip()
+        return self._entry_search.text().strip()
 
     def get_selected_profile(self) -> str:
-        return self._combo_profile.get()
+        return self._combo_profile.currentText()
 
     def get_selected_status(self) -> str:
-        return self._combo_status.get()
+        return self._combo_status.currentText()

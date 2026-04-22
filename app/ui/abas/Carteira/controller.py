@@ -10,7 +10,7 @@ import re
 import sys
 import subprocess
 import tempfile
-from tkinter import filedialog
+from PyQt6.QtWidgets import QFileDialog
 from PIL import Image
 
 # Tenta importar bibliotecas de PDF
@@ -18,16 +18,13 @@ PDF_AVAILABLE = False
 try:
     from pypdf import PdfReader, PdfWriter
     PDF_AVAILABLE = True
-    print("[Controller] ✅ pypdf carregado com sucesso.")
 except ImportError:
     try:
         from PyPDF2 import PdfReader, PdfWriter
         PDF_AVAILABLE = True
-        print("[Controller] ✅ PyPDF2 carregado com sucesso.")
     except ImportError:
         PdfReader = None
         PdfWriter = None
-        print("[Controller] ❌ NENHUMA BIBLIOTECA PDF DISPONÍVEL")
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -104,24 +101,11 @@ class CarteiraController:
         return None
 
     def gerar_pdf(self, dados, fotos, pdf_original_path=None):
-        """
-        Gera PDF da carteira e anexa o PDF original importado (se houver).
-        """
+        """Gera PDF da carteira e anexa o PDF original importado (se houver)."""
         print("=" * 60)
         print("[gerar_pdf] INICIANDO GERAÇÃO DO PDF")
-        print(f"[gerar_pdf] PDF original path: {pdf_original_path}")
-        print(f"[gerar_pdf] PDF_AVAILABLE: {PDF_AVAILABLE}")
         
-        # Verifica se o PDF original existe
-        pdf_original_existe = False
-        if pdf_original_path and os.path.exists(pdf_original_path):
-            pdf_original_existe = True
-            tamanho = os.path.getsize(pdf_original_path)
-            print(f"[gerar_pdf] ✅ PDF scaneado encontrado! Tamanho: {tamanho} bytes")
-        elif pdf_original_path:
-            print(f"[gerar_pdf] ❌ PDF scaneado NÃO encontrado: {pdf_original_path}")
-        else:
-            print("[gerar_pdf] ℹ️ Nenhum PDF scaneado fornecido")
+        pdf_original_existe = pdf_original_path and os.path.exists(pdf_original_path)
         
         try:
             # ========== 1. GERAR PDF DA CARTEIRA ==========
@@ -161,72 +145,33 @@ class CarteiraController:
             for i, foto_path in enumerate(fotos.values(), 1):
                 if foto_path and os.path.exists(foto_path):
                     self._pagina_foto(c, W, H, foto_path)
-                    print(f"[gerar_pdf] Foto {i} adicionada: {foto_path}")
 
             c.save()
             carteira_bytes = buffer.getvalue()
-            print(f"[gerar_pdf] PDF da carteira gerado: {len(carteira_bytes)} bytes")
 
             # ========== 2. ANEXAR PDF SCANEADO SE EXISTIR ==========
             if pdf_original_existe and PDF_AVAILABLE:
-                print("[gerar_pdf] 🔄 INICIANDO MERGE COM PDF SCANEADO...")
-                
                 try:
-                    # Ler o PDF da carteira gerado
                     carteira_reader = PdfReader(io.BytesIO(carteira_bytes))
-                    paginas_carteira = len(carteira_reader.pages)
-                    print(f"[gerar_pdf] PDF da carteira tem {paginas_carteira} página(s)")
-                    
-                    # Ler o PDF scaneado original
                     with open(pdf_original_path, "rb") as f:
                         original_bytes = f.read()
-                    print(f"[gerar_pdf] PDF scaneado lido: {len(original_bytes)} bytes")
-                    
                     original_reader = PdfReader(io.BytesIO(original_bytes))
-                    paginas_scaneadas = len(original_reader.pages)
-                    print(f"[gerar_pdf] PDF scaneado tem {paginas_scaneadas} página(s)")
                     
-                    # Criar escritor para o PDF final
                     writer = PdfWriter()
-                    
-                    # Adicionar todas as páginas da carteira
-                    for i, page in enumerate(carteira_reader.pages, 1):
+                    for page in carteira_reader.pages:
                         writer.add_page(page)
-                        print(f"[gerar_pdf]   - Página carteira {i}/{paginas_carteira} adicionada")
-                    
-                    # Adicionar TODAS as páginas do PDF scaneado
-                    for i, page in enumerate(original_reader.pages, 1):
+                    for page in original_reader.pages:
                         writer.add_page(page)
-                        print(f"[gerar_pdf]   - Página scaneada {i}/{paginas_scaneadas} ANEXADA")
                     
-                    # Salvar PDF final mesclado
                     output_buffer = io.BytesIO()
                     writer.write(output_buffer)
                     carteira_bytes = output_buffer.getvalue()
-                    
-                    print(f"[gerar_pdf] ✅✅✅ MERGE REALIZADO COM SUCESSO! ✅✅✅")
-                    print(f"[gerar_pdf] Total de páginas: {paginas_carteira + paginas_scaneadas}")
-                    print(f"[gerar_pdf] Tamanho final: {len(carteira_bytes)} bytes")
-                    
                 except Exception as e:
-                    print(f"[gerar_pdf] ❌ ERRO no merge: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    print("[gerar_pdf] ⚠️ Mantendo apenas o PDF da carteira")
-                    
-            elif pdf_original_existe and not PDF_AVAILABLE:
-                print("[gerar_pdf] ❌ IMPOSSÍVEL FAZER MERGE: Biblioteca PDF não disponível!")
-                print("[gerar_pdf] Instale: pip install pypdf")
-            else:
-                print("[gerar_pdf] ℹ️ Nenhum PDF scaneado para anexar")
-            
-            print("=" * 60)
+                    print(f"[gerar_pdf] Erro no merge: {e}")
+
             return carteira_bytes
             
         except Exception as e:
-            print(f"[gerar_pdf] ERRO FATAL: {e}")
-            import traceback
-            traceback.print_exc()
             raise RuntimeError(f"Erro ao gerar PDF: {e}")
 
     def _draw_paragraph(self, c, text, x, y, w, size=8, bold=False):
@@ -242,8 +187,7 @@ class CarteiraController:
             p = Paragraph(text, style)
             p.wrapOn(c, w, 100)
             p.drawOn(c, x, y)
-        except Exception as e:
-            print(f"Aviso PDF: {e}")
+        except Exception:
             c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
             safe = text if text != "&nbsp;" else ""
             c.drawString(x, y, safe)
@@ -276,18 +220,12 @@ class CarteiraController:
 
     def salvar_carteira(self, dados, fotos, pdf_original_path=None):
         """Salva carteira no banco"""
-        print(f"[salvar_carteira] ========================")
-        print(f"[salvar_carteira] PDF original path: {pdf_original_path}")
-        print(f"[salvar_carteira] PDF existe? {os.path.exists(pdf_original_path) if pdf_original_path else False}")
-        
         erros = self.validar_dados(dados)
         if erros:
             return False, "Corrija os seguintes erros:\n\n" + "\n".join(erros)
         
         try:
             pdf = self.gerar_pdf(dados, fotos, pdf_original_path=pdf_original_path)
-            
-            print(f"[salvar_carteira] PDF gerado com {len(pdf)} bytes")
             
             self.repo.salvar(
                 registro=dados.get("registro"),
@@ -309,8 +247,6 @@ class CarteiraController:
             )
             return True, "Carteira digital salva no banco com sucesso!"
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             return False, f"Erro ao salvar no banco:\n{str(e)}"
 
     def visualizar_pdf(self, carteira_id):
@@ -343,11 +279,11 @@ class CarteiraController:
                 return False, "PDF não encontrado no banco."
             
             nome_limpo = re.sub(r'[<>:"/\\|?*]', "_", nome or "Carteira")
-            caminho = filedialog.asksaveasfilename(
-                title="Salvar PDF",
-                defaultextension=".pdf",
-                initialfile=f"Carteira_{nome_limpo}.pdf",
-                filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")],
+            caminho, _ = QFileDialog.getSaveFileName(
+                None,
+                "Salvar PDF",
+                f"Carteira_{nome_limpo}.pdf",
+                "PDF Files (*.pdf);;All Files (*.*)"
             )
             if not caminho:
                 return False, "Operação cancelada"

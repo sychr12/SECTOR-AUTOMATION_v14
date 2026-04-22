@@ -1,126 +1,158 @@
 # -*- coding: utf-8 -*-
 """
 UserListCard — container scrollável com cabeçalho de colunas e estados de UI.
-
-Métodos públicos:
-    clear_users()
-    show_loading()
-    show_no_users_message(message)
-    show_error(error_msg)
-    add_user_card(user_data, on_select, on_delete)
-    disable_user_actions(username)
-    enable_user_actions(username)
-    scroll_to_top()
+Versão PyQt6.
 """
-import customtkinter as ctk
-from app.theme import AppTheme
 
-_VERM  = "#ef4444"
+from PyQt6.QtWidgets import (
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QWidget
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+
+_VERM = "#ef4444"
 _MUTED = "#64748b"
+_BRANCO = "#ffffff"
+_CINZA_BORDER = "#e2e8f0"
 
 _COLUNAS = [
-    ("👤 Usuário",       130),
-    ("🧑🏻 Perfil",        110),
-    ("📧 Email",         210),
+    ("👤 Usuário", 130),
+    ("🧑🏻 Perfil", 110),
+    ("📧 Email", 210),
     ("📅 Último Acesso", 160),
-    ("🔄 Status",        110),
-    ("⚙️ Ações",         120),
+    ("🔄 Status", 110),
+    ("⚙️ Ações", 120),
 ]
 
 
-class UserListCard(ctk.CTkFrame):
+class UserListCard(QFrame):
+    """Container scrollável para lista de usuários."""
 
-    def __init__(self, master, **kwargs):
-        super().__init__(master,
-                         fg_color=AppTheme.BG_CARD,
-                         corner_radius=16, **kwargs)
-        self._user_actions_disabled: set = set()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._user_actions_disabled = set()
+        
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 16px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
         self._build()
 
-    # ── Layout ───────────────────────────────────────────────────────────────
-
     def _build(self):
-        content = ctk.CTkFrame(self, fg_color="transparent")
-        content.pack(fill="both", expand=True, padx=12, pady=12)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
         # Cabeçalho de colunas
-        hdr = ctk.CTkFrame(content, fg_color=AppTheme.BG_INPUT,
-                           corner_radius=12, height=50)
-        hdr.pack(fill="x", pady=(0, 12))
-        hdr.pack_propagate(False)
-
-        hdr_inner = ctk.CTkFrame(hdr, fg_color="transparent")
-        hdr_inner.pack(fill="both", expand=True, padx=16, pady=8)
-
+        header = QFrame()
+        header.setFixedHeight(50)
+        header.setStyleSheet(f"""
+            QFrame {{
+                background-color: #f1f5f9;
+                border-radius: 12px;
+            }}
+        """)
+        
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 0, 16, 0)
+        
         for titulo, largura in _COLUNAS:
-            col = ctk.CTkFrame(hdr_inner, fg_color="transparent", width=largura)
-            col.pack(side="left", fill="y")
-            col.pack_propagate(False)
-            ctk.CTkLabel(col, text=titulo,
-                         font=("Segoe UI", 11, "bold"),
-                         text_color=AppTheme.TXT_MAIN,
-                         anchor="w").pack(fill="x", padx=8)
+            col = QFrame()
+            col.setFixedWidth(largura)
+            lbl = QLabel(titulo)
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            lbl.setStyleSheet("color: #1e2f3e;")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            col_layout = QVBoxLayout(col)
+            col_layout.setContentsMargins(8, 0, 0, 0)
+            col_layout.addWidget(lbl)
+            header_layout.addWidget(col)
+        
+        layout.addWidget(header)
 
-        # Container scrollável
-        self._scroll = ctk.CTkScrollableFrame(
-            content, fg_color="transparent")
-        self._scroll.pack(fill="both", expand=True, padx=(0, 4))
-
-    # ── API pública ───────────────────────────────────────────────────────────
+        # Área scrollável
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        
+        self._scroll_content = QWidget()
+        self._scroll_layout = QVBoxLayout(self._scroll_content)
+        self._scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self._scroll_layout.setSpacing(4)
+        self._scroll_layout.addStretch()
+        
+        self._scroll_area.setWidget(self._scroll_content)
+        layout.addWidget(self._scroll_area)
 
     def clear_users(self):
-        for w in self._scroll.winfo_children():
-            w.destroy()
+        """Remove todos os usuários da lista."""
+        while self._scroll_layout.count() > 1:
+            item = self._scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def show_loading(self):
+        """Mostra indicador de carregamento."""
         self.clear_users()
-        ctk.CTkLabel(self._scroll,
-                     text="⏳ Carregando usuários...",
-                     font=("Segoe UI", 14),
-                     text_color=_MUTED).pack(pady=50)
+        lbl = QLabel("⏳ Carregando usuários...")
+        lbl.setFont(QFont("Segoe UI", 14))
+        lbl.setStyleSheet(f"color: {_MUTED};")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scroll_layout.insertWidget(0, lbl)
 
-    def show_no_users_message(self,
-                               message="Nenhum usuário encontrado."):
+    def show_no_users_message(self, message="Nenhum usuário encontrado."):
+        """Mostra mensagem quando não há usuários."""
         self.clear_users()
-        ctk.CTkLabel(self._scroll,
-                     text=f"📭 {message}",
-                     font=("Segoe UI", 14),
-                     text_color=_MUTED).pack(pady=50)
+        lbl = QLabel(f"📭 {message}")
+        lbl.setFont(QFont("Segoe UI", 14))
+        lbl.setStyleSheet(f"color: {_MUTED};")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scroll_layout.insertWidget(0, lbl)
 
     def show_error(self, error_msg: str):
+        """Mostra mensagem de erro."""
         self.clear_users()
-        wrap = ctk.CTkFrame(self._scroll, fg_color="transparent")
-        wrap.pack(expand=True, pady=50)
-        ctk.CTkLabel(wrap, text="❌",
-                     font=("Segoe UI", 32),
-                     text_color=_VERM).pack()
-        ctk.CTkLabel(wrap, text=f"Erro ao carregar:\n{error_msg}",
-                     font=("Segoe UI", 12),
-                     text_color=_VERM).pack(pady=(10, 0))
+        lbl_icon = QLabel("❌")
+        lbl_icon.setFont(QFont("Segoe UI", 32))
+        lbl_icon.setStyleSheet(f"color: {_VERM};")
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scroll_layout.insertWidget(0, lbl_icon)
+        
+        lbl_msg = QLabel(f"Erro ao carregar:\n{error_msg}")
+        lbl_msg.setFont(QFont("Segoe UI", 12))
+        lbl_msg.setStyleSheet(f"color: {_VERM};")
+        lbl_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scroll_layout.insertWidget(1, lbl_msg)
 
     def add_user_card(self, user_data: dict, on_select, on_delete):
+        """Adiciona um card de usuário à lista."""
         from .user_card import UserCard
-        card = UserCard(self._scroll, user_data, on_select, on_delete)
-        card.pack(fill="x", pady=2)
-        if user_data["username"] in self._user_actions_disabled:
+        card = UserCard(user_data, on_select, on_delete)
+        self._scroll_layout.insertWidget(self._scroll_layout.count() - 1, card)
+        
+        if user_data.get("username") in self._user_actions_disabled:
             card.disable_actions()
 
     def disable_user_actions(self, username: str):
+        """Desabilita ações para um usuário específico."""
         self._user_actions_disabled.add(username)
-        for child in self._scroll.winfo_children():
-            if (hasattr(child, "user_data") and
-                    child.user_data["username"] == username):
-                child.disable_actions()
+        for i in range(self._scroll_layout.count()):
+            widget = self._scroll_layout.itemAt(i).widget()
+            if widget and hasattr(widget, "user_data") and widget.user_data.get("username") == username:
+                widget.disable_actions()
 
     def enable_user_actions(self, username: str):
+        """Reabilita ações para um usuário específico."""
         self._user_actions_disabled.discard(username)
-        for child in self._scroll.winfo_children():
-            if (hasattr(child, "user_data") and
-                    child.user_data["username"] == username):
-                child.enable_actions()
-
-    def scroll_to_top(self):
-        try:
-            self._scroll._parent_canvas.yview_moveto(0)
-        except Exception:
-            pass
+        for i in range(self._scroll_layout.count()):
+            widget = self._scroll_layout.itemAt(i).widget()
+            if widget and hasattr(widget, "user_data") and widget.user_data.get("username") == username:
+                widget.enable_actions()

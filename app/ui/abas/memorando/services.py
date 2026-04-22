@@ -49,6 +49,7 @@ def _substituir_runs(paragraph, substituicoes: dict) -> None:
     """Substitui placeholders preservando a formatação"""
     texto_original = "".join(run.text for run in paragraph.runs)
     texto_novo = texto_original
+
     for placeholder, valor in substituicoes.items():
         texto_novo = texto_novo.replace(placeholder, str(valor))
 
@@ -87,9 +88,9 @@ class MemorandoService:
 
     @staticmethod
     def criar_memorando_word(numero: str, data: str, unloc: str,
-                              memo_entrada: str = "",
-                              nomes: str = "—",
-                              qtda: str = "0") -> bytes:
+                             memo_entrada: str = "",
+                             nomes: str = "—",
+                             qtda: str = "0") -> bytes:
         """Cria documento Word com placeholders substituídos"""
         data_formatada = _normalizar_data(data)
 
@@ -97,19 +98,17 @@ class MemorandoService:
         doc = Document(io.BytesIO(modelo_bytes))
 
         substituicoes = {
-            "(num)":   numero,
-            "(data)":  data_formatada,
-            "(muni)":  unloc.upper(),
+            "(num)": numero,
+            "(data)": data_formatada,
+            "(muni)": unloc.upper(),
             "(memos)": memo_entrada,
             "(nomes)": nomes or "—",
-            "(qtda)":  qtda or "0",
+            "(qtda)": qtda or "0",
         }
 
-        # Parágrafos diretos
         for paragraph in doc.paragraphs:
             _substituir_runs(paragraph, substituicoes)
 
-        # Parágrafos dentro de tabelas
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
@@ -152,12 +151,12 @@ class MemorandoService:
             conn.commit()
 
             return {
-                'id': row[0],
-                'numero': row[1],
-                'unloc': row[2],
-                'data_emissao': row[3],
-                'criado_em': row[4],
-                'usuario': row[5]
+                "id": row[0],
+                "numero": row[1],
+                "unloc": row[2],
+                "data_emissao": row[3],
+                "criado_em": row[4],
+                "usuario": row[5],
             }
         except Exception:
             conn.rollback()
@@ -177,17 +176,17 @@ class MemorandoService:
                     SELECT TOP (?)
                            id, numero, unloc, data_emissao,
                            criado_em, usuario, descricao
-                    FROM   memorandos
-                    WHERE  numero LIKE ? OR unloc LIKE ?
-                    ORDER  BY criado_em DESC
+                    FROM memorandos
+                    WHERE numero LIKE ? OR unloc LIKE ?
+                    ORDER BY criado_em DESC
                 """, (limite, f"%{termo_pesquisa}%", f"%{termo_pesquisa}%"))
             else:
                 cursor.execute("""
                     SELECT TOP (?)
                            id, numero, unloc, data_emissao,
                            criado_em, usuario, descricao
-                    FROM   memorandos
-                    ORDER  BY criado_em DESC
+                    FROM memorandos
+                    ORDER BY criado_em DESC
                 """, (limite,))
 
             rows = cursor.fetchall()
@@ -195,45 +194,19 @@ class MemorandoService:
 
             return [
                 {
-                    'id': row[0],
-                    'numero': row[1],
-                    'unloc': row[2],
-                    'data_emissao': _fmt_data(row[3]),
-                    'criado_em': _fmt_data(row[4]),
-                    'usuario': row[5],
-                    'descricao': row[6],
+                    "id": row[0],
+                    "numero": row[1],
+                    "unloc": row[2],
+                    "data_emissao": _fmt_data(row[3]),
+                    "criado_em": _fmt_data(row[4]),
+                    "usuario": row[5],
+                    "descricao": row[6],
                 }
                 for row in rows
             ]
         finally:
             conn.close()
- 
-    # ------------------------------------------------------------------
-    # PUXAR DO BANCO - ANOS
-    # ------------------------------------------------------------------           
-            
-    @staticmethod
-    def listar_anos():
-        conn = get_connection()
-        try:
-            from psycopg2.extras import RealDictCursor
 
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT DISTINCT EXTRACT(YEAR FROM data_emissao)::INT AS ano
-                    FROM memorandos
-                    WHERE data_emissao IS NOT NULL
-                    ORDER BY ano DESC
-                """)
-                rows = cur.fetchall()
-
-                return [str(r["ano"]) for r in rows if r["ano"] is not None]
-
-        finally:
-            conn.close()
-    # ------------------------------------------------------------------
-    # BUSCAR POR ID
-    # ------------------------------------------------------------------
     @staticmethod
     def buscar_memorandos_com_filtros(
         termo: str = "",
@@ -244,13 +217,6 @@ class MemorandoService:
     ) -> list:
         """
         Busca memorandos com filtros avançados.
-
-        Args:
-            termo: Texto para buscar no número ou UNLOC
-            codigo_municipio: Código do município (ex: "MAO")
-            ano: Ano para filtrar (ex: "2024")
-            ordem: "Recentes" ou "Antigos"
-            limite: Número máximo de registros retornados
         """
         conn = get_connection()
         try:
@@ -267,9 +233,9 @@ class MemorandoService:
                 conditions.append("unloc LIKE ?")
                 params.append(f"{codigo_municipio.strip()}%")
 
-            if ano and ano.strip():
+            if ano and str(ano).strip():
                 conditions.append("YEAR(data_emissao) = ?")
-                params.append(int(ano.strip()))
+                params.append(int(str(ano).strip()))
 
             where_clause = ""
             if conditions:
@@ -281,9 +247,9 @@ class MemorandoService:
                 SELECT TOP ({limite})
                        id, numero, unloc, data_emissao,
                        criado_em, usuario, descricao
-                FROM   memorandos
+                FROM memorandos
                 {where_clause}
-                ORDER  BY criado_em {order_direction}
+                ORDER BY criado_em {order_direction}
             """
 
             cursor.execute(sql, params)
@@ -292,13 +258,13 @@ class MemorandoService:
 
             return [
                 {
-                    'id': row[0],
-                    'numero': row[1],
-                    'unloc': row[2],
-                    'data_emissao': _fmt_data(row[3]),
-                    'criado_em': _fmt_data(row[4]),
-                    'usuario': row[5],
-                    'descricao': row[6],
+                    "id": row[0],
+                    "numero": row[1],
+                    "unloc": row[2],
+                    "data_emissao": _fmt_data(row[3]),
+                    "criado_em": _fmt_data(row[4]),
+                    "usuario": row[5],
+                    "descricao": row[6],
                 }
                 for row in rows
             ]
@@ -313,13 +279,13 @@ class MemorandoService:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT DISTINCT YEAR(data_emissao) AS ano
-                FROM   memorandos
-                WHERE  data_emissao IS NOT NULL
-                ORDER  BY ano DESC
+                FROM memorandos
+                WHERE data_emissao IS NOT NULL
+                ORDER BY ano DESC
             """)
             rows = cursor.fetchall()
             cursor.close()
-            return [str(row[0]) for row in rows]
+            return [str(row[0]) for row in rows if row[0] is not None]
         finally:
             conn.close()
 
@@ -332,8 +298,8 @@ class MemorandoService:
             cursor.execute("""
                 SELECT id, numero, unloc, data_emissao,
                        word_conteudo, usuario, descricao
-                FROM   memorandos
-                WHERE  id = ?
+                FROM memorandos
+                WHERE id = ?
             """, (memorando_id,))
 
             row = cursor.fetchone()
@@ -343,13 +309,13 @@ class MemorandoService:
                 return None
 
             return {
-                'id': row[0],
-                'numero': row[1],
-                'unloc': row[2],
-                'data_emissao': row[3],
-                'word_conteudo': _to_bytes(row[4]),
-                'usuario': row[5],
-                'descricao': row[6],
+                "id": row[0],
+                "numero": row[1],
+                "unloc": row[2],
+                "data_emissao": row[3],
+                "word_conteudo": _to_bytes(row[4]),
+                "usuario": row[5],
+                "descricao": row[6],
             }
         finally:
             conn.close()
@@ -358,6 +324,7 @@ class MemorandoService:
     def abrir_arquivo_temp(conteudo_word: bytes, sufixo: str = ".docx") -> str:
         """Abre arquivo temporário com o documento"""
         conteudo = _to_bytes(conteudo_word)
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=sufixo) as tmp:
             tmp.write(conteudo)
             caminho = tmp.name
