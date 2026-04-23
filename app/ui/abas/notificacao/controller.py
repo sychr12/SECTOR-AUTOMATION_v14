@@ -3,7 +3,7 @@
 Controller para operações de email
 """
 
-from tkinter import messagebox
+##from tkinter import messagebox
 from typing import Tuple, Optional, Dict, Any
 from .models import EmailConfigModel
 from .services import EmailService
@@ -78,3 +78,4 @@ class EmailController:
     def esta_habilitado(self) -> bool:
         """Verifica se o serviço de email está habilitado"""
         return self.config.habilitado
+

@@ -2,135 +2,137 @@
 # -*- coding: utf-8 -*-
 """
 Componentes de UI reutilizáveis para a interface de download de emails
+Versão PyQt6
 """
 
-import customtkinter as ctk
-from tkinter import ttk
+from PyQt6.QtWidgets import (
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 
 class AppTheme:
     """Paleta local — espelha app.theme.AppTheme sem depender do caminho absoluto."""
-    BG_INPUT         = "#ffffff"
-    BG_CARD          = "#f1f5f9"
-    TXT_MAIN         = "#0f172a"
-    TXT_MUTED        = "#64748b"
-    BTN_PRIMARY      = "#2c6e9e"
+    BG_INPUT = "#ffffff"
+    BG_CARD = "#f1f5f9"
+    TXT_MAIN = "#0f172a"
+    TXT_MUTED = "#64748b"
+    BTN_PRIMARY = "#2c6e9e"
     BTN_PRIMARY_HOVER = "#1e4a6e"
+    BORDER = "#e2e8f0"
 
-class HeaderCard(ctk.CTkFrame):
+
+class HeaderCard(QFrame):
     """Card de cabeçalho estilizado"""
-    def __init__(self, master, title, subtitle="", **kwargs):
-        super().__init__(master, fg_color="transparent", **kwargs)
-        self._create_widgets(title, subtitle)
-    
-    def _create_widgets(self, title, subtitle):
-        ctk.CTkLabel(
-            self,
-            text=title,
-            font=("Segoe UI", 26, "bold"),
-            anchor="w"
-        ).pack(anchor="w")
+    def __init__(self, parent=None, title="", subtitle=""):
+        super().__init__(parent)
+        self.setStyleSheet("background-color: transparent;")
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 15)
+        
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {AppTheme.TXT_MAIN};")
+        layout.addWidget(lbl_title)
         
         if subtitle:
-            ctk.CTkLabel(
-                self,
-                text=subtitle,
-                font=("Segoe UI", 14),
-                text_color=AppTheme.TXT_MUTED
-            ).pack(anchor="w", pady=(6, 0))
-    
-    def pack(self, **kwargs):
-        kwargs.setdefault('fill', 'x')
-        kwargs.setdefault('padx', 30)
-        kwargs.setdefault('pady', (30, 15))
-        super().pack(**kwargs)
+            lbl_subtitle = QLabel(subtitle)
+            lbl_subtitle.setFont(QFont("Segoe UI", 14))
+            lbl_subtitle.setStyleSheet(f"color: {AppTheme.TXT_MUTED};")
+            layout.addWidget(lbl_subtitle)
 
-class ActionButton(ctk.CTkButton):
+
+class ActionButton(QPushButton):
     """Botão de ação estilizado"""
-    def __init__(self, master, text="", command=None, **kwargs):
-        super().__init__(
-            master,
-            text=text,
-            command=command,
-            height=46,
-            width=220,
-            font=("Segoe UI", 15, "bold"),
-            corner_radius=14,
-            fg_color=AppTheme.BTN_PRIMARY,
-            hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            **kwargs
-        )
-    
-    def pack(self, **kwargs):
-        kwargs.setdefault('anchor', 'w')
-        super().pack(**kwargs)
+    def __init__(self, parent=None, text="", command=None):
+        super().__init__(text, parent)
+        self.setFixedHeight(46)
+        self.setMinimumWidth(220)
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {AppTheme.BTN_PRIMARY};
+                color: white;
+                border: none;
+                border-radius: 14px;
+                font-family: 'Segoe UI';
+                font-size: 15px;
+                font-weight: bold;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppTheme.BTN_PRIMARY_HOVER};
+            }}
+        """)
+        if command:
+            self.clicked.connect(command)
+
 
 class LogTableView:
-    """Tabela para exibição de logs"""
-    
+    """Tabela para exibição de logs usando QTableWidget"""
+
     @staticmethod
     def criar(parent):
         """Cria e configura a tabela de logs"""
-        container = ctk.CTkFrame(parent, corner_radius=16, fg_color=AppTheme.BG_CARD)
-        container.pack(fill="both", expand=True, padx=30, pady=(10, 30))
-        
-        # Criar estilo para a tabela
-        LogTableView._aplicar_estilo()
-        
-        # Criar Treeview
-        treeview = ttk.Treeview(
-            container,
-            columns=("Status", "Mensagem"),
-            show="headings",
-            height=12
-        )
-        
-        # Configurar colunas
-        treeview.heading("Status", text="Status")
-        treeview.heading("Mensagem", text="Mensagem")
-        
-        treeview.column("Status", width=140, anchor="center")
-        treeview.column("Mensagem", width=900, anchor="w")
-        
-        treeview.pack(fill="both", expand=True, padx=12, pady=12)
-        
-        return treeview, container
-    
+        container = QFrame(parent)
+        container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {AppTheme.BG_CARD};
+                border-radius: 16px;
+            }}
+        """)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(30, 15, 30, 30)
+
+        # Título
+        lbl_title = QLabel("Log de Processamento")
+        lbl_title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        layout.addWidget(lbl_title)
+
+        # Tabela
+        table = QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(["Status", "Mensagem"])
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {AppTheme.BG_INPUT};
+                border: 1px solid {AppTheme.BORDER};
+                border-radius: 12px;
+                gridline-color: {AppTheme.BORDER};
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+            }}
+            QHeaderView::section {{
+                background-color: {AppTheme.BG_CARD};
+                color: {AppTheme.TXT_MAIN};
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
+
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        layout.addWidget(table)
+
+        return table, container
+
     @staticmethod
-    def _aplicar_estilo():
-        """Aplica estilo na tabela"""
-        style = ttk.Style()
-        style.theme_use("default")
-        
-        style.configure(
-            "Treeview",
-            background=AppTheme.BG_CARD,
-            foreground=AppTheme.TXT_MAIN,
-            fieldbackground=AppTheme.BG_CARD,
-            rowheight=34,
-            font=("Segoe UI", 12)
-        )
-        
-        style.configure(
-            "Treeview.Heading",
-            background=AppTheme.BG_CARD,
-            foreground=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12, "bold")
-        )
-        
-        style.map(
-            "Treeview",
-            background=[("selected", AppTheme.BTN_PRIMARY)],
-            foreground=[("selected", AppTheme.TXT_MAIN)]
-        )
-    
-    @staticmethod
-    def adicionar_log(treeview, status, mensagem):
+    def adicionar_log(table, status, mensagem):
         """Adiciona uma entrada de log na tabela"""
-        treeview.insert("", "end", values=(status, mensagem))
-    
+        row = table.rowCount()
+        table.insertRow(row)
+        table.setItem(row, 0, QTableWidgetItem(status))
+        table.setItem(row, 1, QTableWidgetItem(mensagem))
+        table.scrollToBottom()
+
     @staticmethod
-    def limpar_logs(treeview):
+    def limpar_logs(table):
         """Limpa todos os logs da tabela"""
-        for item in treeview.get_children():
-            treeview.delete(item)
+        table.setRowCount(0)

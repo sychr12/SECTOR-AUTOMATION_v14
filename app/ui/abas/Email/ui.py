@@ -2,254 +2,258 @@
 """
 Interface para baixar emails com anexos PDF do Gmail
 Com persistência em SQL Server — PDFs armazenados como VARBINARY(MAX)
+Versão PyQt6
 """
 import threading
 from datetime import datetime
-from tkinter import messagebox, filedialog
-import customtkinter as ctk
-from tkinter import ttk
-from PIL import Image, ImageOps
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
+    QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont, QColor
 import os
 
 from .controller import EmailDownloadController
 from .services import EmailDownloadService
-from .views import ProgressoDownload, EstatisticasDownload
 from .repository import EmailDownloadRepository
 
-
 # ── Paleta Corporativa ──────────────────────────────────────────────────────────
-_PRIMARY_DARK    = "#0a2540"
-_PRIMARY         = "#1a4b6e"
-_ACCENT          = "#2c6e9e"
-_ACCENT_DARK     = "#1e4a6e"
-_ACCENT_LIGHT    = "#e8f0f8"
-_BRANCO          = "#ffffff"
-_CINZA_BG        = "#f5f7fc"
-_CINZA_BORDER    = "#e2e8f0"
-_CINZA_MEDIO     = "#5a6e8a"
-_CINZA_TEXTO     = "#1e2f3e"
-_VERDE_STATUS    = "#10b981"
-_VERDE_HOVER     = "#d1fae5"
-_AMARELO         = "#f59e0b"
-_VERMELHO        = "#ef4444"
-_AZUL_INFO       = "#3b82f6"
-_ICON_COLOR      = "#1e293b"  # Preto suave para os ícones
+_PRIMARY_DARK = "#0a2540"
+_PRIMARY = "#1a4b6e"
+_ACCENT = "#2c6e9e"
+_ACCENT_DARK = "#1e4a6e"
+_ACCENT_LIGHT = "#e8f0f8"
+_BRANCO = "#ffffff"
+_CINZA_BG = "#f5f7fc"
+_CINZA_BORDER = "#e2e8f0"
+_CINZA_MEDIO = "#5a6e8a"
+_CINZA_TEXTO = "#1e2f3e"
+_VERDE_STATUS = "#10b981"
+_AMARELO = "#f59e0b"
+_VERMELHO = "#ef4444"
+_AZUL_INFO = "#3b82f6"
+_ICON_COLOR = "#1e293b"
 
 
 def _safe_print(msg: str) -> None:
-    """Print seguro para terminais Windows que não suportam UTF-8."""
+    """Print seguro para terminais Windows."""
     try:
         print(msg)
     except UnicodeEncodeError:
         print(msg.encode("ascii", errors="replace").decode("ascii"))
 
 
-# ---------------------------------------------------------------------------
-# Classe para gerenciar ícones dos cards
-# ---------------------------------------------------------------------------
-class IconManager:
-    """Gerenciador de ícones para os cards"""
-    
-    def __init__(self):
-        self.icons = {}
-        # Caminho absoluto direto para a pasta de ícones
-        self.icons_dir = r"images\icons\email"
-        
-    def load_icon(self, filename, size=(32, 32), colorize_to=None):
-        """Carrega um ícone da pasta images/icons/email e opcionalmente aplica cor"""
-        try:
-            path = os.path.join(self.icons_dir, filename)
-            if os.path.exists(path):
-                img = Image.open(path)
-                img = img.resize(size, Image.Resampling.LANCZOS)
-                
-                # Se for para colorir o ícone
-                if colorize_to:
-                    # Converte para RGBA se necessário
-                    if img.mode != 'RGBA':
-                        img = img.convert('RGBA')
-                    
-                    # Obtém os dados da imagem
-                    data = img.getdata()
-                    new_data = []
-                    
-                    # Define a cor de destino (RGB)
-                    if isinstance(colorize_to, tuple):
-                        target_r, target_g, target_b = colorize_to
-                    else:
-                        # Se for string hex, converte para RGB
-                        hex_color = colorize_to.lstrip('#')
-                        target_r, target_g, target_b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-                    
-                    # Processa cada pixel
-                    for item in data:
-                        r, g, b, a = item
-                        # Mantém a transparência e aplica a nova cor nos pixels não transparentes
-                        if a > 0:
-                            new_data.append((target_r, target_g, target_b, a))
-                        else:
-                            new_data.append((r, g, b, a))
-                    
-                    img.putdata(new_data)
-                
-                return ctk.CTkImage(light_image=img, dark_image=img, size=size)
-            else:
-                _safe_print(f"Ícone não encontrado: {path}")
-        except Exception as e:
-            _safe_print(f"Erro ao carregar ícone {filename}: {e}")
-        return None
-    
-    def setup_icons(self):
-        """Configura os ícones dos cards com cor preta"""
-        icons_config = {
-            "database": ("hard_drive.png", (32, 32), _ICON_COLOR),
-            "google": ("api.png", (32, 32), _ICON_COLOR),
-        }
-        
-        for name, (filename, size, color) in icons_config.items():
-            self.icons[name] = self.load_icon(filename, size, color)
-            
-        # Verificar se os ícones foram carregados
-        if self.icons.get("database"):
-            _safe_print("✅ Ícone hard_drive.png carregado com sucesso")
-        else:
-            _safe_print("⚠️ Ícone hard_drive.png NÃO encontrado em: " + self.icons_dir)
-            
-        if self.icons.get("google"):
-            _safe_print("✅ Ícone api.png carregado com sucesso")
-        else:
-            _safe_print("⚠️ Ícone api.png NÃO encontrado em: " + self.icons_dir)
-        
-        return self.icons
+class ProgressoDownload(QWidget):
+    """Barra de progresso com status"""
 
-# ---------------------------------------------------------------------------
-# Tabela de histórico
-# ---------------------------------------------------------------------------
-class LogTableView:
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: none;
+                border-radius: 8px;
+                background-color: {_CINZA_BORDER};
+                height: 8px;
+                text-align: center;
+            }}
+            QProgressBar::chunk {{
+                background-color: {_VERDE_STATUS};
+                border-radius: 8px;
+            }}
+        """)
+        layout.addWidget(self.progress_bar)
+
+        self.status_label = QLabel("Pronto")
+        self.status_label.setFont(QFont("Segoe UI", 10))
+        self.status_label.setStyleSheet(f"color: {_CINZA_MEDIO};")
+        layout.addWidget(self.status_label)
+
+    def atualizar(self, valor, status=""):
+        self.progress_bar.setValue(valor)
+        if status:
+            self.status_label.setText(status)
+
+    def reset(self):
+        self.progress_bar.setValue(0)
+        self.status_label.setText("Pronto")
+
+
+class EstatisticasDownload(QWidget):
+    """Painel de estatísticas"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
+
+        self.lbl_emails = self._create_stat_card("E-mails", "0")
+        self.lbl_arquivos = self._create_stat_card("Anexos", "0")
+        self.lbl_sucessos = self._create_stat_card("Sucessos", "0")
+        self.lbl_erros = self._create_stat_card("Erros", "0")
+        self.lbl_ultimo = self._create_stat_card("Ultima execucao", "---")
+
+        layout.addWidget(self.lbl_emails)
+        layout.addWidget(self.lbl_arquivos)
+        layout.addWidget(self.lbl_sucessos)
+        layout.addWidget(self.lbl_erros)
+        layout.addWidget(self.lbl_ultimo, 1)
+
+    def _create_stat_card(self, title, value):
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 12px;
+            }}
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 12, 16, 12)
+
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Segoe UI", 10))
+        lbl_title.setStyleSheet(f"color: {_CINZA_MEDIO};")
+        layout.addWidget(lbl_title)
+
+        lbl_value = QLabel(value)
+        lbl_value.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        lbl_value.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        layout.addWidget(lbl_value)
+
+        return card
+
+    def atualizar(self, emails, anexos, sucessos, erros):
+        self._set_value(self.lbl_emails, str(emails))
+        self._set_value(self.lbl_arquivos, str(anexos))
+        self._set_value(self.lbl_sucessos, str(sucessos))
+        self._set_value(self.lbl_erros, str(erros))
+
+    def atualizar_ultima_execucao(self, data):
+        self._set_value(self.lbl_ultimo, data)
+
+    def _set_value(self, card, value):
+        for child in card.findChildren(QLabel):
+            if child.font().pointSize() == 18:
+                child.setText(value)
+
+    def reset(self):
+        self.atualizar(0, 0, 0, 0)
+        self.atualizar_ultima_execucao("---")
+
+
+class LogTableView(QWidget):
     """Tabela de histórico com coluna de ação de download."""
 
-    COLUNAS    = ("status", "remetente", "assunto", "arquivo", "criado_em", "acao")
+    COLUNAS = ["status", "remetente", "assunto", "arquivo", "criado_em", "acao"]
     CABECALHOS = {
-        "status":    ("Status",     100),
-        "remetente": ("Remetente", 220),
-        "assunto":   ("Assunto",   280),
-        "arquivo":   ("Arquivo",   250),
-        "criado_em": ("Data/Hora", 150),
-        "acao":      ("Ação",      90),
-    }
-    TAG_CORES = {
-        "sucesso":   (_VERDE_STATUS, "#052e16"),
-        "erro":      (_VERMELHO, "#450a0a"),
-        "info":      (_AZUL_INFO, "#172554"),
-        "ok":        (_VERDE_STATUS, "#052e16"),
-        "iniciando": (_AMARELO, "#451a03"),
+        "status": "Status",
+        "remetente": "Remetente",
+        "assunto": "Assunto",
+        "arquivo": "Arquivo",
+        "criado_em": "Data/Hora",
+        "acao": "Acao",
     }
 
-    def __init__(self, parent, on_download_click):
-        self.parent = parent
+    def __init__(self, parent=None, on_download_click=None):
+        super().__init__(parent)
         self.on_download_click = on_download_click
-        self.tree = None
-        self.container = None
-        self._criar()
+        self._create_table()
 
-    def _criar(self):
-        """Cria a tabela com design moderno"""
-        self.container = ctk.CTkFrame(self.parent, fg_color="transparent")
-        
-        # Header
-        header_frame = ctk.CTkFrame(self.container, fg_color="transparent")
-        header_frame.pack(anchor="w", pady=(0, 12))
-        
-        ctk.CTkLabel(
-            header_frame,
-            text="Histórico de Downloads",
-            font=("Segoe UI", 14, "bold"),
-            text_color=_CINZA_TEXTO
-        ).pack(side="left")
+    def _create_table(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Container da tabela
-        frame_tree = ctk.CTkFrame(
-            self.container, 
-            fg_color=_BRANCO, 
-            corner_radius=12,
-            border_width=1,
-            border_color=_CINZA_BORDER
-        )
-        frame_tree.pack(fill="both", expand=True)
+        lbl_title = QLabel("Historico de Downloads")
+        lbl_title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        layout.addWidget(lbl_title)
 
-        # Estilo da Treeview
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure(
-            "EmailDL.Treeview",
-            background=_BRANCO,
-            fieldbackground=_BRANCO,
-            foreground=_CINZA_TEXTO,
-            rowheight=40,
-            font=("Segoe UI", 11),
-            borderwidth=0,
-        )
-        style.configure(
-            "EmailDL.Treeview.Heading",
-            background=_ACCENT_LIGHT,
-            foreground=_ACCENT,
-            font=("Segoe UI", 11, "bold"),
-            relief="flat",
-            borderwidth=0,
-        )
-        style.map("EmailDL.Treeview", 
-                  background=[("selected", _ACCENT_LIGHT)],
-                  foreground=[("selected", _ACCENT)])
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        frame_layout = QVBoxLayout(frame)
 
-        # Treeview
-        self.tree = ttk.Treeview(
-            frame_tree,
-            columns=self.COLUNAS,
-            show="headings",
-            style="EmailDL.Treeview",
-            selectmode="browse",
-            height=10
-        )
-        
-        for col in self.COLUNAS:
-            titulo, largura = self.CABECALHOS[col]
-            self.tree.heading(col, text=titulo)
-            self.tree.column(col, width=largura, minwidth=50, stretch=(col == "assunto"))
+        self.table = QTableWidget()
+        self.table.setColumnCount(len(self.COLUNAS))
+        self.table.setHorizontalHeaderLabels([self.CABECALHOS[col] for col in self.COLUNAS])
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {_BRANCO};
+                border: none;
+                gridline-color: {_CINZA_BORDER};
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+            }}
+            QHeaderView::section {{
+                background-color: {_ACCENT_LIGHT};
+                color: {_ACCENT};
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
 
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Pack
-        self.tree.pack(side="left", fill="both", expand=True, padx=12, pady=12)
-        scrollbar.pack(side="right", fill="y", pady=12)
-        
-        # Configurar tags de cor
-        for tag, (bg, fg) in self.TAG_CORES.items():
-            self.tree.tag_configure(tag, background=bg, foreground=fg)
-        
-        # Bind duplo clique
-        self.tree.bind("<Double-1>", self._on_double_click)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
 
-    def _on_double_click(self, event):
-        item = self.tree.identify_row(event.y)
-        if not item:
-            return
-        tags = self.tree.item(item, "tags")
-        if len(tags) >= 2:
-            try:
-                self.on_download_click(int(tags[1]))
-            except (ValueError, TypeError):
-                pass
+        self.table.itemDoubleClicked.connect(self._on_double_click)
+
+        frame_layout.addWidget(self.table)
+        layout.addWidget(frame)
+
+    def _on_double_click(self, item):
+        row = item.row()
+        record_id_item = self.table.item(row, 0)
+        if record_id_item:
+            record_id = record_id_item.data(Qt.ItemDataRole.UserRole)
+            if record_id and self.on_download_click:
+                self.on_download_click(record_id)
 
     def adicionar_linha(self, record_id: int, status: str, remetente: str,
                         assunto: str, arquivo: str, criado_em: str):
-        tag_cor = status.lower() if status.lower() in self.TAG_CORES else "info"
-        self.tree.insert(
-            "", 0,
-            values=(status, remetente, assunto, arquivo, criado_em, "📥 Baixar"),
-            tags=(tag_cor, str(record_id)),
-        )
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        status_colors = {
+            "sucesso": _VERDE_STATUS,
+            "erro": _VERMELHO,
+            "info": _AZUL_INFO,
+            "ok": _VERDE_STATUS,
+            "iniciando": _AMARELO,
+        }
+        color = status_colors.get(status.lower(), _CINZA_MEDIO)
+
+        status_item = QTableWidgetItem(status.upper())
+        status_item.setForeground(QColor(color))
+        status_item.setData(Qt.ItemDataRole.UserRole, record_id)
+
+        self.table.setItem(row, 0, status_item)
+        self.table.setItem(row, 1, QTableWidgetItem(remetente))
+        self.table.setItem(row, 2, QTableWidgetItem(assunto))
+        self.table.setItem(row, 3, QTableWidgetItem(arquivo))
+        self.table.setItem(row, 4, QTableWidgetItem(criado_em))
+        self.table.setItem(row, 5, QTableWidgetItem("Baixar"))
 
     def carregar_do_banco(self, registros: list):
         self.limpar()
@@ -273,405 +277,288 @@ class LogTableView:
             )
 
     def limpar(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-    def pack(self, **kwargs):
-        self.container.pack(**kwargs)
+        self.table.setRowCount(0)
 
 
-# ---------------------------------------------------------------------------
-# UI principal
-# ---------------------------------------------------------------------------
-class BaixarEmailUI(ctk.CTkFrame):
+class BaixarEmailUI(QWidget):
     """Interface para download de emails com anexos PDF."""
 
-    def __init__(self, master, usuario=None):
-        super().__init__(master)
+    def __init__(self, parent=None, usuario=None, conectar_bd=None):
+        super().__init__(parent)
         self.usuario = usuario
-        
-        # Inicializar gerenciador de ícones
-        self.icon_manager = IconManager()
-        self.icons = self.icon_manager.setup_icons()
+        self.conectar_bd = conectar_bd
 
         self.BASE_DIR = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
         )
 
-        self.controller  = EmailDownloadController(
+        self.controller = EmailDownloadController(
             base_dir=self.BASE_DIR,
             save_directory="",
             usuario=usuario,
         )
-        self.service    = EmailDownloadService(self.BASE_DIR)
+        self.service = EmailDownloadService(self.BASE_DIR)
         self.repository = EmailDownloadRepository()
 
         self.emails_processados = 0
-        self.arquivos_baixados  = 0
-        self.sucessos           = 0
-        self.erros              = 0
+        self.arquivos_baixados = 0
+        self.sucessos = 0
+        self.erros = 0
         self.log_table = None
 
+        self.setStyleSheet(f"background-color: {_CINZA_BG};")
         self._criar_interface()
 
-        # Inicialização em background
         threading.Thread(target=self._init_banco, daemon=True).start()
 
-    # ------------------------------------------------------------------
-    # Inicialização do banco em background
-    # ------------------------------------------------------------------
     def _init_banco(self):
         try:
-            #essa merda aqui voce ta vendo vai fazer a conexão primeiro ok
-            conn = self.repository._get_conn()
-            conn.close()
-            _safe_print("[EmailDownloadUI] Conexão com banco de dados estabelecida com sucesso.")
-            
-            #Aqui vai criar a bentita tabela sera? que vai kkkkkkkkk
+            if self.conectar_bd:
+                conn = self.conectar_bd()
+                conn.close()
+            _safe_print("[EmailDownloadUI] Conexao com banco estabelecida.")
             self.repository.criar_tabela()
-            
         except Exception as e:
-            _safe_print(f"[EmailDownloadUI] Erro ao conectar ou criar tabela no banco de dados: {e}")
-            import traceback
-            traceback.print_exc()
-            
+            _safe_print(f"[EmailDownloadUI] Erro: {e}")
         self._carregar_historico()
 
-    # ------------------------------------------------------------------
-    # Layout
-    # ------------------------------------------------------------------
     def _criar_interface(self):
-        self.configure(fg_color=_CINZA_BG)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(20)
 
-        # Container principal
-        main_container = ctk.CTkFrame(self, fg_color="transparent")
-        main_container.pack(fill="both", expand=True, padx=32, pady=32)
+        self._criar_header(layout)
+        self._criar_painel_controle(layout)
+        self._criar_cards_informativos(layout)
+        self._criar_tabela(layout)
+        self._criar_estatisticas(layout)
 
-        # Card principal
-        card = ctk.CTkFrame(
-            main_container, 
-            corner_radius=16, 
-            fg_color=_BRANCO,
-            border_width=1,
-            border_color=_CINZA_BORDER
-        )
-        card.pack(fill="both", expand=True)
+    def _criar_header(self, parent_layout):
+        title = QLabel("Download de E-mails")
+        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        parent_layout.addWidget(title)
 
-        # Header
-        self._criar_header(card)
-        self._criar_painel_controle(card)
-        self._criar_cards_informativos(card)  # Cards com ícones pretos
-        self._criar_tabela(card)
-        self._criar_estatisticas(card)
+        subtitle = QLabel("Anexos PDF recebidos no Gmail — armazenados no banco de dados")
+        subtitle.setFont(QFont("Segoe UI", 12))
+        subtitle.setStyleSheet(f"color: {_CINZA_MEDIO};")
+        parent_layout.addWidget(subtitle)
 
-    def _criar_header(self, parent):
-        """Cria o cabeçalho com título"""
-        header_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        header_frame.pack(fill="x", padx=32, pady=(32, 24))
-        
-        title_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        title_frame.pack(side="left")
-        
-        ctk.CTkLabel(
-            title_frame,
-            text="Download de E-mails",
-            font=("Segoe UI", 24, "bold"),
-            text_color=_CINZA_TEXTO
-        ).pack(anchor="w")
-        
-        ctk.CTkLabel(
-            title_frame,
-            text="Anexos PDF recebidos no Gmail — armazenados no banco de dados",
-            font=("Segoe UI", 12),
-            text_color=_CINZA_MEDIO
-        ).pack(anchor="w", pady=(4, 0))
+    def _criar_painel_controle(self, parent_layout):
+        panel_layout = QHBoxLayout()
+        panel_layout.setSpacing(12)
 
-    def _criar_painel_controle(self, parent):
-        """Cria o painel de botões de controle"""
-        painel = ctk.CTkFrame(parent, fg_color="transparent")
-        painel.pack(fill="x", padx=32, pady=(0, 24))
+        self.btn_baixar = QPushButton("Iniciar Download")
+        self.btn_baixar.setFixedHeight(48)
+        self.btn_baixar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_ACCENT};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0 24px;
+            }}
+            QPushButton:hover {{
+                background-color: {_ACCENT_DARK};
+            }}
+        """)
+        self.btn_baixar.clicked.connect(self.iniciar_download)
+        panel_layout.addWidget(self.btn_baixar)
 
-        # Botão de download
-        self.btn_baixar = ctk.CTkButton(
-            painel,
-            text="Iniciar Download",
-            command=self.iniciar_download,
-            height=48,
-            corner_radius=10,
-            fg_color=_ACCENT,
-            hover_color=_ACCENT_DARK,
-            text_color=_BRANCO,
-            font=("Segoe UI", 14, "bold")
-        )
-        self.btn_baixar.pack(side="left", padx=(0, 12))
+        btn_recarregar = QPushButton("Recarregar")
+        btn_recarregar.setFixedHeight(48)
+        btn_recarregar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_CINZA_BG};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 13px;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_ACCENT_LIGHT};
+            }}
+        """)
+        btn_recarregar.clicked.connect(self._carregar_historico)
+        panel_layout.addWidget(btn_recarregar)
 
-        # Botão de recarregar
-        ctk.CTkButton(
-            painel,
-            text="Recarregar",
-            height=48,
-            width=140,
-            corner_radius=10,
-            fg_color=_CINZA_BG,
-            hover_color=_ACCENT_LIGHT,
-            text_color=_CINZA_TEXTO,
-            font=("Segoe UI", 13),
-            command=self._carregar_historico,
-        ).pack(side="left", padx=(0, 12))
-        
-         
-        self.btn_baixar_todos = ctk.CTkButton(
-             painel,
-             text="📥 Baixar Todos",
-             command=self._baixar_todos_pdfs,
-             height=48,
-             width=160,
-             corner_radius=10,
-             fg_color="#10b981",  # verde
-             hover_color="#059669",
-             text_color=_BRANCO,
-             font=("Segoe UI", 13, "bold")
-         )
-        self.btn_baixar_todos.pack(side="left", padx=(0, 12))
+        self.btn_baixar_todos = QPushButton("Baixar Todos")
+        self.btn_baixar_todos.setFixedHeight(48)
+        self.btn_baixar_todos.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE_STATUS};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: bold;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: #059669;
+            }}
+        """)
+        self.btn_baixar_todos.clicked.connect(self._baixar_todos_pdfs)
+        panel_layout.addWidget(self.btn_baixar_todos)
 
-        # Botão de limpar logs
-        ctk.CTkButton(
-            painel,
-            text="Limpar Logs",
-            height=48,
-            width=140,
-            corner_radius=10,
-            fg_color=_CINZA_BG,
-            hover_color=_VERMELHO,
-            text_color=_CINZA_TEXTO,
-            font=("Segoe UI", 13),
-            command=self._limpar_logs,
-        ).pack(side="left")
+        btn_limpar = QPushButton("Limpar Logs")
+        btn_limpar.setFixedHeight(48)
+        btn_limpar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_CINZA_BG};
+                color: {_CINZA_TEXTO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 10px;
+                font-size: 13px;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERMELHO};
+                color: white;
+            }}
+        """)
+        btn_limpar.clicked.connect(self._limpar_logs)
+        panel_layout.addWidget(btn_limpar)
 
-        # Barra de progresso
-        self.progresso = ProgressoDownload(painel)
-        self.progresso.pack(side="left", fill="x", expand=True, padx=(20, 0))
+        self.progresso = ProgressoDownload()
+        panel_layout.addWidget(self.progresso, 1)
 
-    def _criar_cards_informativos(self, parent):
-        """Cria os cards informativos COM ÍCONES PRETOS"""
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="x", padx=32, pady=(0, 24))
-        
-        # Configurar grid
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_columnconfigure(1, weight=1)
-        
-        # ==================== CARD 1: Armazenamento ====================
-        card_storage = ctk.CTkFrame(
-            container,
-            fg_color=_ACCENT_LIGHT,
-            corner_radius=12,
-            border_width=1,
-            border_color=_CINZA_BORDER
-        )
-        card_storage.grid(row=0, column=0, sticky="nsew", padx=(0, 12), pady=5)
-        
-        storage_inner = ctk.CTkFrame(card_storage, fg_color="transparent")
-        storage_inner.pack(fill="x", padx=20, pady=16)
-        
-        # Ícone do card de armazenamento (hard_drive.png) com cor preta
-        if self.icons.get("database"):
-            icon_label = ctk.CTkLabel(
-                storage_inner,
-                text="",
-                image=self.icons["database"],
-                width=32,
-                height=32
-            )
-            icon_label.pack(side="left", padx=(0, 12))
-        else:
-            # Fallback se o ícone não for encontrado
-            ctk.CTkLabel(
-                storage_inner,
-                text="",
-                font=("Segoe UI", 24),
-                text_color=_ICON_COLOR  # Usa a cor preta também no fallback
-            ).pack(side="left", padx=(0, 12))
-        
-        # Texto do card
-        storage_text_frame = ctk.CTkFrame(storage_inner, fg_color="transparent")
-        storage_text_frame.pack(side="left", fill="x", expand=True)
-        
-        ctk.CTkLabel(
-            storage_text_frame,
-            text="Armazenamento",
-            font=("Segoe UI", 13, "bold"),
-            text_color=_CINZA_TEXTO
-        ).pack(anchor="w")
-        
-        ctk.CTkLabel(
-            storage_text_frame,
-            text="PDFs salvos diretamente no banco de dados (SQL Server)",
-            font=("Segoe UI", 11),
-            text_color=_CINZA_MEDIO,
-            wraplength=300
-        ).pack(anchor="w", pady=(4, 0))
-        
-        # ==================== CARD 2: Status da API Google ====================
-        card_api = ctk.CTkFrame(
-            container,
-            fg_color=_ACCENT_LIGHT,
-            corner_radius=12,
-            border_width=1,
-            border_color=_CINZA_BORDER
-        )
-        card_api.grid(row=0, column=1, sticky="nsew", padx=(12, 0), pady=5)
-        
-        api_inner = ctk.CTkFrame(card_api, fg_color="transparent")
-        api_inner.pack(fill="x", padx=20, pady=16)
-        
-        # Ícone do card da API Google (api.png) com cor preta
-        if self.icons.get("google"):
-            icon_label = ctk.CTkLabel(
-                api_inner,
-                text="",
-                image=self.icons["google"],
-                width=32,
-                height=32
-            )
-            icon_label.pack(side="left", padx=(0, 12))
-        else:
-            # Fallback se o ícone não for encontrado
-            ctk.CTkLabel(
-                api_inner,
-                text="",
-                font=("Segoe UI", 24),
-                text_color=_ICON_COLOR  # Usa a cor preta também no fallback
-            ).pack(side="left", padx=(0, 12))
-        
-        # Texto do card
-        api_text_frame = ctk.CTkFrame(api_inner, fg_color="transparent")
-        api_text_frame.pack(side="left", fill="x", expand=True)
-        
-        ctk.CTkLabel(
-            api_text_frame,
-            text="Status da API Google",
-            font=("Segoe UI", 13, "bold"),
-            text_color=_CINZA_TEXTO
-        ).pack(anchor="w")
-        
-        self.lbl_status_api = ctk.CTkLabel(
-            api_text_frame,
-            text="✅ Pronto para autenticar",
-            font=("Segoe UI", 11),
-            text_color=_VERDE_STATUS
-        )
-        self.lbl_status_api.pack(anchor="w", pady=(4, 0))
+        parent_layout.addLayout(panel_layout)
 
-    def _criar_tabela(self, parent):
-        """Cria a tabela de histórico"""
-        self.log_table = LogTableView(
-            parent, 
-            on_download_click=self._baixar_pdf_do_banco
-        )
-        self.log_table.pack(fill="both", expand=True, padx=32, pady=(0, 24))
+    def _criar_cards_informativos(self, parent_layout):
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(12)
 
-    def _criar_estatisticas(self, parent):
-        """Cria o rodapé com estatísticas"""
-        self.estatisticas = EstatisticasDownload(parent)
-        self.estatisticas.pack(fill="x", padx=32, pady=(0, 32))
+        card_storage = self._create_info_card("Armazenamento", "PDFs salvos diretamente no banco de dados (SQL Server)")
+        cards_layout.addWidget(card_storage, 1)
 
-    # ------------------------------------------------------------------
-    # Histórico
-    # ------------------------------------------------------------------
+        card_api = self._create_info_card("Status da API Google", "Pronto para autenticar")
+        self.lbl_status_api = self._find_status_label(card_api)
+        cards_layout.addWidget(card_api, 1)
+
+        parent_layout.addLayout(cards_layout)
+
+    def _create_info_card(self, title, content):
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_ACCENT_LIGHT};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 16)
+
+        text_layout = QVBoxLayout()
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        text_layout.addWidget(lbl_title)
+
+        lbl_content = QLabel(content)
+        lbl_content.setObjectName("status")
+        lbl_content.setFont(QFont("Segoe UI", 11))
+        lbl_content.setStyleSheet(f"color: {_CINZA_MEDIO};")
+        text_layout.addWidget(lbl_content)
+
+        layout.addLayout(text_layout, 1)
+        return card
+
+    def _find_status_label(self, card):
+        for child in card.findChildren(QLabel):
+            if child.objectName() == "status":
+                return child
+        return None
+
+    def _criar_tabela(self, parent_layout):
+        self.log_table = LogTableView(self, on_download_click=self._baixar_pdf_do_banco)
+        parent_layout.addWidget(self.log_table)
+
+    def _criar_estatisticas(self, parent_layout):
+        self.estatisticas = EstatisticasDownload()
+        parent_layout.addWidget(self.estatisticas)
+
     def _carregar_historico(self):
-        """Carrega histórico em thread separada"""
         threading.Thread(target=self._worker_historico, daemon=True).start()
 
     def _worker_historico(self):
         try:
             registros = self.repository.listar_downloads(limit=200)
-            self.after(0, self._aplicar_historico, registros)
+            QTimer.singleShot(0, lambda: self._aplicar_historico(registros))
         except Exception as exc:
             _safe_print(f"[EmailDownloadUI] Erro ao carregar historico: {exc}")
 
     def _aplicar_historico(self, registros: list):
-        """Aplica o histórico na UI"""
-        if not self.winfo_exists():
-            return
         if self.log_table:
             self.log_table.carregar_do_banco(registros)
-            
-    
 
-    # ------------------------------------------------------------------
-    # Download do banco
-    # ------------------------------------------------------------------
     def _baixar_pdf_do_banco(self, record_id: int):
-        """Baixa PDF do banco"""
         try:
             resultado = self.repository.baixar_bytes_por_id(record_id)
             if not resultado:
-                messagebox.showwarning("Aviso", "Registro não encontrado no banco.")
+                QMessageBox.warning(self, "Aviso", "Registro nao encontrado no banco.")
                 return
-    
+
             nome_arquivo, dados = resultado
-    
+
             if not dados:
-                messagebox.showerror("Erro", "Nenhum dado encontrado para este registro.")
+                QMessageBox.critical(self, "Erro", "Nenhum dado encontrado para este registro.")
                 return
-    
-            destino = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")],
-                initialfile=nome_arquivo or "anexo.pdf",
-                title="Salvar PDF como...",
+
+            destino, _ = QFileDialog.getSaveFileName(
+                self,
+                "Salvar PDF como...",
+                nome_arquivo or "anexo.pdf",
+                "PDF Files (*.pdf)"
             )
             if not destino:
                 return
-    
+
             with open(destino, "wb") as f:
                 f.write(dados)
-    
-            messagebox.showinfo("Sucesso", f"✅ PDF salvo em:\n{destino}")
-    
-        except Exception as exc:
-            messagebox.showerror("Erro", f"Falha ao baixar PDF:\n{exc}")
 
+            QMessageBox.information(self, "Sucesso", f"PDF salvo em:\n{destino}")
+
+        except Exception as exc:
+            QMessageBox.critical(self, "Erro", f"Falha ao baixar PDF:\n{exc}")
 
     def _baixar_todos_pdfs(self):
-        """Baixa todos os PDFs do histórico para uma pasta selecionada"""
-
-        # Selecionar pasta de destino
-        pasta_destino = filedialog.askdirectory(
-            title="Selecione a pasta para salvar todos os PDFs"
+        pasta_destino = QFileDialog.getExistingDirectory(
+            self,
+            "Selecione a pasta para salvar todos os PDFs"
         )
 
         if not pasta_destino:
             return
 
-        # Pegar todos os registros do banco
         try:
             registros = self.repository.listar_downloads(limit=1000)
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao buscar registros: {e}")
+            QMessageBox.critical(self, "Erro", f"Erro ao buscar registros: {e}")
             return
 
         if not registros:
-            messagebox.showinfo("Info", "Nenhum PDF encontrado no histórico")
+            QMessageBox.information(self, "Info", "Nenhum PDF encontrado no historico")
             return
 
-        # Perguntar se quer continuar
-        resposta = messagebox.askyesno(
+        resposta = QMessageBox.question(
+            self,
             "Confirmar",
-            f"Você está prestes a baixar {len(registros)} arquivos PDF.\n\n"
+            f"Voce esta prestes a baixar {len(registros)} arquivos PDF.\n\n"
             f"Pasta de destino: {pasta_destino}\n\n"
-            "Deseja continuar?"
+            "Deseja continuar?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
-        if not resposta:
+        if resposta != QMessageBox.StandardButton.Yes:
             return
 
-        # Desabilitar botões durante o download
-        self.btn_baixar.configure(state="disabled")
-        self.btn_baixar_todos.configure(state="disabled")
+        self.btn_baixar.setEnabled(False)
+        self.btn_baixar_todos.setEnabled(False)
 
-        # Iniciar download em thread separada
         threading.Thread(
             target=self._executar_download_todos,
             args=(registros, pasta_destino),
@@ -679,54 +566,40 @@ class BaixarEmailUI(ctk.CTkFrame):
         ).start()
 
     def _executar_download_todos(self, registros, pasta_destino):
-        """Executa o download de todos os PDFs em thread"""
-
         total = len(registros)
         sucessos = 0
         erros = 0
 
-        self._atualizar_progresso(0, f"Iniciando download de {total} arquivos...")
-
         for i, registro in enumerate(registros):
             try:
-                record_id = registro['id']
-                nome_arquivo = registro['nome_arquivo']
+                record_id = registro["id"]
+                nome_arquivo = registro["nome_arquivo"]
 
-                # Buscar os bytes do PDF
                 resultado = self.repository.baixar_bytes_por_id(record_id)
-
                 if not resultado:
                     erros += 1
-                    self._log("Erro", f"Arquivo não encontrado: {nome_arquivo}")
                     continue
-                
+
                 nome, dados = resultado
 
-                # Limpar nome do arquivo
                 nome_limpo = "".join(c for c in nome if c.isalnum() or c in ".-_ ").strip()
                 if not nome_limpo:
                     nome_limpo = f"anexo_{record_id}.pdf"
 
-                # ── Subpasta: email {ano} / {municipio} ──────────────────
-                municipio_raw = registro.get('municipio') or 'Desconhecido'
-                municipio_dir = "".join(
-                    c for c in municipio_raw if c.isalnum() or c in " _-"
-                ).strip() or "Desconhecido"
+                municipio_raw = registro.get("municipio") or "Desconhecido"
+                municipio_dir = "".join(c for c in municipio_raw if c.isalnum() or c in " _-").strip() or "Desconhecido"
 
-                data_email = registro.get('data_email')
-                if data_email and hasattr(data_email, 'year'):
+                data_email = registro.get("data_email")
+                if data_email and hasattr(data_email, "year"):
                     ano = data_email.year
                 else:
                     ano = datetime.now().year
 
                 subpasta = os.path.join(pasta_destino, f"email {ano}", municipio_dir)
                 os.makedirs(subpasta, exist_ok=True)
-                # ────────────────────────────────────────────────────────
 
-                # Caminho completo
                 caminho = os.path.join(subpasta, nome_limpo)
 
-                # Se arquivo já existe, adicionar número
                 contador = 1
                 while os.path.exists(caminho):
                     nome_sem_ext = os.path.splitext(nome_limpo)[0]
@@ -734,47 +607,34 @@ class BaixarEmailUI(ctk.CTkFrame):
                     caminho = os.path.join(subpasta, f"{nome_sem_ext}_{contador}{ext}")
                     contador += 1
 
-                # Salvar arquivo
                 with open(caminho, "wb") as f:
                     f.write(dados)
 
                 sucessos += 1
-                self._log("OK", f"Baixado: {nome_limpo}")
 
-                # Atualizar progresso
                 percentual = int((i + 1) / total * 100)
-                self._atualizar_progresso(
-                    percentual,
-                    f"Baixando {i+1}/{total}: {nome_limpo}"
-                )
+                QTimer.singleShot(0, lambda p=percentual, t=f"{i+1}/{total}: {nome_limpo}":
+                                  self.progresso.atualizar(p, t))
 
-            except Exception as e:
+            except Exception:
                 erros += 1
-                self._log("Erro", f"Falha ao baixar {registro.get('nome_arquivo', 'desconhecido')}: {e}")
 
-        # Finalizar
-        self._atualizar_progresso(100, f"Download concluído! {sucessos} sucessos, {erros} erros")
+        QTimer.singleShot(0, lambda: self.progresso.atualizar(100, f"Download concluido! {sucessos} sucessos, {erros} erros"))
+        QTimer.singleShot(0, lambda: self.btn_baixar.setEnabled(True))
+        QTimer.singleShot(0, lambda: self.btn_baixar_todos.setEnabled(True))
 
-        # Reativar botões
-        self.after(0, lambda: self.btn_baixar.configure(state="normal"))
-        self.after(0, lambda: self.btn_baixar_todos.configure(state="normal"))
-
-        # Mostrar resultado
-        self.after(0, lambda: messagebox.showinfo(
-            "Download Concluído",
-            f" Download finalizado!\n\n"
+        QTimer.singleShot(0, lambda: QMessageBox.information(
+            self,
+            "Download Concluido",
+            f"Download finalizado!\n\n"
             f"Pasta: {pasta_destino}\n"
             f"Sucessos: {sucessos}\n"
             f"Erros: {erros}\n"
             f"Total: {total}"
-       ))
-    
+        ))
 
-    # ------------------------------------------------------------------
-    # Fluxo de download
-    # ------------------------------------------------------------------
     def iniciar_download(self):
-        self.btn_baixar.configure(state="disabled")
+        self.btn_baixar.setEnabled(False)
         self.progresso.reset()
         self._resetar_estatisticas()
         threading.Thread(target=self._executar_fluxo_download, daemon=True).start()
@@ -787,12 +647,12 @@ class BaixarEmailUI(ctk.CTkFrame):
             sucesso, mensagem = self.service.autenticar()
             if not sucesso:
                 self._log("Erro", mensagem)
-                self._atualizar_status_api("❌ " + mensagem, _VERMELHO)
+                self._atualizar_status_api("Falha: " + mensagem, _VERMELHO)
                 self._finalizar_fluxo(False)
                 return
 
-            self._log("OK", "Autenticação bem-sucedida.")
-            self._atualizar_status_api("✅ Autenticado com sucesso", _VERDE_STATUS)
+            self._log("OK", "Autenticacao bem-sucedida.")
+            self._atualizar_status_api("Autenticado com sucesso", _VERDE_STATUS)
             self._atualizar_progresso(10, "Buscando e-mails...")
 
             emails, mensagem = self.service.buscar_emails_nao_lidos_com_anexos()
@@ -820,24 +680,24 @@ class BaixarEmailUI(ctk.CTkFrame):
                     self._log("Erro", f"E-mail {i}: {exc}")
 
             self._atualizar_estatisticas()
-            self._atualizar_progresso(100, "Download concluído!")
+            self._atualizar_progresso(100, "Download concluido!")
             self._carregar_historico()
             self._finalizar_fluxo(True)
 
         except Exception as exc:
-            self._log("Erro Crítico", str(exc))
+            self._log("Erro Critico", str(exc))
             self._finalizar_fluxo(False)
 
     def _processar_email(self, email):
         service = self.service.obter_service()
         if not service:
-            raise Exception("Serviço do Gmail não disponível")
+            raise Exception("Servico do Gmail nao disponivel")
 
-        msg_id    = email["id"]
+        msg_id = email["id"]
         remetente = self.service.extrair_cabecalho_email(email, "From", "Desconhecido")
-        assunto   = self.service.extrair_cabecalho_email(email, "Subject", "Sem assunto")
+        assunto = self.service.extrair_cabecalho_email(email, "Subject", "Sem assunto")
         municipio = self.controller.obter_municipio_por_email(remetente)
-        data      = self.controller.formatar_data(email["internalDate"])
+        data = self.controller.formatar_data(email["internalDate"])
 
         try:
             data_email = datetime.strptime(data, "%d-%m-%Y")
@@ -846,28 +706,25 @@ class BaixarEmailUI(ctk.CTkFrame):
 
         parts = email["payload"].get("parts", [])
         for part in self.controller.extrair_parts_pdf(parts):
-
             nome, dados, erro = self.controller.obter_bytes_anexo_pdf(service, msg_id, part)
 
             record_id = self.repository.registrar_download(
-                msg_id = f"{msg_id}_{nome or 'erro'}",  # Gera ID único para evitar duplicidade essa bosta aqui
-                remetente = remetente,
-                assunto = assunto,
-                municipio = municipio,
-                data_email = data_email,
-                nome_arquivo = nome or 'Error.pdf',
-                arquivo_bytes = dados,
-                #staus = "SUCESSO" if dados else "ERRO",
-                erro_mensagem = erro if erro else None,
+                msg_id=f"{msg_id}_{nome or 'erro'}",
+                remetente=remetente,
+                assunto=assunto,
+                municipio=municipio,
+                data_email=data_email,
+                nome_arquivo=nome or "Error.pdf",
+                arquivo_bytes=dados,
+                erro_mensagem=erro if erro else None,
             )
-            
 
             if dados:
                 self.arquivos_baixados += 1
                 self.sucessos += 1
                 self._log("OK", f"Salvo no banco: {nome}")
-                self.after(0, self._adicionar_linha_safe,
-                           record_id, remetente, assunto, nome)
+                QTimer.singleShot(0, lambda rid=record_id, r=remetente, a=assunto, n=nome:
+                                  self._adicionar_linha_safe(rid, r, a, n))
             else:
                 self.erros += 1
                 self._log("Erro", f"Falha: {erro}")
@@ -875,8 +732,6 @@ class BaixarEmailUI(ctk.CTkFrame):
         self.controller.marcar_email_como_processado(service, msg_id, "salvo")
 
     def _adicionar_linha_safe(self, record_id, remetente, assunto, nome):
-        if not self.winfo_exists():
-            return
         if self.log_table:
             self.log_table.adicionar_linha(
                 record_id, "sucesso",
@@ -884,67 +739,45 @@ class BaixarEmailUI(ctk.CTkFrame):
                 datetime.now().strftime("%d/%m/%Y %H:%M"),
             )
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
     def _log(self, status, mensagem):
         _safe_print(f"[{status}] {mensagem}")
 
     def _atualizar_progresso(self, valor, status=""):
-        def _apply():
-            if not self.winfo_exists():
-                return
-            self.progresso.atualizar(valor, status)
-        self.after(0, _apply)
+        QTimer.singleShot(0, lambda: self.progresso.atualizar(valor, status))
 
     def _atualizar_status_api(self, texto, cor):
-        def _apply():
-            if not self.winfo_exists():
-                return
-            self.lbl_status_api.configure(text=texto, text_color=cor)
-        self.after(0, _apply)
+        if self.lbl_status_api:
+            QTimer.singleShot(0, lambda: self.lbl_status_api.setText(texto))
 
     def _atualizar_estatisticas(self):
-        def _apply():
-            if not self.winfo_exists():
-                return
-            self.estatisticas.atualizar(
-                self.emails_processados,
-                self.arquivos_baixados,
-                self.sucessos,
-                self.erros,
-            )
-            self.estatisticas.atualizar_ultima_execucao(
-                datetime.now().strftime("%d/%m/%Y %H:%M")
-            )
-        self.after(0, _apply)
+        QTimer.singleShot(0, lambda: self.estatisticas.atualizar(
+            self.emails_processados,
+            self.arquivos_baixados,
+            self.sucessos,
+            self.erros,
+        ))
+        QTimer.singleShot(0, lambda: self.estatisticas.atualizar_ultima_execucao(
+            datetime.now().strftime("%d/%m/%Y %H:%M")
+        ))
 
     def _resetar_estatisticas(self):
         self.emails_processados = 0
-        self.arquivos_baixados  = 0
-        self.sucessos           = 0
-        self.erros              = 0
-        def _apply():
-            if not self.winfo_exists():
-                return
-            self.estatisticas.reset()
-        self.after(0, _apply)
+        self.arquivos_baixados = 0
+        self.sucessos = 0
+        self.erros = 0
+        QTimer.singleShot(0, lambda: self.estatisticas.reset())
 
     def _finalizar_fluxo(self, sucesso: bool):
-        def _apply():
-            if not self.winfo_exists():
-                return
+        def apply():
             if sucesso:
-                self.progresso.atualizar(100, "Download concluído com sucesso!")
-                messagebox.showinfo("Sucesso", "✅ Download concluído!")
+                self.progresso.atualizar(100, "Download concluido com sucesso!")
+                QMessageBox.information(self, "Sucesso", "Download concluido!")
             else:
                 self.progresso.atualizar(0, "Falha no download")
-            self.btn_baixar.configure(state="normal")
-        self.after(0, _apply)
+            self.btn_baixar.setEnabled(True)
+        QTimer.singleShot(0, apply)
 
     def _limpar_logs(self):
-        if not self.winfo_exists():
-            return
         if self.log_table:
             self.log_table.limpar()
         self._resetar_estatisticas()

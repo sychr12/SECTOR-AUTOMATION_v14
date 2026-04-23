@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
+"""Interface de Análise AP — gerenciamento de Análise de Pedidos (PyQt6)."""
 import os
-from tkinter import messagebox, END
-import customtkinter as ctk
+from PyQt6.QtWidgets import (
+    QWidget, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QLineEdit, QComboBox, QTextEdit, QPushButton, QRadioButton,
+    QButtonGroup, QMessageBox, QStackedWidget
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
-from ui.base_ui import BaseUI
 from services.analiseap_repository import AnaliseapRepository
-from app.theme import AppTheme
 from .controller import AnaliseapController
 from .services import AnaliseapServices
 
@@ -15,302 +19,523 @@ MOTIVOS_DEVOLUCAO = [
     "Pesca", "Simples Nacional", "Animais"
 ]
 
-class AnaliseapUI(BaseUI):
-    def __init__(self, master, usuario):
-        super().__init__(master)
+# ── Paleta Corporativa ──────────────────────────────────────────────────────────
+_PRIMARY_DARK    = "#0a2540"
+_PRIMARY         = "#1a4b6e"
+_ACCENT          = "#2c6e9e"
+_ACCENT_DARK     = "#1e4a6e"
+_ACCENT_LIGHT    = "#e8f0f8"
+_BRANCO          = "#ffffff"
+_CINZA_BG        = "#f5f7fc"
+_CINZA_BORDER    = "#e2e8f0"
+_CINZA_MEDIO     = "#5a6e8a"
+_CINZA_TEXTO     = "#1e2f3e"
+_VERDE_STATUS    = "#10b981"
+_VERDE_DARK      = "#059669"
+_VERDE_LIGHT     = "#d1fae5"
+_AMARELO         = "#f59e0b"
+_VERMELHO        = "#ef4444"
+_VERMELHO_DARK   = "#dc2626"
+_AZUL            = "#3b82f6"
+_AZUL_DARK       = "#2563eb"
+_MUTED           = "#5a6e8a"
+
+
+class AnaliseapUI(QWidget):
+    """Interface PyQt6 para Análise AP."""
+
+    def __init__(self, parent=None, usuario=None):
+        super().__init__(parent)
 
         self.usuario = usuario
         self.repo = AnaliseapRepository()
         self.lista_municipios = {}
-        self.BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        self.BASE_DIR = os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))
+                )
+            )
+        )
 
         # Inicializar controller e services
         self.controller = AnaliseapController(usuario, self.repo)
         self.services = AnaliseapServices(self.BASE_DIR)
 
-        self.configure(fg_color=AppTheme.BG_APP)
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {_CINZA_BG};
+            }}
+        """)
 
-        self.container = ctk.CTkFrame(self, fg_color="transparent")
-        self.container.pack(expand=True, fill="both", padx=40, pady=35)
+        self.init_ui()
 
-        self._header()
-        self._selector()
-        self._content()
+    def init_ui(self):
+        """Inicializa a interface."""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(40, 35, 40, 35)
+        main_layout.setSpacing(20)
 
-        self.radio_var.set("insc")
-        self._show_screen()
+        # Header
+        self._create_header(main_layout)
 
-    # ================= HEADER =================
-    def _header(self):
-        ctk.CTkLabel(
-            self.container,
-            text="Adicionar Dados",
-            font=("Segoe UI", 28, "bold"),
-            text_color=AppTheme.TXT_MAIN
-        ).pack(anchor="w")
+        # Selector (Radio buttons)
+        self._create_selector(main_layout)
 
-        ctk.CTkLabel(
-            self.container,
-            text="Gestão de Inscrição, Renovação e Devolução",
-            font=("Segoe UI", 14),
-            text_color=AppTheme.TXT_MUTED
-        ).pack(anchor="w", pady=(6, 28))
+        # Content
+        self._create_content(main_layout)
 
-    # ================= SELECTOR =================
-    def _selector(self):
-        card = ctk.CTkFrame(self.container, fg_color=AppTheme.BG_CARD, corner_radius=22)
-        card.pack(fill="x", pady=(0, 28))
+        main_layout.addStretch()
 
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(padx=25, pady=20)
+    def _create_header(self, parent_layout):
+        """Cria o header com título e subtítulo."""
+        title = QLabel("Adicionar Dados")
+        title.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {_CINZA_TEXTO};")
+        parent_layout.addWidget(title)
 
-        self.radio_var = ctk.StringVar(value="insc")
+        subtitle = QLabel("Gestão de Inscrição, Renovação e Devolução")
+        subtitle.setFont(QFont("Segoe UI", 14))
+        subtitle.setStyleSheet(f"color: {_CINZA_MEDIO};")
+        parent_layout.addWidget(subtitle)
 
-        ctk.CTkRadioButton(
-            row, 
-            text="Inscrição / Renovação",
-            variable=self.radio_var, 
-            value="insc",
-            command=self._show_screen,
-            fg_color=AppTheme.BTN_PRIMARY,
-            hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            border_color=AppTheme.BTN_PRIMARY,
-            text_color=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12)
-        ).pack(side="left", padx=40)
+    def _create_selector(self, parent_layout):
+        """Cria o seletor de tipo de operação (radio buttons)."""
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(25, 20, 25, 20)
+        card_layout.setSpacing(20)
 
-        ctk.CTkRadioButton(
-            row, 
-            text="Devolução",
-            variable=self.radio_var, 
-            value="dev",
-            command=self._show_screen,
-            fg_color=AppTheme.BTN_PRIMARY,
-            hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            border_color=AppTheme.BTN_PRIMARY,
-            text_color=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12)
-        ).pack(side="left", padx=40)
+        self.radio_group = QButtonGroup(self)
 
-    # ================= CONTENT =================
-    def _content(self):
-        self.body = ctk.CTkFrame(self.container, fg_color="transparent")
-        self.body.pack(expand=True, fill="both")
+        self.radio_insc = QRadioButton("Inscrição / Renovação")
+        self.radio_insc.setFont(QFont("Segoe UI", 12))
+        self.radio_insc.setStyleSheet(f"""
+            QRadioButton {{
+                color: {_CINZA_TEXTO};
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 2px solid {_ACCENT};
+                border-radius: 8px;
+                background-color: white;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {_ACCENT};
+            }}
+        """)
+        self.radio_insc.setChecked(True)
+        self.radio_insc.toggled.connect(self._on_radio_changed)
+        self.radio_group.addButton(self.radio_insc, 0)
+        card_layout.addWidget(self.radio_insc)
 
-        self.frame_insc = ctk.CTkFrame(self.body, fg_color="transparent")
-        self.frame_dev = ctk.CTkFrame(self.body, fg_color="transparent")
+        self.radio_dev = QRadioButton("Devolução")
+        self.radio_dev.setFont(QFont("Segoe UI", 12))
+        self.radio_dev.setStyleSheet(f"""
+            QRadioButton {{
+                color: {_CINZA_TEXTO};
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 2px solid {_ACCENT};
+                border-radius: 8px;
+                background-color: white;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {_ACCENT};
+            }}
+        """)
+        self.radio_dev.toggled.connect(self._on_radio_changed)
+        self.radio_group.addButton(self.radio_dev, 1)
+        card_layout.addWidget(self.radio_dev)
 
-        self._form_inscricao(self.frame_insc)
-        self._form_devolucao(self.frame_dev)
+        card_layout.addStretch()
+        parent_layout.addWidget(card)
 
-    def _show_screen(self):
-        self.frame_insc.pack_forget()
-        self.frame_dev.pack_forget()
+    def _create_content(self, parent_layout):
+        """Cria as abas de conteúdo (inscrição e devolução)."""
+        self.stacked_widget = QStackedWidget()
 
-        if self.radio_var.get() == "insc":
-            self.frame_insc.pack(fill="both", expand=True)
-        else:
-            self.frame_dev.pack(fill="both", expand=True)
+        # Frame inscrição
+        self.frame_insc = QWidget()
+        frame_insc_layout = QVBoxLayout(self.frame_insc)
+        frame_insc_layout.setContentsMargins(0, 0, 0, 0)
+        self._create_form_inscricao(frame_insc_layout)
 
-    # ================= FORM INSCRIÇÃO =================
-    def _form_inscricao(self, parent):
+        # Frame devolução
+        self.frame_dev = QWidget()
+        frame_dev_layout = QVBoxLayout(self.frame_dev)
+        frame_dev_layout.setContentsMargins(0, 0, 0, 0)
+        self._create_form_devolucao(frame_dev_layout)
+
+        self.stacked_widget.addWidget(self.frame_insc)
+        self.stacked_widget.addWidget(self.frame_dev)
+        self.stacked_widget.setCurrentWidget(self.frame_insc)
+
+        parent_layout.addWidget(self.stacked_widget)
+
+    def _create_form_inscricao(self, parent_layout):
+        """Cria o formulário de inscrição/renovação."""
+        # Card principal
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 22, 25, 22)
+        card_layout.setSpacing(16)
+
+        # Grid de campos
+        grid = QGridLayout()
+        grid.setSpacing(10)
+
         self.services.carregar_municipios()
-        card = self._card(parent)
-        grid = self._grid(card)
 
-        self.nome = self._entry(grid, "Nome", 0)
-        self.cpf = self._entry(grid, "CPF", 1)
-        self.cpf.bind("<KeyRelease>", self._format_cpf)
+        # Campo Nome
+        self.nome = self._create_labeled_field(grid, "Nome", 0, 0)
 
-        self.unloc = self._entry(grid, "Município", 2)
-        self.unloc.bind("<KeyRelease>", lambda e: self._filter_city())
+        # Campo CPF
+        self.cpf = self._create_labeled_field(grid, "CPF", 0, 1)
+        self.cpf.textChanged.connect(self._format_cpf)
 
-        self.memorando = self._entry(grid, "Memorando", 3)
+        # Campo Município
+        self.unloc = self._create_labeled_field(grid, "Município", 1, 0)
+        self.unloc.textChanged.connect(self._filter_city)
 
-        self.descricao = ctk.CTkComboBox(
-            grid, 
-            values=["INSC", "RENOV"], 
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BTN_PRIMARY,
-            button_color=AppTheme.BTN_PRIMARY,
-            button_hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_INPUT,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-            dropdown_hover_color=AppTheme.BG_CARD
-        )
-        self.descricao.grid(row=0, column=4, padx=10, sticky="ew")
+        # Campo Memorando
+        self.memorando = self._create_labeled_field(grid, "Memorando", 1, 1)
 
-        self._action_button(parent, self._add_insc)
+        # ComboBox Descrição (INSC/RENOV)
+        desc_label = QLabel("Tipo")
+        desc_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        grid.addWidget(desc_label, 2, 0)
 
-    # ================= FORM DEVOLUÇÃO =================
-    def _form_devolucao(self, parent):
-        card = self._card(parent)
-        grid = self._grid(card)
+        self.descricao = QComboBox()
+        self.descricao.addItems(["INSC", "RENOV"])
+        self.descricao.setFixedHeight(44)
+        self.descricao.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {_CINZA_TEXTO};
+                font-family: 'Segoe UI';
+                font-size: 13px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid {_ACCENT};
+                margin-right: 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {_BRANCO};
+                color: {_CINZA_TEXTO};
+                selection-background-color: {_ACCENT_LIGHT};
+            }}
+        """)
+        grid.addWidget(self.descricao, 2, 1)
 
-        self.nome_dev = self._entry(grid, "Nome", 0)
-        self.cpf_dev = self._entry(grid, "CPF", 1)
-        self.cpf_dev.bind("<KeyRelease>", self._format_cpf)
+        card_layout.addLayout(grid)
+        parent_layout.addWidget(card)
 
-        self.unloc_dev = self._entry(grid, "Município", 2)
-        self.memo_dev = self._entry(grid, "Memorando", 3)
+        # Botão Salvar
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
 
-        motivo_card = self._card(parent)
+        save_btn = QPushButton("💾 Salvar")
+        save_btn.setFixedHeight(44)
+        save_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE_STATUS};
+                color: {_BRANCO};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 30px;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERDE_DARK};
+            }}
+        """)
+        save_btn.clicked.connect(self._add_insc)
+        btn_layout.addWidget(save_btn)
+        btn_layout.addStretch()
 
-        self.motivo_combo = ctk.CTkComboBox(
-            motivo_card, 
-            values=MOTIVOS_DEVOLUCAO, 
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BTN_PRIMARY,
-            button_color=AppTheme.BTN_PRIMARY,
-            button_hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            text_color=AppTheme.TXT_MAIN,
-            dropdown_fg_color=AppTheme.BG_INPUT,
-            dropdown_text_color=AppTheme.TXT_MAIN,
-            dropdown_hover_color=AppTheme.BG_CARD
-        )
-        self.motivo_combo.pack(padx=20, pady=(12, 6), fill="x")
+        parent_layout.addLayout(btn_layout)
 
-        self.motivo_texto = ctk.CTkTextbox(
-            motivo_card, 
-            height=100,
-            fg_color=AppTheme.BG_INPUT,
-            text_color=AppTheme.TXT_MAIN,
-            border_color=AppTheme.BTN_PRIMARY
-        )
-        self.motivo_texto.pack(fill="x", padx=20, pady=(0, 18))
+    def _create_form_devolucao(self, parent_layout):
+        """Cria o formulário de devolução."""
+        # Card principal
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 22, 25, 22)
+        card_layout.setSpacing(16)
 
-        self._action_button(parent, self._add_dev)
+        # Grid de campos
+        grid = QGridLayout()
+        grid.setSpacing(10)
 
-    # ================= ACTIONS =================
-    def _add_insc(self):
-        # Validar campos obrigatórios
-        campos = [
-            self.nome.get(),
-            self.cpf.get(),
-            self.unloc.get(),
-            self.memorando.get(),
-            self.descricao.get()
-        ]
-        
-        if not self.controller.validar_campos_obrigatorios(campos):
-            messagebox.showwarning("Aviso", "Preencha todos os campos.")
-            return
+        # Campo Nome
+        self.nome_dev = self._create_labeled_field(grid, "Nome", 0, 0)
 
-        # Salvar usando o controller
-        sucesso, mensagem = self.controller.salvar_inscricao(
-            nome=self.nome.get(),
-            cpf=self.cpf.get(),
-            municipio=self.unloc.get(),
-            memorando=self.memorando.get(),
-            tipo=self.descricao.get()
-        )
-        
-        if sucesso:
-            messagebox.showinfo("Sucesso", mensagem)
-            # Limpar campos após salvar
-            self._limpar_campos_inscricao()
-        else:
-            messagebox.showerror("Erro", mensagem)
+        # Campo CPF
+        self.cpf_dev = self._create_labeled_field(grid, "CPF", 0, 1)
+        self.cpf_dev.textChanged.connect(self._format_cpf_dev)
 
-    def _add_dev(self):
-        # Validar campos obrigatórios
-        campos = [
-            self.nome_dev.get(),
-            self.cpf_dev.get(),
-            self.unloc_dev.get(),
-            self.memo_dev.get(),
-            self.motivo_combo.get(),
-            self.motivo_texto.get("1.0", END).strip()
-        ]
-        
-        if not self.controller.validar_campos_obrigatorios(campos):
-            messagebox.showwarning("Aviso", "Preencha todos os campos.")
-            return
+        # Campo Município
+        self.unloc_dev = self._create_labeled_field(grid, "Município", 1, 0)
+        self.unloc_dev.textChanged.connect(self._filter_city_dev)
 
-        # Salvar usando o controller
-        sucesso, mensagem = self.controller.salvar_devolucao(
-            nome=self.nome_dev.get(),
-            cpf=self.cpf_dev.get(),
-            municipio=self.unloc_dev.get(),
-            memorando=self.memo_dev.get(),
-            motivo_combo=self.motivo_combo.get(),
-            motivo_texto=self.motivo_texto.get("1.0", END).strip()
-        )
-        
-        if sucesso:
-            messagebox.showinfo("Sucesso", mensagem)
-            # Limpar campos após salvar
-            self._limpar_campos_devolucao()
-        else:
-            messagebox.showerror("Erro", mensagem)
+        # Campo Memorando
+        self.memo_dev = self._create_labeled_field(grid, "Memorando", 1, 1)
 
-    # ================= HELPERS =================
-    def _card(self, parent):
-        card = ctk.CTkFrame(parent, fg_color=AppTheme.BG_CARD, corner_radius=22)
-        card.pack(fill="x", pady=(0, 24))
-        return card
+        card_layout.addLayout(grid)
+        parent_layout.addWidget(card)
 
-    def _grid(self, parent):
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(padx=25, pady=22, fill="x")
-        for i in range(5):
-            grid.columnconfigure(i, weight=1)
-        return grid
+        # Card Motivo
+        motivo_card = QFrame()
+        motivo_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {_BRANCO};
+                border-radius: 12px;
+                border: 1px solid {_CINZA_BORDER};
+            }}
+        """)
+        motivo_layout = QVBoxLayout(motivo_card)
+        motivo_layout.setContentsMargins(25, 22, 25, 22)
+        motivo_layout.setSpacing(12)
 
-    def _entry(self, parent, placeholder, col):
-        entry = ctk.CTkEntry(
-            parent, 
-            placeholder_text=placeholder,
-            fg_color=AppTheme.BG_INPUT,
-            border_color=AppTheme.BTN_PRIMARY,
-            text_color=AppTheme.TXT_MAIN,
-            placeholder_text_color=AppTheme.TXT_MUTED,
-            font=("Segoe UI", 12),
-            height=40
-        )
-        entry.grid(row=0, column=col, padx=10, sticky="ew")
+        motivo_label = QLabel("Motivo da Devolução")
+        motivo_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        motivo_layout.addWidget(motivo_label)
+
+        self.motivo_combo = QComboBox()
+        self.motivo_combo.addItems(MOTIVOS_DEVOLUCAO)
+        self.motivo_combo.setFixedHeight(44)
+        self.motivo_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {_CINZA_TEXTO};
+                font-family: 'Segoe UI';
+                font-size: 13px;
+            }}
+        """)
+        motivo_layout.addWidget(self.motivo_combo)
+
+        self.motivo_texto = QTextEdit()
+        self.motivo_texto.setFixedHeight(100)
+        self.motivo_texto.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px;
+                color: {_CINZA_TEXTO};
+                font-family: 'Segoe UI';
+                font-size: 12px;
+            }}
+        """)
+        motivo_layout.addWidget(self.motivo_texto)
+
+        parent_layout.addWidget(motivo_card)
+
+        # Botão Salvar
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        save_btn = QPushButton("💾 Salvar")
+        save_btn.setFixedHeight(44)
+        save_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {_VERDE_STATUS};
+                color: {_BRANCO};
+                border: none;
+                border-radius: 8px;
+                padding: 10px 30px;
+            }}
+            QPushButton:hover {{
+                background-color: {_VERDE_DARK};
+            }}
+        """)
+        save_btn.clicked.connect(self._add_dev)
+        btn_layout.addWidget(save_btn)
+        btn_layout.addStretch()
+
+        parent_layout.addLayout(btn_layout)
+
+    def _create_labeled_field(self, grid, label_text, row, col):
+        """Helper para criar um campo com label."""
+        label = QLabel(label_text)
+        label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        label.setStyleSheet(f"color: {_CINZA_TEXTO};")
+
+        entry = QLineEdit()
+        entry.setPlaceholderText(f"Digite {label_text.lower()}")
+        entry.setFixedHeight(44)
+        entry.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {_BRANCO};
+                border: 1px solid {_CINZA_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {_CINZA_TEXTO};
+                font-family: 'Segoe UI';
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {_ACCENT};
+            }}
+        """)
+
+        grid.addWidget(label, row * 2, col)
+        grid.addWidget(entry, row * 2 + 1, col)
+
         return entry
 
-    def _action_button(self, parent, command):
-        ctk.CTkButton(
-            parent, 
-            text="Salvar", 
-            command=command,
-            fg_color=AppTheme.BTN_PRIMARY,
-            hover_color=AppTheme.BTN_PRIMARY_HOVER,
-            text_color=AppTheme.TXT_MAIN,
-            font=("Segoe UI", 12, "bold"),
-            height=40,
-            corner_radius=10
-        ).pack(anchor="e", padx=20, pady=10)
+    def _on_radio_changed(self):
+        """Muda entre formulários de inscrição e devolução."""
+        if self.radio_insc.isChecked():
+            self.stacked_widget.setCurrentWidget(self.frame_insc)
+        else:
+            self.stacked_widget.setCurrentWidget(self.frame_dev)
 
-    def _format_cpf(self, event):
-        entry = event.widget
-        texto_formatado = self.controller.formatar_cpf(entry.get())
-        entry.delete(0, END)
-        entry.insert(0, texto_formatado)
+    def _format_cpf(self, text):
+        """Formata CPF automaticamente."""
+        cpf_formatado = self.controller.formatar_cpf(text)
+        if cpf_formatado != text:
+            self.cpf.blockSignals(True)
+            self.cpf.setText(cpf_formatado)
+            self.cpf.blockSignals(False)
+
+    def _format_cpf_dev(self, text):
+        """Formata CPF automaticamente no formulário de devolução."""
+        cpf_formatado = self.controller.formatar_cpf(text)
+        if cpf_formatado != text:
+            self.cpf_dev.blockSignals(True)
+            self.cpf_dev.setText(cpf_formatado)
+            self.cpf_dev.blockSignals(False)
 
     def _filter_city(self):
-        texto = self.unloc.get()
-        cidade = self.services.filtrar_cidade(texto)
-        if cidade:
-            self.unloc.delete(0, END)
-            self.unloc.insert(0, cidade)
+        """Filtra e autocompleta o município."""
+        texto = self.unloc.text()
+        if texto:
+            cidade = self.services.filtrar_cidade(texto)
+            if cidade and cidade != texto:
+                self.unloc.blockSignals(True)
+                self.unloc.setText(cidade)
+                self.unloc.blockSignals(False)
+
+    def _filter_city_dev(self):
+        """Filtra e autocompleta o município no formulário de devolução."""
+        texto = self.unloc_dev.text()
+        if texto:
+            cidade = self.services.filtrar_cidade(texto)
+            if cidade and cidade != texto:
+                self.unloc_dev.blockSignals(True)
+                self.unloc_dev.setText(cidade)
+                self.unloc_dev.blockSignals(False)
+
+    def _add_insc(self):
+        """Salva inscrição/renovação."""
+        campos = [
+            self.nome.text().strip(),
+            self.cpf.text().strip(),
+            self.unloc.text().strip(),
+            self.memorando.text().strip(),
+            self.descricao.currentText()
+        ]
+
+        if not all(campos):
+            QMessageBox.warning(self, "Aviso", "Preencha todos os campos.")
+            return
+
+        sucesso, mensagem = self.controller.salvar_inscricao(
+            nome=self.nome.text().strip(),
+            cpf=self.cpf.text().strip(),
+            municipio=self.unloc.text().strip(),
+            memorando=self.memorando.text().strip(),
+            tipo=self.descricao.currentText()
+        )
+
+        if sucesso:
+            QMessageBox.information(self, "Sucesso", mensagem)
+            self._limpar_campos_inscricao()
+        else:
+            QMessageBox.critical(self, "Erro", mensagem)
+
+    def _add_dev(self):
+        """Salva devolução."""
+        campos = [
+            self.nome_dev.text().strip(),
+            self.cpf_dev.text().strip(),
+            self.unloc_dev.text().strip(),
+            self.memo_dev.text().strip(),
+            self.motivo_combo.currentText(),
+            self.motivo_texto.toPlainText().strip()
+        ]
+
+        if not all(campos):
+            QMessageBox.warning(self, "Aviso", "Preencha todos os campos.")
+            return
+
+        sucesso, mensagem = self.controller.salvar_devolucao(
+            nome=self.nome_dev.text().strip(),
+            cpf=self.cpf_dev.text().strip(),
+            municipio=self.unloc_dev.text().strip(),
+            memorando=self.memo_dev.text().strip(),
+            motivo_combo=self.motivo_combo.currentText(),
+            motivo_texto=self.motivo_texto.toPlainText().strip()
+        )
+
+        if sucesso:
+            QMessageBox.information(self, "Sucesso", mensagem)
+            self._limpar_campos_devolucao()
+        else:
+            QMessageBox.critical(self, "Erro", mensagem)
 
     def _limpar_campos_inscricao(self):
-        """Limpa campos do formulário de inscrição"""
-        self.nome.delete(0, END)
-        self.cpf.delete(0, END)
-        self.unloc.delete(0, END)
-        self.memorando.delete(0, END)
-        self.descricao.set("INSC")
+        """Limpa campos do formulário de inscrição."""
+        self.nome.clear()
+        self.cpf.clear()
+        self.unloc.clear()
+        self.memorando.clear()
+        self.descricao.setCurrentIndex(0)
 
     def _limpar_campos_devolucao(self):
-        """Limpa campos do formulário de devolução"""
-        self.nome_dev.delete(0, END)
-        self.cpf_dev.delete(0, END)
-        self.unloc_dev.delete(0, END)
-        self.memo_dev.delete(0, END)
-        self.motivo_combo.set("")
-        self.motivo_texto.delete("1.0", END)
+        """Limpa campos do formulário de devolução."""
+        self.nome_dev.clear()
+        self.cpf_dev.clear()
+        self.unloc_dev.clear()
+        self.memo_dev.clear()
+        self.motivo_combo.setCurrentIndex(0)
+        self.motivo_texto.clear()

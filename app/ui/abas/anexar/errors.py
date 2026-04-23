@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
 """
 Aba "Erros" — registra todas as falhas durante o processamento.
+Versão PyQt6.
 """
-from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QColor
 
-import customtkinter as ctk
-
-# ========== CORES DIRETAMENTE NO ARQUIVO (sem import do theme) ==========
+# ========== CORES ==========
 VERM = "#ef4444"
 VERM_H = "#b91c1c"
 MUTED = "#64748b"
 BG_INPUT = "#ffffff"
 BG_CARD = "#f1f5f9"
 TXT_MAIN = "#0f172a"
+VERDE = "#22c55e"
+AMBER = "#f59e0b"
+INFO = "#60a5fa"
 
 
 class ErrorsTable:
@@ -21,193 +28,171 @@ class ErrorsTable:
     Tabela para exibir erros ocorridos durante a anexação.
     """
     
-    # Cores para cada tipo de erro
-    _TAGS = {
-        "erro": (VERM, "#3f0a0a"),
-        "aviso": ("#f59e0b", "#2d2a0a"),
-        "critico": ("#b91c1c", "#ffffff"),
-    }
-    
-    # Ícones para cada tipo
-    _ICONS = {
-        "erro": "✗",
-        "aviso": "⚠",
-        "critico": "💀",
-    }
-    
-    _lbl_count = None  # Contador de erros
+    _lbl_count = None
     
     @classmethod
     def criar(cls, parent):
-        """
-        Cria a tabela de erros.
-        Retorna: (treeview, container_frame)
-        """
-        # Estilo da tabela
-        s = ttk.Style()
-        s.configure("Errors.Treeview",
-                    background=BG_INPUT,
-                    fieldbackground=BG_INPUT,
-                    foreground=TXT_MAIN,
-                    rowheight=34,
-                    font=("Segoe UI", 10),
-                    borderwidth=0)
-        s.configure("Errors.Treeview.Heading",
-                    background=BG_CARD,
-                    foreground=MUTED,
-                    font=("Segoe UI", 10, "bold"),
-                    relief="flat")
-        s.map("Errors.Treeview",
-              background=[("selected", "#1e3a5f")])
+        """Cria a tabela de erros. Retorna: (table_widget, container_widget)"""
+        container = QFrame(parent)
+        container.setStyleSheet("background-color: transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
         
-        container = ctk.CTkFrame(parent, fg_color="transparent")
+        # Cabeçalho
+        hdr = QFrame()
+        hdr.setStyleSheet("background-color: transparent;")
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(0, 0, 0, 0)
         
-        # ========== CABEÇALHO ==========
-        hdr = ctk.CTkFrame(container, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 12))
+        lbl_title = QLabel("❌ Registro de Erros")
+        lbl_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        lbl_title.setStyleSheet(f"color: {TXT_MAIN};")
+        hdr_layout.addWidget(lbl_title)
         
-        cls._section_header(hdr, "❌ Registro de Erros")
+        cls._lbl_count = QLabel("0 erros")
+        cls._lbl_count.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        cls._lbl_count.setStyleSheet(f"color: {VERM};")
+        hdr_layout.addWidget(cls._lbl_count, alignment=Qt.AlignmentFlag.AlignRight)
         
-        # Contador de erros
-        cls._lbl_count = ctk.CTkLabel(
-            hdr, text="0 erros",
-            font=("Segoe UI", 11, "bold"),
-            text_color=VERM
-        )
-        cls._lbl_count.pack(side="right")
+        layout.addWidget(hdr)
         
-        # ========== TABELA ==========
-        frame = cls._tree_frame(container)
+        # Frame da tabela
+        table_frame = QFrame()
+        table_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_INPUT};
+                border-radius: 12px;
+                border: 1px solid {BG_CARD};
+            }}
+        """)
+        table_layout = QVBoxLayout(table_frame)
+        table_layout.setContentsMargins(4, 4, 4, 4)
         
-        tree = ttk.Treeview(
-            frame,
-            columns=("data", "cpf", "status", "mensagem"),
-            show="headings",
-            style="Errors.Treeview",
-            selectmode="browse"
-        )
+        # Tabela
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["Data/Hora", "CPF", "Status", "Mensagem de Erro"])
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {BG_INPUT};
+                color: {TXT_MAIN};
+                border: none;
+                gridline-color: {BG_CARD};
+            }}
+            QTableWidget::item {{
+                padding: 6px;
+            }}
+            QHeaderView::section {{
+                background-color: {BG_CARD};
+                color: {MUTED};
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
         
-        # Configurar colunas
-        tree.heading("data", text="Data/Hora")
-        tree.heading("cpf", text="CPF")
-        tree.heading("status", text="Status")
-        tree.heading("mensagem", text="Mensagem de Erro")
+        # Configurar larguras das colunas
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         
-        tree.column("data", width=140, minwidth=120)
-        tree.column("cpf", width=120, minwidth=100)
-        tree.column("status", width=100, minwidth=80)
-        tree.column("mensagem", width=500, stretch=True, minwidth=200)
+        table_layout.addWidget(table)
+        layout.addWidget(table_frame)
         
-        # Scrollbar
-        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        tree.pack(fill="both", expand=True, padx=4, pady=4)
+        # Botões
+        btn_frame = QFrame()
+        btn_frame.setStyleSheet("background-color: transparent;")
+        btn_layout = QHBoxLayout(btn_frame)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(10)
         
-        # Configurar cores por tipo
-        for tag, (bg, fg) in cls._TAGS.items():
-            tree.tag_configure(tag, background=bg, foreground=fg)
+        btn_limpar = QPushButton("🗑️ Limpar Erros")
+        btn_limpar.setFixedSize(120, 32)
+        btn_limpar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {VERM_H};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: #991b1b;
+            }}
+        """)
+        btn_limpar.clicked.connect(lambda: cls.limpar(table))
+        btn_layout.addWidget(btn_limpar)
         
-        # ========== BOTÕES ==========
-        btn_frame = ctk.CTkFrame(container, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=(12, 0))
+        btn_exportar = QPushButton("📋 Exportar")
+        btn_exportar.setFixedSize(100, 32)
+        btn_exportar.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {BG_INPUT};
+                color: {TXT_MAIN};
+                border: 1px solid {BG_CARD};
+                border-radius: 8px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: {BG_CARD};
+            }}
+        """)
+        btn_exportar.clicked.connect(lambda: cls.exportar(table))
+        btn_layout.addWidget(btn_exportar)
         
-        ctk.CTkButton(
-            btn_frame,
-            text="🗑️ Limpar Erros",
-            width=120, height=32,
-            corner_radius=8,
-            fg_color=VERM_H,
-            hover_color="#991b1b",
-            text_color="white",
-            font=("Segoe UI", 11),
-            command=lambda: cls.limpar(tree)
-        ).pack(side="left")
+        btn_layout.addStretch()
+        layout.addWidget(btn_frame)
         
-        ctk.CTkButton(
-            btn_frame,
-            text="📋 Exportar",
-            width=100, height=32,
-            corner_radius=8,
-            fg_color=BG_INPUT,
-            hover_color=BG_CARD,
-            text_color=TXT_MAIN,
-            font=("Segoe UI", 11),
-            command=lambda: cls.exportar(tree)
-        ).pack(side="left", padx=(10, 0))
-        
-        return tree, container
-    
-    @staticmethod
-    def _section_header(parent, texto: str):
-        """Cria um cabeçalho de seção"""
-        ctk.CTkLabel(
-            parent, text=texto,
-            font=("Segoe UI", 13, "bold"),
-            text_color=TXT_MAIN
-        ).pack(side="left")
-    
-    @staticmethod
-    def _tree_frame(parent):
-        """Cria um frame estilizado para a tabela"""
-        frame = ctk.CTkFrame(
-            parent,
-            fg_color=BG_INPUT,
-            corner_radius=12,
-            border_width=1,
-            border_color=BG_CARD
-        )
-        frame.pack(fill="both", expand=True)
-        return frame
-    
-    # ========== MÉTODOS PRINCIPAIS ==========
+        return table, container
     
     @classmethod
-    def adicionar(cls, tree, cpf: str, mensagem: str, tipo: str = "erro"):
-        """
-        Adiciona um erro à tabela.
-        
-        Args:
-            tree: Treeview onde adicionar
-            cpf: CPF do processo que deu erro
-            mensagem: Descrição do erro
-            tipo: "erro", "aviso", ou "critico"
-        """
+    def adicionar(cls, table, cpf: str, mensagem: str, tipo: str = "erro"):
+        """Adiciona um erro à tabela."""
         ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        icon = cls._ICONS.get(tipo.lower(), "✗")
+        icon = {"erro": "✗", "aviso": "⚠", "critico": "💀"}.get(tipo.lower(), "✗")
         
-        tree.insert(
-            "", "end",
-            values=(ts, cpf, tipo.upper(), f"{icon} {mensagem}"),
-            tags=(tipo.lower(),)
-        )
+        row = table.rowCount()
+        table.insertRow(row)
+        
+        table.setItem(row, 0, QTableWidgetItem(ts))
+        table.setItem(row, 1, QTableWidgetItem(cpf))
+        table.setItem(row, 2, QTableWidgetItem(tipo.upper()))
+        table.setItem(row, 3, QTableWidgetItem(f"{icon} {mensagem}"))
+        
+        # Aplicar cor
+        color = {"erro": VERM, "aviso": AMBER, "critico": VERM_H}.get(tipo.lower(), VERM)
+        for col in range(4):
+            item = table.item(row, col)
+            if item:
+                item.setForeground(QColor(color))
         
         # Atualizar contador
+        total = table.rowCount()
         if cls._lbl_count:
-            total = len(tree.get_children())
-            cls._lbl_count.configure(text=f"{total} erro(s)")
+            cls._lbl_count.setText(f"{total} erro(s)")
         
-        # Rolar para o final
-        kids = tree.get_children()
-        if kids:
-            tree.see(kids[-1])
+        # Scroll para o final
+        table.scrollToBottom()
     
     @classmethod
-    def limpar(cls, tree):
-        """Limpa todos os erros da tabela"""
-        for item in tree.get_children():
-            tree.delete(item)
+    def limpar(cls, table):
+        """Limpa todos os erros da tabela."""
+        table.setRowCount(0)
         if cls._lbl_count:
-            cls._lbl_count.configure(text="0 erros")
+            cls._lbl_count.setText("0 erros")
     
     @classmethod
-    def exportar(cls, tree):
-        """Exporta os erros para um arquivo de texto"""
-        destino = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Arquivo de Texto", "*.txt"), ("Todos", "*.*")],
-            initialfile=f"erros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            title="Exportar erros como..."
+    def exportar(cls, table):
+        """Exporta os erros para um arquivo de texto."""
+        destino, _ = QFileDialog.getSaveFileName(
+            None,
+            "Exportar erros como...",
+            f"erros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            "Arquivo de Texto (*.txt);;Todos os arquivos (*.*)"
         )
         
         if not destino:
@@ -220,16 +205,19 @@ class ErrorsTable:
                 f.write(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
                 f.write("=" * 80 + "\n\n")
                 
-                for item in tree.get_children():
-                    valores = tree.item(item, "values")
-                    if valores:
-                        f.write(f"[{valores[0]}] CPF: {valores[1]} | {valores[2]}\n")
-                        f.write(f"   {valores[3]}\n")
-                        f.write("-" * 40 + "\n")
+                for row in range(table.rowCount()):
+                    data = table.item(row, 0).text() if table.item(row, 0) else ""
+                    cpf = table.item(row, 1).text() if table.item(row, 1) else ""
+                    status = table.item(row, 2).text() if table.item(row, 2) else ""
+                    mensagem = table.item(row, 3).text() if table.item(row, 3) else ""
+                    
+                    f.write(f"[{data}] CPF: {cpf} | {status}\n")
+                    f.write(f"   {mensagem}\n")
+                    f.write("-" * 40 + "\n")
                 
-                total = len(tree.get_children())
+                total = table.rowCount()
                 f.write(f"\nTotal de erros: {total}\n")
             
-            messagebox.showinfo("Exportar", f"✅ Erros exportados com sucesso!\n\nArquivo salvo em:\n{destino}")
+            QMessageBox.information(None, "Exportar", f"✅ Erros exportados com sucesso!\n\nArquivo salvo em:\n{destino}")
         except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao exportar:\n{e}")
+            QMessageBox.critical(None, "Erro", f"Falha ao exportar:\n{e}")

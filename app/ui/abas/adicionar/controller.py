@@ -1,6 +1,5 @@
 import re
 from datetime import datetime
-from tkinter import messagebox, END
 
 
 class AdicionarController:
@@ -17,8 +16,15 @@ class AdicionarController:
         cpf_limpo = re.sub(r"\D", "", cpf_texto)
         cpf_limpo = cpf_limpo[:11]
         
-        if len(cpf_limpo) == 11:
-            return f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:]}"
+        if len(cpf_limpo) >= 9:
+            if len(cpf_limpo) == 11:
+                return f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:]}"
+            elif len(cpf_limpo) >= 7:
+                return f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}" if len(cpf_limpo) >= 9 else f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}"
+            elif len(cpf_limpo) >= 4:
+                return f"{cpf_limpo[:3]}.{cpf_limpo[3:]}"
+            else:
+                return cpf_limpo
         return cpf_limpo
 
     def limpar_cpf(self, cpf_texto):
@@ -28,7 +34,14 @@ class AdicionarController:
     def validar_cpf(self, cpf_texto):
         """Valida se CPF tem 11 dígitos"""
         cpf_limpo = self.limpar_cpf(cpf_texto)
-        return len(cpf_limpo) == 11
+        if len(cpf_limpo) != 11:
+            return False
+        
+        # Validação básica de CPF (evita todos dígitos iguais)
+        if cpf_limpo == cpf_limpo[0] * 11:
+            return False
+            
+        return True
 
     def validar_campos_obrigatorios(self, dados):
         """Valida campos obrigatórios"""
@@ -39,8 +52,8 @@ class AdicionarController:
         
         if not dados.get('cpf', '').strip():
             campos_faltantes.append("CPF")
-        elif not self.validar_cpf(dados['cpf']):
-            return False, "O CPF deve conter 11 dígitos!"
+        elif dados.get('cpf', '').strip() and not self.validar_cpf(dados['cpf']):
+            return False, "O CPF informado é inválido!"
         
         if not dados.get('municipio', '').strip():
             campos_faltantes.append("Município")
@@ -66,12 +79,15 @@ class AdicionarController:
             
             cpf_limpo = self.limpar_cpf(dados['cpf'])
             
+            # Extrair o código do tipo (INSC ou RENOV)
+            tipo = dados['tipo'].split()[0] if ' ' in dados['tipo'] else dados['tipo']
+            
             self.repo.salvar_inscricao(
                 nome=dados['nome'].strip(),
                 cpf=cpf_limpo,
                 municipio=dados['municipio'].strip(),
                 memo=dados['memo'].strip(),
-                tipo=dados['tipo'],
+                tipo=tipo,
                 usuario=self.usuario
             )
             
@@ -110,7 +126,7 @@ class AdicionarController:
     def obter_registro_tabela(self, dados, tipo_registro):
         """Obtém dados formatados para a tabela"""
         cpf_formatado = self.formatar_cpf(dados.get('cpf', ''))
-        data_atual = datetime.now().strftime("%d/%m/%Y")
+        data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
         
         return (
             dados.get('nome', '').strip(),

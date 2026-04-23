@@ -3,7 +3,9 @@
 Interface principal para configuração de email
 """
 
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 from tkinter import messagebox
 from app.theme import AppTheme
 from .controller import EmailController

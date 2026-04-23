@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Card de estatísticas com ícone"""
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 
 
 class StatCard(ctk.CTkFrame):

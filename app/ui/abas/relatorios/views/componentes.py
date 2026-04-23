@@ -3,7 +3,9 @@
 Componentes reutilizáveis para interface de relatórios
 """
 # Componentes visuais específicos para a aba de relatórios SEFAZ.
-import customtkinter as ctk
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import *
 from app.theme import AppTheme
 
 class ProgressoRelatorioFrame(ctk.CTkToplevel):

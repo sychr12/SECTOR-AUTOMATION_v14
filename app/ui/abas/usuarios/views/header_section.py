@@ -1,33 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-HeaderSection — cabeçalho com título e subtítulo.
+HeaderSection — cabeçalho com título e subtítulo (PyQt6).
 """
 
-import customtkinter as ctk
-from app.theme import AppTheme
+from PyQt6.QtWidgets import QFrame, QVBoxLayout, QLabel
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 
-class HeaderSection(ctk.CTkFrame):
+class HeaderSection(QFrame):
     """Seção de cabeçalho com título e subtítulo opcionais."""
 
-    def __init__(self, master, title, subtitle="", **kwargs):
-        super().__init__(master, fg_color="transparent", **kwargs)
-        self._title    = title
+    def __init__(self, title="", subtitle="", parent=None):
+        super().__init__(parent)
+        self._title = title
         self._subtitle = subtitle
         self._build()
 
     def _build(self):
-        ctk.CTkLabel(
-            self,
-            text=self._title,
-            font=("Segoe UI", 24, "bold"),
-            text_color=AppTheme.TXT_MAIN,
-        ).pack(anchor="w")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        title_label = QLabel(self._title)
+        title_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #1e2f3e;")
+        layout.addWidget(title_label)
 
         if self._subtitle:
-            ctk.CTkLabel(
-                self,
-                text=self._subtitle,
-                font=("Segoe UI", 13),
-                text_color=AppTheme.TXT_MUTED,
-            ).pack(anchor="w", pady=(4, 0))
+            subtitle_label = QLabel(self._subtitle)
+            subtitle_label.setFont(QFont("Segoe UI", 13))
+            subtitle_label.setStyleSheet("color: #64748b;")
+            layout.addWidget(subtitle_label)
